@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css"></head>
+<body class="gps-mode">
+<header><div><small>OMAPMAKER · FÄLTPROTOTYP</small><h1>Fältkarta</h1></div><button id="export">Exportera</button></header>
+<main id="map"></main>
+<div id="gpsQuality"><i></i><span>GPS inte startad</span></div>
+<div id="modeSwitch"><button id="gpsMode" class="active">⌖ GPS</button><button id="manualMode"><span class="holdFill"></span><span class="modeLabel">✎ Manuellt</span></button></div>
+<div id="modeHint">GPS-LÄGE · Mät med telefonens position</div>
+<div id="editBar" class="hidden"><button id="undoVertex">↶ Ångra punkt</button><button id="cancelEdit">Avbryt</button><button id="finishEdit">Slutför</button><button id="deleteFeature" class="danger hidden">Radera</button></div>
+<section id="toolbar">
+  <div class="tool-row point-row"><button id="pointAction" class="tool-main"><span>PLACERA</span><b id="pointLabel">Sten</b></button><button class="tool-menu" data-category="point" aria-label="Välj punktobjekt">⌄</button></div>
+  <div class="tool-row"><button id="lineAction" class="tool-main"><span>SPELA IN</span><b id="lineLabel">Stig</b></button><button class="tool-menu" data-category="line" aria-label="Välj linjeobjekt">⌄</button></div>
+  <div class="tool-row"><button id="areaAction" class="tool-main"><span>OMRÅDE</span><b id="areaLabel">Tät skog</b></button><button class="tool-menu" data-category="area" aria-label="Välj områdesobjekt">⌄</button></div>
+  <div class="utility-row"><button id="locate">⌖ Starta GPS</button><span id="objectCount">0 objekt</span></div>
+</section>
+<dialog id="objectSheet"><form method="dialog"><div class="sheet-head"><div><small id="sheetCategory"></small><h2 id="sheetTitle">Välj objekt</h2></div><button value="cancel">×</button></div><div id="sheetOptions"></div></form></dialog>
+<div id="toast"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="field.js"></script></body></html>
