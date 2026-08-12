@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=5"><link rel="stylesheet" href="v6.css?v=6"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=5"><link rel="stylesheet" href="v6.css?v=6"><link rel="stylesheet" href="v7.css?v=7"></head>
 <body class="gps-mode">
 <header><div><small>OMAPMAKER · FÄLTPROTOTYP</small><h1>Fältkarta</h1></div><button id="export">Exportera</button></header>
 <main id="map"></main>
 <div id="gpsQuality"><i></i><span>GPS inte startad</span></div>
 <div id="modeSwitch"><button id="gpsMode" class="active">⌖ GPS</button><button id="manualMode"><span class="holdFill"></span><span class="modeLabel">✎ Manuellt</span></button></div>
 <div id="modeHint">GPS-LÄGE · Mät med telefonens position</div>
+<button id="layersButton" aria-label="Kartlager">▱ <span>Karta</span></button>
+<dialog id="layersSheet"><form method="dialog"><div class="sheet-head"><div><small>KARTLAGER</small><h2>Välj kartvy</h2></div><button value="cancel">×</button></div><fieldset><legend>Bakgrund</legend><label><input type="radio" name="basemap" value="osm"> Vanlig OSM</label><label><input type="radio" name="basemap" value="aerial"> Flygfoto</label><label><input type="radio" name="basemap" value="terrain"> Terräng + höjdkurvor</label><label><input type="radio" name="basemap" value="orientation"> Orienteringsskiss</label><label><input type="radio" name="basemap" value="none"> Ingen bakgrund</label></fieldset><fieldset><legend>Förgrund</legend><label><input id="objectsVisible" type="checkbox" checked> Fältobjekt</label><label><input id="contoursVisible" type="checkbox"> Höjdkurvor (referens)</label><label class="range-label">Förgrundens opacitet <output id="foregroundOpacityValue">100 %</output><input id="foregroundOpacity" type="range" min="20" max="100" value="100"></label></fieldset><p id="layerNote">Höjdkurvorna är referensmaterial. För slutlig karta ska vektorkurvor genereras från Lantmäteriets markhöjdmodell.</p></form></dialog>
 <div id="editBar" class="hidden"><button id="undoVertex">↶ Ångra punkt</button><button id="cancelEdit">Avbryt</button><button id="finishEdit">Slutför</button><button id="deleteFeature" class="danger hidden">Radera</button></div>
 <section id="toolbar">
   <div class="tool-row point-row"><button id="pointAction" class="tool-main"><span>PLACERA</span><b id="pointLabel">Sten</b></button><button class="tool-menu" data-category="point" aria-label="Välj punktobjekt">⌄</button></div>
@@ -15,4 +17,4 @@
 </section>
 <dialog id="objectSheet"><form method="dialog"><div class="sheet-head"><div><small id="sheetCategory"></small><h2 id="sheetTitle">Välj objekt</h2></div><button value="cancel">×</button></div><div id="sheetOptions"></div></form></dialog>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=6"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=7"></script></body></html>
