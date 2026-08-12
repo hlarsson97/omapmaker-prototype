@@ -17,7 +17,8 @@ const catalog = {
   ]
 };
 const defaults = {point:'boulder',line:'path',area:'dense'};
-const saved = JSON.parse(localStorage.getItem('omapmaker.live') || '{}');
+const legacy = JSON.parse(localStorage.getItem('omapmaker.live') || '{}');
+const saved = JSON.parse(localStorage.getItem('omapmaker.global') || JSON.stringify(legacy));
 const state = {observations:saved.observations||[],tracks:saved.tracks||[],areas:saved.areas||[]};
 const prefs = {...defaults,...JSON.parse(localStorage.getItem('omapmaker.prefs')||'{}')};
 const aliases = {stone:'boulder',large_boulder:'boulder_large',point_height:'knoll',dense_forest:'dense',very_dense_forest:'very_dense',open:'open_land'};
@@ -28,12 +29,18 @@ for(const cat of ['point','line','area']){
 for(const [cat,list] of [['point',state.observations],['line',state.tracks],['area',state.areas]])for(const object of list){
   object.objectType=aliases[object.objectType||object.type]||object.objectType||object.type;
   if(!catalog[cat].some(x=>x[0]===object.objectType))object.objectType=defaults[cat];
+  object.observationId=object.observationId||object.id||crypto.randomUUID();object.id=object.id||object.observationId;object.contributorId=object.contributorId||'legacy-local';object.syncStatus=object.syncStatus||'local';object.version=object.version||1;
 }
 let mode = localStorage.getItem('omapmaker.mode') === 'manual' ? 'manual' : 'gps';
 let recording = null, currentCoords = [], tempLayer = null, selected = null, handles = [];
 let lastPosition = null, watchId = null, gpsMarker = null, gpsCircle = null;
 const layers = new Map();
-const map = L.map('map',{zoomControl:false}).setView([59.3293,18.0686],15);
+const deviceId=localStorage.getItem('omapmaker.deviceId')||crypto.randomUUID();localStorage.setItem('omapmaker.deviceId',deviceId);
+const workspaceId=new URLSearchParams(location.search).get('workspace');
+const workspaces=JSON.parse(localStorage.getItem('omapmaker.workspaces')||'[]');
+const workspace=workspaces.find(w=>w.id===workspaceId)||null;
+const initialCenter=workspace?.center||JSON.parse(localStorage.getItem('omapmaker.lastCenter')||'{"lat":59.3293,"lng":18.0686}');
+const map = L.map('map',{zoomControl:false}).setView([initialCenter.lat,initialCenter.lng],workspace?14:15);
 L.control.zoom({position:'bottomright'}).addTo(map);
 map.createPane('basemapPane');map.getPane('basemapPane').style.zIndex=200;
 map.createPane('contourPane');map.getPane('contourPane').style.zIndex=350;map.getPane('contourPane').style.pointerEvents='none';
@@ -45,10 +52,20 @@ const layerPrefs={basemap:'osm',objects:true,contours:false,opacity:100,...JSON.
 function saveLayerPrefs(){localStorage.setItem('omapmaker.layers',JSON.stringify(layerPrefs))}
 function setBase(id){if(activeBase)map.removeLayer(activeBase);activeBase=baseMaps[id]||null;if(activeBase)activeBase.addTo(map);layerPrefs.basemap=id;saveLayerPrefs()}
 setBase(layerPrefs.basemap);
+if(workspace){
+  $('#mapContext').textContent=`ARBETSYTA · 1:${Number(workspace.scale).toLocaleString('sv-SE')} · ${workspace.contourInterval} M`;
+  $('#mapTitle').textContent=workspace.name;
+  document.title=`${workspace.name} · OMapMaker`;
+  const half=workspace.sizeKm/2,latDelta=half/111.32,lngDelta=half/(111.32*Math.cos(workspace.center.lat*Math.PI/180));
+  const bounds=L.latLngBounds([workspace.center.lat-latDelta,workspace.center.lng-lngDelta],[workspace.center.lat+latDelta,workspace.center.lng+lngDelta]);
+  L.rectangle(bounds,{pane:'contourPane',className:'workspace-boundary',interactive:false}).addTo(map);map.fitBounds(bounds,{padding:[28,28]});
+  workspace.updatedAt=new Date().toISOString();localStorage.setItem('omapmaker.workspaces',JSON.stringify(workspaces));
+}
+map.on('moveend',()=>{const c=map.getCenter();localStorage.setItem('omapmaker.lastCenter',JSON.stringify({lat:c.lat,lng:c.lng}))});
 
 function item(cat,id){return catalog[cat].find(x=>x[0]===id)||[id,'',id]}
 function name(cat,id){return item(cat,id)[2]}
-function save(){localStorage.setItem('omapmaker.live',JSON.stringify(state));localStorage.setItem('omapmaker.prefs',JSON.stringify(prefs));$('#objectCount').textContent=`${state.observations.length+state.tracks.length+state.areas.length} objekt`}
+function save(){localStorage.setItem('omapmaker.global',JSON.stringify(state));localStorage.setItem('omapmaker.live',JSON.stringify(state));localStorage.setItem('omapmaker.prefs',JSON.stringify(prefs));$('#objectCount').textContent=`${state.observations.length+state.tracks.length+state.areas.length} objekt`}
 function toast(text){$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),1900)}
 function pointSvg(id){
   const black='#181b19', brown='#9b5b35', green='#19834a', blue='#168cab';
@@ -92,11 +109,12 @@ function setMode(next){
 }
 $('#gpsMode').onclick=()=>setMode('gps');$('#manualMode').onclick=()=>setMode('manual');
 
-function addPoint(ll,accuracy,source){if(source==='gps'&&accuracy>50)return toast(`GPS ±${Math.round(accuracy)} m · för osäkert`);const o={id:crypto.randomUUID(),objectType:prefs.point,symbol:item('point',prefs.point)[1],coordinates:[ll.lng,ll.lat],accuracy,source,quality:'unverified',createdAt:new Date().toISOString()};state.observations.push(o);renderPoint(o);save();toast(`${name('point',prefs.point)} sparad`)}
+function identity(){const id=crypto.randomUUID();return{id,observationId:id,contributorId:deviceId,syncStatus:'local',version:1}}
+function addPoint(ll,accuracy,source){if(source==='gps'&&accuracy>50)return toast(`GPS ±${Math.round(accuracy)} m · för osäkert`);const o={...identity(),objectType:prefs.point,symbol:item('point',prefs.point)[1],coordinates:[ll.lng,ll.lat],accuracy,source,quality:'unverified',createdAt:new Date().toISOString()};state.observations.push(o);renderPoint(o);save();toast(`${name('point',prefs.point)} sparad`)}
 function showDrawingBar(){clearSelection();$('#undoVertex').classList.remove('hidden');$('#cancelEdit').classList.remove('hidden');$('#finishEdit').classList.remove('hidden');$('#finishEdit').textContent='Slutför';$('#deleteFeature').classList.add('hidden');$('#editBar').classList.remove('hidden')}
 function updateTemp(){if(tempLayer)map.removeLayer(tempLayer);if(!currentCoords.length)return;tempLayer=recording.cat==='area'?L.polygon(latlngs(currentCoords),{...areaStyle(recording.type),className:'temp-shape'}).addTo(map):L.polyline(latlngs(currentCoords),{...lineStyle(recording.type),className:'temp-shape'}).addTo(map)}
 function beginShape(cat){recording={mode,cat,type:prefs[cat]};currentCoords=[];showDrawingBar();labels();toast(mode==='gps'?`${name(cat,prefs[cat])} spelas in`:`Tryck ut ${cat==='line'?'linjen':'områdets hörn'}`)}
-function finishDrawing(){if(!recording)return;const min=recording.cat==='area'?3:2;if(currentCoords.length<min)return toast(`Minst ${min} punkter behövs`);const obj={id:crypto.randomUUID(),objectType:recording.type,symbol:item(recording.cat,recording.type)[1],coordinates:[...currentCoords],source:recording.mode,quality:'unverified',createdAt:new Date().toISOString()};if(recording.cat==='line'){state.tracks.push(obj);renderLine(obj)}else{state.areas.push(obj);renderArea(obj)}cancelDrawing(false);save();toast('Objekt sparat')}
+function finishDrawing(){if(!recording)return;const min=recording.cat==='area'?3:2;if(currentCoords.length<min)return toast(`Minst ${min} punkter behövs`);const obj={...identity(),objectType:recording.type,symbol:item(recording.cat,recording.type)[1],coordinates:[...currentCoords],source:recording.mode,quality:'unverified',createdAt:new Date().toISOString()};if(recording.cat==='line'){state.tracks.push(obj);renderLine(obj)}else{state.areas.push(obj);renderArea(obj)}cancelDrawing(false);save();toast('Objekt sparat')}
 function cancelDrawing(message=true){if(tempLayer)map.removeLayer(tempLayer);tempLayer=null;recording=null;currentCoords=[];$('#editBar').classList.add('hidden');labels();if(message)toast('Ritningen avbröts')}
 function action(cat){
   if(cat==='point'){if(mode==='manual'){recording={mode:'manual',cat:'point',type:prefs.point};toast(`${name('point',prefs.point)} vald · tryck på kartan`)}else if(lastPosition)addPoint(lastPosition.latlng,lastPosition.accuracy,'gps');else toast('GPS söker position · försök igen strax');return}

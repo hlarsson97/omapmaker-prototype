@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=5"><link rel="stylesheet" href="v6.css?v=6"><link rel="stylesheet" href="v7.css?v=7"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=5"><link rel="stylesheet" href="v6.css?v=6"><link rel="stylesheet" href="v7.css?v=7"><link rel="stylesheet" href="v8.css?v=8"></head>
 <body class="gps-mode">
-<header><div><small>OMAPMAKER · FÄLTPROTOTYP</small><h1>Fältkarta</h1></div><button id="export">Exportera</button></header>
+<header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><button id="export">Exportera</button></header>
 <main id="map"></main>
 <div id="gpsQuality"><i></i><span>GPS inte startad</span></div>
 <div id="modeSwitch"><button id="gpsMode" class="active">⌖ GPS</button><button id="manualMode"><span class="holdFill"></span><span class="modeLabel">✎ Manuellt</span></button></div>
@@ -17,4 +17,4 @@
 </section>
 <dialog id="objectSheet"><form method="dialog"><div class="sheet-head"><div><small id="sheetCategory"></small><h2 id="sheetTitle">Välj objekt</h2></div><button value="cancel">×</button></div><div id="sheetOptions"></div></form></dialog>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=7"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=8"></script></body></html>
