@@ -11,6 +11,6 @@
 #manualMode .holdFill{display:none}
 #modeHint{font-size:7px}
 .omap-symbol{background:transparent!important;border:0!important}
-.symbol-svg{width:25px;height:25px;display:block;filter:drop-shadow(0 1px 1px #fff)}
-#sheetOptions .symbol{vertical-align:middle}
+.symbol-svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px #fff)}
+#sheetOptions .symbol{width:25px;height:25px;vertical-align:middle}
 @media(max-width:430px){header h1{font-size:21px}header button{padding:8px 9px}#toolbar{left:7px;right:7px}.tool-main,.tool-menu{min-height:40px}}
