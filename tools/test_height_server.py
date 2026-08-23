@@ -1,0 +1,172 @@
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import numpy as np
+import rasterio
+from rasterio.transform import from_origin
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import height_server as server
+
+
+class RoadClassificationTests(unittest.TestCase):
+    def test_motorway_ramp_is_wide_road(self):
+        self.assertEqual(server.classify_osm_road({'highway': 'motorway_link'})[:2], ('502', 'wide_road'))
+
+    def test_unknown_highway_is_not_a_path(self):
+        self.assertEqual(server.classify_osm_road({'highway': 'future_road'})[0], '503')
+
+    def test_explicit_width_controls_road(self):
+        result = server.classify_osm_road({'highway': 'service', 'width': '5.2', 'surface': 'asphalt'})
+        self.assertEqual(result, ('502', 'wide_road', 'high', 'explicit-width'))
+
+    def test_path_rules_remain_paths(self):
+        self.assertEqual(server.classify_osm_road({'highway': 'path'})[0], '506')
+        self.assertEqual(server.classify_osm_road({'highway': 'path', 'trail_visibility': 'bad'})[0], '507')
+
+    def test_major_roundabout_inherits_wide_road(self):
+        result = server.classify_osm_road({'highway': 'primary', 'junction': 'roundabout'})
+        self.assertEqual(result, ('502', 'wide_road', 'medium', 'junction-inherited'))
+
+    def test_matching_oneway_pair_is_promoted(self):
+        features = [
+            {'type': 'Feature', 'id': 'a', 'properties': {'sourceId': 'way/1', 'highway': 'primary', 'oneway': 'yes', 'ref': 'E1', 'lanes': '1', 'isomSymbol': '503'}, 'geometry': {'type': 'LineString', 'coordinates': [[18.0, 59.0], [18.001, 59.0]]}},
+            {'type': 'Feature', 'id': 'b', 'properties': {'sourceId': 'way/2', 'highway': 'primary', 'oneway': 'yes', 'ref': 'E1', 'lanes': '1', 'isomSymbol': '503'}, 'geometry': {'type': 'LineString', 'coordinates': [[18.001, 59.0001], [18.0, 59.0001]]}},
+        ]
+        server.apply_paired_oneway_rules(features)
+        self.assertEqual([feature['properties']['isomSymbol'] for feature in features], ['502', '502'])
+        self.assertEqual(features[0]['properties']['classificationReason'], 'paired-oneway')
+
+    def test_three_lane_motorway_gets_physical_width(self):
+        width, reason, confidence = server.estimated_road_width({'highway': 'motorway', 'lanes': '3'})
+        self.assertEqual((width, reason, confidence), (12.5, 'inferred-lanes', 'medium'))
+
+    def test_roundabout_inherits_connected_wide_road(self):
+        features = [
+            {'type': 'Feature', 'id': 'road', 'properties': {'sourceId': 'way/1', 'highway': 'tertiary', 'isomSymbol': '502'}, 'geometry': {'type': 'LineString', 'coordinates': [[18.0, 59.0], [18.0004, 59.0]]}},
+            {'type': 'Feature', 'id': 'circle', 'properties': {'sourceId': 'way/2', 'highway': 'tertiary', 'junction': 'roundabout', 'isomSymbol': '503'}, 'geometry': {'type': 'LineString', 'coordinates': [[18.0004, 59.0], [18.0005, 59.0001], [18.0004, 59.0002], [18.0003, 59.0001], [18.0004, 59.0]]}},
+        ]
+        server.apply_roundabout_rules(features)
+        self.assertEqual(features[1]['properties']['isomSymbol'], '502')
+        self.assertEqual(features[1]['properties']['classificationReason'], 'roundabout-network')
+
+    def test_adjacent_sidewalk_is_suppressed(self):
+        features = [
+            {'type': 'Feature', 'id': 'road', 'properties': {'highway': 'primary', 'isomSymbol': '502'}, 'geometry': {'type': 'LineString', 'coordinates': [[18.0, 59.0], [18.002, 59.0]]}},
+            {'type': 'Feature', 'id': 'walk', 'properties': {'highway': 'footway', 'footway': 'sidewalk', 'isomSymbol': '506'}, 'geometry': {'type': 'LineString', 'coordinates': [[18.0, 59.00003], [18.002, 59.00003]]}},
+        ]
+        server.apply_sidepath_rules(features)
+        self.assertTrue(features[1]['properties']['suppressed'])
+        self.assertEqual(features[1]['properties']['suppressionReason'], 'adjacent-sidepath')
+
+
+class PavedAreaTests(unittest.TestCase):
+    def test_large_public_asphalt_parking_is_included(self):
+        result = server.paved_area_classification({'amenity': 'parking', 'surface': 'asphalt'}, 700, 20)
+        self.assertEqual(result, ('high', 'significant-parking-surface'))
+
+    def test_small_or_private_parking_is_excluded(self):
+        self.assertIsNone(server.paved_area_classification({'amenity': 'parking', 'surface': 'asphalt'}, 200, 20))
+        self.assertIsNone(server.paved_area_classification({'amenity': 'parking', 'surface': 'asphalt', 'access': 'private'}, 1000, 30))
+
+    def test_named_public_parking_can_pass_at_isom_minimum(self):
+        result = server.paved_area_classification({'amenity': 'parking', 'name': 'Besöksparkering'}, 300, 16)
+        self.assertEqual(result, ('medium', 'significant-parking'))
+
+
+    def test_parking_aisle_inside_501_is_suppressed(self):
+        roads = [{'type': 'Feature', 'id': 'aisle', 'properties': {'highway': 'service', 'service': 'parking_aisle'}, 'geometry': {'type': 'LineString', 'coordinates': [[18.0002, 59.0002], [18.0008, 59.0008]]}}]
+        paved = {'type': 'FeatureCollection', 'features': [{'type': 'Feature', 'geometry': {'type': 'Polygon', 'coordinates': [[[18.0, 59.0], [18.001, 59.0], [18.001, 59.001], [18.0, 59.001], [18.0, 59.0]]]}, 'properties': {}}]}
+        server.apply_paved_area_rules(roads, paved)
+        self.assertTrue(roads[0]['properties']['suppressed'])
+        self.assertEqual(roads[0]['properties']['suppressionReason'], 'inside-paved-area')
+
+
+class LandCoverTests(unittest.TestCase):
+    def test_water_area_and_stream_are_distinguished(self):
+        self.assertEqual(server.land_cover_classification({'natural': 'water'}, True)[:2], ('water_301', '301'))
+        self.assertEqual(server.land_cover_classification({'waterway': 'stream'}, False)[:2], ('watercourse_305', '305'))
+
+    def test_shallow_water_uses_302(self):
+        result = server.land_cover_classification({'natural': 'water', 'depth': '0.4'}, True, 1000, 20)
+        self.assertEqual(result[:2], ('water_302', '302'))
+
+    def test_wide_watercourse_uses_304(self):
+        result = server.land_cover_classification({'waterway': 'stream', 'width': '2.5'}, False)
+        self.assertEqual(result[:2], ('watercourse_304', '304'))
+
+    def test_minor_and_seasonal_channels_use_306(self):
+        self.assertEqual(server.land_cover_classification({'waterway': 'ditch'}, False)[:2], ('watercourse_306', '306'))
+        self.assertEqual(server.land_cover_classification({'waterway': 'stream', 'intermittent': 'yes'}, False)[:2], ('watercourse_306', '306'))
+
+    def test_reedbed_uses_uncrossable_marsh_candidate(self):
+        result = server.land_cover_classification({'natural': 'wetland', 'wetland': 'reedbed'}, True, 1000, 20)
+        self.assertEqual(result[:2], ('marsh_307', '307'))
+
+    def test_marsh_variants_are_distinguished(self):
+        self.assertEqual(server.land_cover_classification({'natural': 'wetland'}, True)[:2], ('marsh_308', '308'))
+        self.assertEqual(server.land_cover_classification({'natural': 'wetland'}, False)[:2], ('marsh_309', '309'))
+        self.assertEqual(server.land_cover_classification({'natural': 'wetland', 'seasonal': 'yes'}, True)[:2], ('marsh_310', '310'))
+
+    def test_water_points_cover_311_to_313(self):
+        self.assertEqual(server.water_point_classification({'man_made': 'water_well'})[:2], ('water_311', '311'))
+        self.assertEqual(server.water_point_classification({'natural': 'spring'})[:2], ('water_312', '312'))
+        self.assertEqual(server.water_point_classification({'waterway': 'waterfall'})[:2], ('water_313', '313'))
+
+    def test_open_and_cultivated_land_get_different_symbols(self):
+        self.assertEqual(server.land_cover_classification({'landuse': 'meadow'}, True)[:2], ('open_land', '401'))
+        self.assertEqual(server.land_cover_classification({'landuse': 'farmland'}, True)[:2], ('cultivated_land', '412'))
+
+    def test_residential_land_is_low_confidence_tomtmark(self):
+        result = server.land_cover_classification({'landuse': 'residential'}, True, 1800, 35)
+        self.assertEqual(result, ('residential_land', '520', 'low', 'small-residential-polygon'))
+
+    def test_large_residential_area_is_not_tomtmark(self):
+        self.assertIsNone(server.land_cover_classification({'landuse': 'residential'}, True, 25000, 120))
+
+    def test_water_tag_is_accepted_without_natural_tag(self):
+        self.assertEqual(server.land_cover_classification({'water': 'lake'}, True, 1000, 30)[:2], ('water_301', '301'))
+
+    def test_expanded_water_search_bbox_is_larger(self):
+        bbox=[18.0,59.0,18.01,59.01]
+        expanded=server.expand_bbox(bbox)
+        self.assertLess(expanded[0],bbox[0]);self.assertLess(expanded[1],bbox[1])
+        self.assertGreater(expanded[2],bbox[2]);self.assertGreater(expanded[3],bbox[3])
+
+    def test_large_polygon_crossing_workspace_is_kept(self):
+        geometry={'type':'Polygon','coordinates':[[[17.9,58.9],[18.2,58.9],[18.2,59.2],[17.9,59.2],[17.9,58.9]]]}
+        self.assertTrue(server.geometry_overlaps_bbox(geometry,[18.0,59.0,18.01,59.01]))
+
+    def test_relation_segments_are_joined_into_polygon(self):
+        relation={'members':[{'type':'way','role':'outer','geometry':[{'lon':18,'lat':59},{'lon':18.01,'lat':59},{'lon':18.01,'lat':59.01}]},{'type':'way','role':'outer','geometry':[{'lon':18.01,'lat':59.01},{'lon':18,'lat':59.01},{'lon':18,'lat':59}]}]}
+        polygons=server.relation_polygons(relation)
+        self.assertEqual(len(polygons),1)
+        self.assertEqual(polygons[0][0][0],polygons[0][0][-1])
+
+
+class AutomaticHeightDataTests(unittest.TestCase):
+    def test_missing_credentials_are_reported_explicitly(self):
+        previous=dict(server.LM_SESSION)
+        try:
+            server.LM_SESSION.update({'username':'','password':''})
+            with self.assertRaises(server.LantmaterietCredentialsRequired):server.lantmateriet_credentials()
+        finally:server.LM_SESSION.clear();server.LM_SESSION.update(previous)
+
+    def test_two_adjacent_height_tiles_form_covering_mosaic(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);first=root/'west.tif';second=root/'east.tif'
+            profile={'driver':'GTiff','width':10,'height':10,'count':1,'dtype':'float32','crs':'EPSG:4326','transform':from_origin(18.0,59.001,0.0001,0.0001),'nodata':-9999}
+            with rasterio.open(first,'w',**profile) as dataset:dataset.write(np.ones((1,10,10),dtype='float32'))
+            profile['transform']=from_origin(18.001,59.001,0.0001,0.0001)
+            with rasterio.open(second,'w',**profile) as dataset:dataset.write(np.full((1,10,10),2,dtype='float32'))
+            previous_cache=server.CACHE
+            try:
+                server.CACHE=root/'cache';bbox=[18.0,59.0,18.002,59.001];mosaic=server.build_height_mosaic([first,second],bbox)
+                self.assertTrue(mosaic.exists());self.assertTrue(server.covers(mosaic,bbox))
+            finally:server.CACHE=previous_cache
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -13,4 +13,9 @@
 .omap-symbol{background:transparent!important;border:0!important}
 .symbol-svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px #fff)}
 #sheetOptions .symbol{width:25px;height:25px;vertical-align:middle}
+.building-popup,.road-popup,.paved-area-popup{display:grid;gap:6px;min-width:220px}
+.building-popup small,.road-popup small,.paved-area-popup small{display:block;color:#59645d;line-height:1.35}
+.building-popup div,.road-popup div,.paved-area-popup div{display:flex;flex-wrap:wrap;gap:5px}
+.building-popup button,.road-popup button,.paved-area-popup button,.road-popup select{border:0;border-radius:7px;padding:6px 8px;background:#e8eee9;color:#173f2d;font-size:11px;font-weight:700}
+.road-popup select{width:100%;background:#f0f3ef}
 @media(max-width:430px){header h1{font-size:21px}header button{padding:8px 9px}#toolbar{left:7px;right:7px}.tool-main,.tool-menu{min-height:40px}}
