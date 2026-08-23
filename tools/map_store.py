@@ -141,6 +141,10 @@ class MapStore:
                     source_license TEXT,
                     feature_count INTEGER NOT NULL,
                     payload_zlib BLOB NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    revision INTEGER NOT NULL DEFAULT 1,
+                    content_hash TEXT,
+                    last_accessed_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -205,31 +209,111 @@ class MapStore:
                 );
                 CREATE INDEX IF NOT EXISTS global_objects_bbox ON global_objects(west, south, east, north);
             ''')
+            # Keep installations made before the central layer catalogue gained
+            # revisions readable without a manual database migration.
+            columns = {row['name'] for row in connection.execute('PRAGMA table_info(map_layers)').fetchall()}
+            migrations = {
+                'status': "ALTER TABLE map_layers ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+                'revision': "ALTER TABLE map_layers ADD COLUMN revision INTEGER NOT NULL DEFAULT 1",
+                'content_hash': 'ALTER TABLE map_layers ADD COLUMN content_hash TEXT',
+                'last_accessed_at': 'ALTER TABLE map_layers ADD COLUMN last_accessed_at TEXT',
+            }
+            for column, statement in migrations.items():
+                if column not in columns:
+                    connection.execute(statement)
+
+    @staticmethod
+    def _normalized_bbox(bbox):
+        values = [float(value) for value in bbox]
+        if len(values) != 4 or not all(math.isfinite(value) for value in values):
+            raise ValueError('Kartlagrets arbetsområde är ogiltigt')
+        west, south, east, north = values
+        if not (-180 <= west < east <= 180 and -90 <= south < north <= 90):
+            raise ValueError('Kartlagrets arbetsområde ligger utanför WGS84')
+        return values
+
+    @staticmethod
+    def _parameters_json(parameters):
+        def canonical(item):
+            if isinstance(item, dict):
+                return {str(key): canonical(value) for key, value in item.items()}
+            if isinstance(item, list):
+                return [canonical(value) for value in item]
+            if isinstance(item, float) and math.isfinite(item) and item.is_integer():
+                return int(item)
+            return item
+        value = json.dumps(canonical(parameters or {}), ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        if len(value) > 4_000:
+            raise ValueError('Kartlagrets parametrar är för stora')
+        return value
+
+    @staticmethod
+    def _row_metadata(row):
+        return {
+            'id': row['id'],
+            'layerType': row['layer_type'],
+            'bbox': [row['west'], row['south'], row['east'], row['north']],
+            'parameters': json.loads(row['parameters_json']),
+            'source': row['source'],
+            'license': row['source_license'],
+            'featureCount': row['feature_count'],
+            'status': row['status'],
+            'revision': row['revision'],
+            'createdAt': row['created_at'],
+            'updatedAt': row['updated_at'],
+        }
+
+    @staticmethod
+    def _feature_intersects(feature, bbox):
+        geometry = feature.get('geometry') if isinstance(feature, dict) else None
+        if not isinstance(geometry, dict) or geometry.get('coordinates') is None:
+            return True
+        try:
+            coordinates = list(_walk_coordinates(geometry['coordinates']))
+        except ValueError:
+            return True
+        if not coordinates:
+            return True
+        west, south, east, north = bbox
+        feature_west = min(point[0] for point in coordinates)
+        feature_south = min(point[1] for point in coordinates)
+        feature_east = max(point[0] for point in coordinates)
+        feature_north = max(point[1] for point in coordinates)
+        return feature_east >= west and feature_west <= east and feature_north >= south and feature_south <= north
 
     def store_layer(self, layer_type, bbox, parameters, feature_collection):
         if not isinstance(feature_collection, dict) or feature_collection.get('type') != 'FeatureCollection':
             raise ValueError('Kartlagret måste vara en GeoJSON FeatureCollection')
-        bbox = [float(value) for value in bbox]
-        parameters_json = json.dumps(parameters or {}, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        bbox = self._normalized_bbox(bbox)
+        parameters_json = self._parameters_json(parameters)
         cache_key = hashlib.sha256(json.dumps([layer_type, bbox, json.loads(parameters_json)], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         now = utc_now()
-        payload = zlib.compress(json.dumps(feature_collection, ensure_ascii=False, separators=(',', ':')).encode(), level=6)
+        payload_json = json.dumps(feature_collection, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+        content_hash = hashlib.sha256(payload_json).hexdigest()
+        payload = zlib.compress(payload_json, level=6)
         properties = feature_collection.get('properties') or {}
         source = str(properties.get('source', ''))[:100] or None
         source_license = str(properties.get('license', ''))[:100] or None
         with self.connection() as connection:
-            existing = connection.execute('SELECT id, created_at FROM map_layers WHERE cache_key=?', (cache_key,)).fetchone()
+            existing = connection.execute('SELECT id,created_at,revision,content_hash FROM map_layers WHERE cache_key=?', (cache_key,)).fetchone()
             layer_id = existing['id'] if existing else uuid.uuid4().hex
             created_at = existing['created_at'] if existing else now
-            connection.execute('''
-                INSERT INTO map_layers(id,cache_key,layer_type,west,south,east,north,parameters_json,source,source_license,feature_count,payload_zlib,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(cache_key) DO UPDATE SET source=excluded.source,source_license=excluded.source_license,feature_count=excluded.feature_count,payload_zlib=excluded.payload_zlib,updated_at=excluded.updated_at
-            ''', (layer_id, cache_key, str(layer_type), *bbox, parameters_json, source, source_license, len(feature_collection.get('features') or []), payload, created_at, now))
+            revision = int(existing['revision'] or 1) if existing else 1
+            if existing and existing['content_hash'] != content_hash:
+                revision += 1
+            if existing:
+                connection.execute('''
+                    UPDATE map_layers SET layer_type=?,west=?,south=?,east=?,north=?,parameters_json=?,source=?,source_license=?,feature_count=?,payload_zlib=?,status='active',revision=?,content_hash=?,last_accessed_at=?,updated_at=? WHERE cache_key=?
+                ''', (str(layer_type), *bbox, parameters_json, source, source_license, len(feature_collection.get('features') or []), payload, revision, content_hash, now, now, cache_key))
+            else:
+                connection.execute('''
+                    INSERT INTO map_layers(id,cache_key,layer_type,west,south,east,north,parameters_json,source,source_license,feature_count,payload_zlib,status,revision,content_hash,last_accessed_at,created_at,updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ''', (layer_id, cache_key, str(layer_type), *bbox, parameters_json, source, source_license, len(feature_collection.get('features') or []), payload, 'active', revision, content_hash, now, created_at, now))
         return layer_id
 
     def list_layers(self, bbox=None):
-        query = 'SELECT id,layer_type,west,south,east,north,parameters_json,source,source_license,feature_count,created_at,updated_at FROM map_layers'
+        query = 'SELECT id,layer_type,west,south,east,north,parameters_json,source,source_license,feature_count,status,revision,created_at,updated_at FROM map_layers'
         parameters = []
         if bbox:
             west, south, east, north = [float(value) for value in bbox]
@@ -238,7 +322,49 @@ class MapStore:
         query += ' ORDER BY updated_at DESC'
         with self.connection() as connection:
             rows = connection.execute(query, parameters).fetchall()
-        return [{**dict(row), 'bbox':[row['west'],row['south'],row['east'],row['north']], 'parameters':json.loads(row['parameters_json'])} for row in rows]
+        return [self._row_metadata(row) for row in rows]
+
+    def resolve_layer(self, layer_type, bbox, parameters=None, max_age_seconds=None, include_layer=True):
+        """Find the smallest current snapshot that fully covers a work area."""
+        west, south, east, north = self._normalized_bbox(bbox)
+        parameters_json = self._parameters_json(parameters)
+        query = '''
+            SELECT id,layer_type,west,south,east,north,parameters_json,source,source_license,feature_count,status,revision,payload_zlib,created_at,updated_at
+            FROM map_layers
+            WHERE layer_type=? AND status='active'
+              AND west<=? AND south<=? AND east>=? AND north>=?
+        '''
+        values = [str(layer_type), west, south, east, north]
+        if max_age_seconds is not None:
+            maximum = float(max_age_seconds)
+            if not math.isfinite(maximum) or maximum < 0:
+                raise ValueError('Lagrets maximala ålder är ogiltig')
+            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=maximum)
+            query += ' AND updated_at>=?'
+            values.append(cutoff.isoformat())
+        query += ' ORDER BY ((east-west)*(north-south)) ASC, updated_at DESC'
+        with self.connection() as connection:
+            rows = connection.execute(query, values).fetchall()
+            row = next((candidate for candidate in rows if self._parameters_json(json.loads(candidate['parameters_json'])) == parameters_json), None)
+            if not row:
+                return {'found': False}
+            connection.execute('UPDATE map_layers SET last_accessed_at=? WHERE id=?', (utc_now(), row['id']))
+        metadata = self._row_metadata(row)
+        result = {'found': True, 'metadata': metadata}
+        if include_layer:
+            layer = json.loads(zlib.decompress(row['payload_zlib']))
+            layer['features'] = [feature for feature in layer.get('features') or [] if self._feature_intersects(feature, [west, south, east, north])]
+            properties = layer.setdefault('properties', {})
+            properties.update({
+                'centralStorage': True,
+                'centralLayerId': row['id'],
+                'centralLayerRevision': row['revision'],
+                'centralLayerUpdatedAt': row['updated_at'],
+                'centralLayerBbox': metadata['bbox'],
+                'requestedBboxWgs84': [west, south, east, north],
+            })
+            result['layer'] = layer
+        return result
 
     def get_layer(self, layer_id):
         with self.connection() as connection:
@@ -300,7 +426,8 @@ class MapStore:
     def status(self):
         with self.connection() as connection:
             layers = connection.execute('SELECT COUNT(*) FROM map_layers').fetchone()[0]
+            layer_rows = connection.execute("SELECT layer_type,COUNT(*) AS count FROM map_layers WHERE status='active' GROUP BY layer_type").fetchall()
             submissions = connection.execute('SELECT COUNT(*) FROM submissions').fetchone()[0]
             observations = connection.execute("SELECT COUNT(*) FROM observations WHERE is_current=1 AND status='submitted'").fetchone()[0]
             global_objects = connection.execute("SELECT COUNT(*) FROM global_objects WHERE status='approved' AND deleted_at IS NULL").fetchone()[0]
-        return {'ok':True,'centralStorage':True,'layers':layers,'submissions':submissions,'pendingObservations':observations,'globalObjects':global_objects}
+        return {'ok':True,'centralStorage':True,'layers':layers,'layersByType':{row['layer_type']:row['count'] for row in layer_rows},'submissions':submissions,'pendingObservations':observations,'globalObjects':global_objects}

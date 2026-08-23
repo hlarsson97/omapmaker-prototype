@@ -16,4 +16,5 @@ __pycache__/
 data/lantmateriet/
 data/contour-cache/
 data/omapmaker.sqlite3*
+data/backups/
 

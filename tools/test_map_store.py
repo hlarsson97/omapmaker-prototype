@@ -44,7 +44,43 @@ class CentralMapStoreTests(unittest.TestCase):
             layer_id=store.store_layer('buildings',[18,59,18.01,59.01],{'importVersion':3},collection)
             self.assertEqual(store.get_layer(layer_id),collection)
             listed=store.list_layers([18.005,59.005,18.02,59.02])
-            self.assertEqual(listed[0]['layer_type'],'buildings');self.assertEqual(listed[0]['feature_count'],1)
+            self.assertEqual(listed[0]['layerType'],'buildings');self.assertEqual(listed[0]['featureCount'],1)
+
+    def test_layer_resolver_uses_covering_snapshot_and_filters_delivery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=MapStore(Path(temporary)/'map.sqlite3')
+            inside=self.feature(longitude=18.01,latitude=59.01);inside['id']='inside'
+            outside=self.feature(longitude=18.08,latitude=59.08);outside['id']='outside'
+            collection={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL'},'features':[inside,outside]}
+            layer_id=store.store_layer('buildings',[18,59,18.1,59.1],{'importVersion':3},collection)
+            resolved=store.resolve_layer('buildings',[18,59,18.02,59.02],{'importVersion':3})
+            self.assertTrue(resolved['found']);self.assertEqual(resolved['metadata']['id'],layer_id)
+            self.assertEqual([feature['id'] for feature in resolved['layer']['features']],['inside'])
+            self.assertEqual(resolved['layer']['properties']['centralLayerRevision'],1)
+            self.assertFalse(store.resolve_layer('buildings',[18,59,18.02,59.02],{'importVersion':4})['found'])
+
+    def test_layer_revision_changes_only_when_snapshot_content_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=MapStore(Path(temporary)/'map.sqlite3');bbox=[18,59,18.1,59.1];parameters={'importVersion':3}
+            collection={'type':'FeatureCollection','properties':{'source':'OpenStreetMap'},'features':[self.feature()]}
+            store.store_layer('buildings',bbox,parameters,collection)
+            store.store_layer('buildings',bbox,parameters,collection)
+            self.assertEqual(store.resolve_layer('buildings',bbox,parameters,include_layer=False)['metadata']['revision'],1)
+            changed={**collection,'features':[self.feature(longitude=18.02)]}
+            store.store_layer('buildings',bbox,parameters,changed)
+            self.assertEqual(store.resolve_layer('buildings',bbox,parameters,include_layer=False)['metadata']['revision'],2)
+
+    def test_existing_database_is_migrated_to_versioned_layers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'map.sqlite3'
+            import sqlite3
+            connection=sqlite3.connect(path)
+            connection.execute('''CREATE TABLE map_layers (id TEXT PRIMARY KEY,cache_key TEXT UNIQUE,layer_type TEXT,west REAL,south REAL,east REAL,north REAL,parameters_json TEXT,source TEXT,source_license TEXT,feature_count INTEGER,payload_zlib BLOB,created_at TEXT,updated_at TEXT)''')
+            connection.commit();connection.close()
+            store=MapStore(path)
+            with store.connection() as connection:
+                columns={row['name'] for row in connection.execute('PRAGMA table_info(map_layers)').fetchall()}
+            self.assertTrue({'status','revision','content_hash','last_accessed_at'}.issubset(columns))
 
     def test_invalid_geometry_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -83,7 +83,7 @@ kräver därför inget ytterligare serverpaket. Databasen använder WAL-läge oc
 innehåller:
 
 - en central katalog och komprimerad kopia av genererade höjdkurvor och hämtade
-  OSM-lager,
+  OSM-lager, med täckningsområde, parametrar, källuppgift och revision,
 - frivilligt insända observationer med versionshistorik,
 - en separat, inledningsvis tom tabell för granskade globala kartobjekt.
 
@@ -92,6 +92,13 @@ granskningsdialogen, välja varje objekt och godkänna att dess exakta geometri
 skickas. En insänd observation blir inte automatiskt ett globalt kartobjekt.
 Enhets-id:t lagras inte i databasen; servern lagrar endast ett envägshashat,
 pseudonymt bidrags-id för versionshantering och återkallning.
+
+När ett arbetsområde öppnas frågar klienten efter den minsta centrala
+lagerversion som täcker hela området och har samma genereringsparametrar. En
+manuell hämtning använder också en aktuell central kopia före OSM eller
+höjdtjänsten. OSM-lager äldre än 24 timmar kan hämtas på nytt när användaren
+trycker på hämtningsknappen; färdiga höjdkurvor återanvänds utan den tidsgränsen.
+Webbläsarens IndexedDB är en lokal cache och inte huvudlagringen.
 
 Databasen och dess WAL-filer är runtime-data och ska inte läggas i Git. De bör
 ingå i serverns privata säkerhetskopiering. För en konsekvent manuell filkopia,

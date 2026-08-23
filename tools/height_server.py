@@ -20,15 +20,15 @@ JOBS_LOCK=threading.Lock();JOBS={};JOB_CANCEL_EVENTS={};JOB_EXECUTOR=ThreadPoolE
 
 OAUTH_CLIENT_ID_CREDENTIAL='lantmateriet_oauth_client_id'
 OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
+CENTRAL_LAYER_TYPES={'contours','buildings','roads','paved-areas','land-cover'}
 
 class LantmaterietCredentialsRequired(RuntimeError):pass
 class ContourJobCancelled(RuntimeError):pass
 
 def centralize_layer(layer_type,bbox,result,parameters=None):
-    layer_id=MAP_STORE.store_layer(layer_type,bbox,parameters or {},result)
-    result.setdefault('properties',{})['centralLayerId']=layer_id
-    result['properties']['centralStorage']=True
-    return result
+    parameters=parameters or {};MAP_STORE.store_layer(layer_type,bbox,parameters,result)
+    resolved=MAP_STORE.resolve_layer(layer_type,bbox,parameters)
+    return resolved.get('layer',result)
 
 def overpass_json(query):
     last_error=None
@@ -766,7 +766,7 @@ def contour_result(request,progress=None,cancel_check=None):
             finally:temporary.unlink(missing_ok=True)
     cancel_check()
     result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['baseElevation']=base_elevation;result['properties']['verticalDatum']=vertical_datum;result['properties']['heightData']=height_data
-    centralize_layer('contours',bbox,result,{'interval':interval,'generalization':level,'baseElevation':base_elevation,'verticalDatum':vertical_datum})
+    result=centralize_layer('contours',bbox,result,{'interval':interval,'generalization':level,'baseElevation':base_elevation,'verticalDatum':vertical_datum})
     progress('complete','Höjdkurvorna är klara.',progressPercent=100,progressIndeterminate=False)
     return result
 
@@ -884,13 +884,21 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(404,{'error':'Okänd API-adress'})
     def do_POST(self):
         path=urllib.parse.urlparse(self.path).path
-        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=self.read_json()
             if path=='/api/submissions':return self.send_json(201,MAP_STORE.submit(self.device_id(),request.get('clientSubmissionId'),request.get('features')))
             if path=='/api/submissions/withdraw':return self.send_json(200,MAP_STORE.withdraw(self.device_id(),request.get('clientObservationIds')))
             if path=='/api/contour-jobs':return self.send_json(202,public_job(create_contour_job(request)['id']))
             bbox,_,_=validate_bbox(request)
+            if path=='/api/map-layers/resolve':
+                layer_type=str(request.get('layerType',''))
+                if layer_type not in CENTRAL_LAYER_TYPES:raise ValueError('Okänd central lagertyp')
+                parameters=request.get('parameters') or {}
+                if not isinstance(parameters,dict):raise ValueError('Lagrets parametrar är ogiltiga')
+                max_age=request.get('maxAgeSeconds')
+                include_layer=request.get('includeLayer',True) is not False
+                return self.send_json(200,MAP_STORE.resolve_layer(layer_type,bbox,parameters,max_age,include_layer))
             if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3}))
             if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':3}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1}))

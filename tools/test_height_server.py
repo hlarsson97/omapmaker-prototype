@@ -52,6 +52,18 @@ class CentralStorageApiTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/submissions',{'clientSubmissionId':'missing','features':[]})
         self.assertEqual(caught.exception.code,400)
 
+    def test_central_layer_resolver_returns_covering_snapshot(self):
+        collection={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL'},'features':[{'type':'Feature','id':'way-1','properties':{'sourceId':'way/1'},'geometry':{'type':'LineString','coordinates':[[18,59],[18.02,59.02]]}}]}
+        server.MAP_STORE.store_layer('roads',[17.99,58.99,18.03,59.03],{'importVersion':3},collection)
+        status,result=self.request('/api/map-layers/resolve',{'bbox':[18,59,18.01,59.01],'layerType':'roads','parameters':{'importVersion':3}})
+        self.assertEqual(status,200);self.assertTrue(result['found'])
+        self.assertEqual(result['layer']['properties']['centralLayerRevision'],1)
+        self.assertEqual(result['metadata']['layerType'],'roads')
+
+    def test_central_layer_resolver_reports_parameter_miss(self):
+        _,result=self.request('/api/map-layers/resolve',{'bbox':[18,59,18.01,59.01],'layerType':'roads','parameters':{'importVersion':999}})
+        self.assertFalse(result['found']);self.assertNotIn('layer',result)
+
 
 class RoadClassificationTests(unittest.TestCase):
     def test_motorway_ramp_is_wide_road(self):

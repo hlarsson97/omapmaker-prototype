@@ -17,4 +17,9 @@ Ubuntu finns i `SERVER_SETUP_UBUNTU.md`.
   kartobjekt. En observation ändrar därför aldrig kartan direkt.
 - Serverlagrade lager och observationer ligger i `data/omapmaker.sqlite3` och
   ingår inte i Git.
+- Externa lager återanvänds automatiskt från serverns centrala katalog när en
+  aktuell version täcker arbetsområdet. IndexedDB i webbläsaren är bara den
+  snabba lokala kopian.
+- Lokala godkännanden, avvisningar och typändringar läggs ovanpå nästa central
+  lagerversion och skrivs därför inte över av en vanlig källuppdatering.
 
