@@ -15,6 +15,7 @@ import height_server as server
 import lantmateriet_height as lm_height
 import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
+from test_map_store import CentralMapStoreTests
 
 
 class RoadClassificationTests(unittest.TestCase):

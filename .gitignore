@@ -15,4 +15,5 @@ __pycache__/
 # separate distribution terms. They remain on the server only.
 data/lantmateriet/
 data/contour-cache/
+data/omapmaker.sqlite3*
 

@@ -76,10 +76,42 @@ curl http://127.0.0.1:8765/api/height-status
 - Webbläsaren startar ett bakgrundsjobb och följer dess status. Ett avbrott i
   mobilanslutningen stoppar inte serverns cache eller redan färdiga resultat.
 
+## Central kartlagring
+
+Servern skapar automatiskt `data/omapmaker.sqlite3`. SQLite ingår i Python och
+kräver därför inget ytterligare serverpaket. Databasen använder WAL-läge och
+innehåller:
+
+- en central katalog och komprimerad kopia av genererade höjdkurvor och hämtade
+  OSM-lager,
+- frivilligt insända observationer med versionshistorik,
+- en separat, inledningsvis tom tabell för granskade globala kartobjekt.
+
+Lokala fältobjekt skickas aldrig automatiskt. Användaren måste först öppna
+granskningsdialogen, välja varje objekt och godkänna att dess exakta geometri
+skickas. En insänd observation blir inte automatiskt ett globalt kartobjekt.
+Enhets-id:t lagras inte i databasen; servern lagrar endast ett envägshashat,
+pseudonymt bidrags-id för versionshantering och återkallning.
+
+Databasen och dess WAL-filer är runtime-data och ska inte läggas i Git. De bör
+ingå i serverns privata säkerhetskopiering. För en konsekvent manuell filkopia,
+stoppa först tjänsten eller använd SQLite backup-API:t.
+
+Kontrollera lagringen med:
+
+```bash
+curl http://127.0.0.1:8765/api/storage-status
+```
+
+API:t skiljer uttryckligen på `/api/submissions` (ogranskade observationer) och
+`/api/global-objects` (godkända kartobjekt). Det finns ännu inget automatiskt
+flöde mellan dem.
+
 ## Kontroll
 
 ```bash
 curl http://127.0.0.1:8765/api/health
+curl http://127.0.0.1:8765/api/storage-status
 ```
 
 Stoppa en manuellt startad server med `Ctrl+C`.

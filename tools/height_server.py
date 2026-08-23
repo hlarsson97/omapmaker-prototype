@@ -9,8 +9,9 @@ import rasterio
 from pyproj import Transformer
 from rasterio.merge import merge as merge_rasters
 from lantmateriet_height import ApiError as LantmaterietApiError, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
+from map_store import MapStore
 
-ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'
+ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE)
 LEVELS={'detailed':2,'normal':5,'soft':10}
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
 HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':''}
@@ -22,6 +23,12 @@ OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
 
 class LantmaterietCredentialsRequired(RuntimeError):pass
 class ContourJobCancelled(RuntimeError):pass
+
+def centralize_layer(layer_type,bbox,result,parameters=None):
+    layer_id=MAP_STORE.store_layer(layer_type,bbox,parameters or {},result)
+    result.setdefault('properties',{})['centralLayerId']=layer_id
+    result['properties']['centralStorage']=True
+    return result
 
 def overpass_json(query):
     last_error=None
@@ -759,6 +766,7 @@ def contour_result(request,progress=None,cancel_check=None):
             finally:temporary.unlink(missing_ok=True)
     cancel_check()
     result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['baseElevation']=base_elevation;result['properties']['verticalDatum']=vertical_datum;result['properties']['heightData']=height_data
+    centralize_layer('contours',bbox,result,{'interval':interval,'generalization':level,'baseElevation':base_elevation,'verticalDatum':vertical_datum})
     progress('complete','Höjdkurvorna är klara.',progressPercent=100,progressIndeterminate=False)
     return result
 
@@ -832,9 +840,31 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
     def send_json(self,status,value):
         body=json.dumps(value,ensure_ascii=False).encode();self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+    def read_json(self,max_bytes=2_000_000):
+        length=int(self.headers.get('Content-Length','0'))
+        if length<=0 or length>max_bytes:raise ValueError('Begäran är tom eller för stor')
+        return json.loads(self.rfile.read(length))
+    def device_id(self):
+        value=self.headers.get('X-OMapMaker-Device','')
+        if not value:raise ValueError('En anonym enhetsidentifierare krävs')
+        return value
+    def query_bbox(self):
+        query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        raw=(query.get('bbox') or [''])[0]
+        return validate_bbox({'bbox':raw.split(',')})[0]
     def do_GET(self):
         path=urllib.parse.urlparse(self.path).path
         if path=='/api/health':return self.send_json(200,{'ok':True})
+        if path=='/api/storage-status':return self.send_json(200,MAP_STORE.status())
+        if path=='/api/map-layers':
+            try:return self.send_json(200,{'layers':MAP_STORE.list_layers(self.query_bbox())})
+            except (ValueError,KeyError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path.startswith('/api/map-layers/'):
+            result=MAP_STORE.get_layer(path.rsplit('/',1)[-1])
+            return self.send_json(200,result) if result else self.send_json(404,{'error':'Kartlagret hittades inte'})
+        if path=='/api/global-objects':
+            try:return self.send_json(200,MAP_STORE.global_objects(self.query_bbox()))
+            except (ValueError,KeyError) as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/height-status':
             mode=lantmateriet_auth_mode();cached_files=len(list(DATA.rglob('*.tif'))) if DATA.exists() else 0
             return self.send_json(200,{'ok':True,'credentialsConfigured':mode!='not-configured','authenticationMode':mode,'collection':'dtm-cog','cachedHeightFiles':cached_files})
@@ -854,15 +884,17 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(404,{'error':'Okänd API-adress'})
     def do_POST(self):
         path=urllib.parse.urlparse(self.path).path
-        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover'):return self.send_json(404,{'error':'Okänd API-adress'})
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
-            request=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))))
+            request=self.read_json()
+            if path=='/api/submissions':return self.send_json(201,MAP_STORE.submit(self.device_id(),request.get('clientSubmissionId'),request.get('features')))
+            if path=='/api/submissions/withdraw':return self.send_json(200,MAP_STORE.withdraw(self.device_id(),request.get('clientObservationIds')))
             if path=='/api/contour-jobs':return self.send_json(202,public_job(create_contour_job(request)['id']))
             bbox,_,_=validate_bbox(request)
-            if path=='/api/buildings':return self.send_json(200,osm_buildings(bbox))
-            if path=='/api/roads':return self.send_json(200,osm_roads(bbox))
-            if path=='/api/paved-areas':return self.send_json(200,osm_paved_areas(bbox))
-            if path=='/api/land-cover':return self.send_json(200,osm_land_cover(bbox))
+            if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3}))
+            if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':3}))
+            if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1}))
+            if path=='/api/land-cover':return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox),{'importVersion':4}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})

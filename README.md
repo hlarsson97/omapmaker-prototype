@@ -7,3 +7,14 @@ GitHub Pages visar den statiska demonstrationsversionen. Funktioner som hämtar
 OSM-data eller Lantmäteriets höjddata kräver Python-servern. Instruktioner för
 Ubuntu finns i `SERVER_SETUP_UBUNTU.md`.
 
+## Integritet och gemensam karta
+
+- Nya GPS- och manuellt ritade objekt är alltid lokala utkast.
+- Appen skickar inga objekt eller GPS-spår automatiskt.
+- Frivillig publicering kräver val av objekt, förhandsgranskning och ett
+  uttryckligt godkännande.
+- Servern lagrar insända observationer separat från godkända globala
+  kartobjekt. En observation ändrar därför aldrig kartan direkt.
+- Serverlagrade lager och observationer ligger i `data/omapmaker.sqlite3` och
+  ingår inte i Git.
+
