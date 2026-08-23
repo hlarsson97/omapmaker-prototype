@@ -46,7 +46,7 @@ class CentralStorageApiTests(unittest.TestCase):
         status,receipt=self.request('/api/submissions',{'clientSubmissionId':submission,'features':[feature]},device)
         self.assertEqual(status,201);self.assertEqual(receipt['status'],'submitted')
         _,storage=self.request('/api/storage-status');self.assertEqual(storage['pendingObservations'],1);self.assertEqual(storage['globalObjects'],0)
-        _,global_map=self.request('/api/global-objects?bbox=17.9,58.9,18.1,59.1');self.assertEqual(global_map['features'],[])
+        _,global_map=self.request('/api/global-objects?bbox=17.99,58.99,18.01,59.01');self.assertEqual(global_map['features'],[])
 
     def test_submission_requires_anonymous_device_identifier(self):
         with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/submissions',{'clientSubmissionId':'missing','features':[]})
