@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Local OMapMaker server with a contour-generation endpoint."""
 from __future__ import annotations
-import argparse, datetime, hashlib, json, math, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
+import argparse, datetime, hashlib, json, math, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request, uuid
+from concurrent.futures import ThreadPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import rasterio
 from pyproj import Transformer
 from rasterio.merge import merge as merge_rasters
-from lantmateriet_height import ApiError as LantmaterietApiError, asset_candidates, collections as lantmateriet_collections, download_assets, safe_filename, search as lantmateriet_search
+from lantmateriet_height import ApiError as LantmaterietApiError, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 
 ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'
 LEVELS={'detailed':2,'normal':5,'soft':10}
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
-HEIGHT_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':os.environ.get('LM_USERNAME',''),'password':os.environ.get('LM_PASSWORD','')}
+HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':''}
+OAUTH_LOCK=threading.Lock();OAUTH_STATE={'accessToken':'','expiresAt':0.0}
+JOBS_LOCK=threading.Lock();JOBS={};JOB_EXECUTOR=ThreadPoolExecutor(max_workers=2,thread_name_prefix='omapmaker-contours')
+
+OAUTH_CLIENT_ID_CREDENTIAL='lantmateriet_oauth_client_id'
+OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
 
 class LantmaterietCredentialsRequired(RuntimeError):pass
 
@@ -531,11 +537,86 @@ def intersects(path,bbox):
             return not (bounds.right<west or east<bounds.left or bounds.top<south or north<bounds.bottom)
     except Exception:return False
 
+def projected_request_bounds(dataset,bbox):
+    convert=Transformer.from_crs('EPSG:4326',dataset.crs,always_xy=True)
+    projected=[convert.transform(x,y) for x,y in ((bbox[0],bbox[1]),(bbox[0],bbox[3]),(bbox[2],bbox[1]),(bbox[2],bbox[3]))]
+    return min(point[0] for point in projected),min(point[1] for point in projected),max(point[0] for point in projected),max(point[1] for point in projected)
+
+def cached_tiles_cover(paths,bbox):
+    """Return True when a set of axis-aligned rasters jointly covers bbox."""
+    if not paths:return False
+    opened=[]
+    try:
+        opened=[rasterio.open(path) for path in paths]
+        crs=opened[0].crs
+        if not crs or any(dataset.crs!=crs for dataset in opened):return False
+        west,south,east,north=projected_request_bounds(opened[0],bbox)
+        rectangles=[]
+        for dataset in opened:
+            bounds=dataset.bounds
+            left=max(west,bounds.left);right=min(east,bounds.right)
+            bottom=max(south,bounds.bottom);top=min(north,bounds.top)
+            if left<right and bottom<top:rectangles.append((left,bottom,right,top))
+        if not rectangles:return False
+        xs=sorted({west,east,*[value for rectangle in rectangles for value in (rectangle[0],rectangle[2])]})
+        ys=sorted({south,north,*[value for rectangle in rectangles for value in (rectangle[1],rectangle[3])]})
+        for x1,x2 in zip(xs,xs[1:]):
+            if x2<=west or x1>=east:continue
+            x=(max(x1,west)+min(x2,east))/2
+            for y1,y2 in zip(ys,ys[1:]):
+                if y2<=south or y1>=north:continue
+                y=(max(y1,south)+min(y2,north))/2
+                if not any(left<=x<=right and bottom<=y<=top for left,bottom,right,top in rectangles):return False
+        return True
+    except Exception:return False
+    finally:
+        for dataset in opened:dataset.close()
+
+def service_credential(name,environment_name):
+    """Read a systemd credential, with an environment fallback for development."""
+    credentials_directory=os.environ.get('CREDENTIALS_DIRECTORY','')
+    if credentials_directory:
+        path=Path(credentials_directory)/name
+        try:
+            if path.is_file():return path.read_text(encoding='utf-8').strip()
+        except OSError:pass
+    return str(os.environ.get(environment_name,'')).strip()
+
+def oauth_client_credentials():
+    client_id=service_credential(OAUTH_CLIENT_ID_CREDENTIAL,'LM_OAUTH_CLIENT_ID')
+    client_secret=service_credential(OAUTH_CLIENT_SECRET_CREDENTIAL,'LM_OAUTH_CLIENT_SECRET')
+    return client_id,client_secret
+
+def lantmateriet_auth_mode():
+    client_id,client_secret=oauth_client_credentials()
+    if client_id and client_secret:return 'oauth2'
+    with LM_SESSION_LOCK:
+        if LM_SESSION.get('username') and LM_SESSION.get('password'):return 'basic-session'
+    return 'not-configured'
+
+def lantmateriet_bearer_token():
+    client_id,client_secret=oauth_client_credentials()
+    if not client_id or not client_secret:raise LantmaterietCredentialsRequired('Servern saknar en OAuth2-nyckel för Lantmäteriets STAC-hojd.')
+    now=time.time()
+    with OAUTH_LOCK:
+        if OAUTH_STATE['accessToken'] and OAUTH_STATE['expiresAt']>now+60:return OAUTH_STATE['accessToken']
+        token,expires_in=lantmateriet_oauth_token(client_id,client_secret)
+        OAUTH_STATE.update({'accessToken':token,'expiresAt':now+expires_in})
+        return token
+
 def lantmateriet_credentials():
     with LM_SESSION_LOCK:
         username=LM_SESSION.get('username','');password=LM_SESSION.get('password','')
     if not username or not password:raise LantmaterietCredentialsRequired('Lantmäteriets API-inloggning behövs för att hämta höjddata.')
     return username,password
+
+def lantmateriet_auth():
+    mode=lantmateriet_auth_mode()
+    if mode=='oauth2':return {'bearer_token':lantmateriet_bearer_token(),'username':'','password':''}
+    if mode=='basic-session':
+        username,password=lantmateriet_credentials()
+        return {'bearer_token':'','username':username,'password':password}
+    raise LantmaterietCredentialsRequired('Servern behöver konfigureras med en OAuth2-nyckel för Lantmäteriets STAC-hojd.')
 
 def set_lantmateriet_credentials(username,password):
     username=str(username or '').strip();password=str(password or '')
@@ -565,9 +646,7 @@ def build_height_mosaic(paths,bbox):
     try:
         crs=opened[0].crs
         if any(dataset.crs!=crs for dataset in opened):raise ValueError('Höjddatarutorna använder olika koordinatsystem')
-        convert=Transformer.from_crs('EPSG:4326',crs,always_xy=True)
-        projected=[convert.transform(x,y) for x,y in ((bbox[0],bbox[1]),(bbox[0],bbox[3]),(bbox[2],bbox[1]),(bbox[2],bbox[3]))]
-        bounds=(min(p[0] for p in projected),min(p[1] for p in projected),max(p[0] for p in projected),max(p[1] for p in projected))
+        bounds=projected_request_bounds(opened[0],bbox)
         CACHE.mkdir(parents=True,exist_ok=True)
         merge_rasters(opened,bounds=bounds,target_aligned_pixels=True,mem_limit=96,dst_path=target,dst_kwds={'driver':'GTiff','tiled':True,'blockxsize':256,'blockysize':256,'compress':'deflate','BIGTIFF':'IF_SAFER'})
     finally:
@@ -575,27 +654,112 @@ def build_height_mosaic(paths,bbox):
     if not target.exists() or not covers(target,bbox):raise ValueError('De hämtade höjdrutorna täcker inte hela arbetsområdet')
     return target
 
-def ensure_height_data(bbox):
+def cached_height_source(bbox):
+    candidates=[path for path in DATA.rglob('*.tif') if intersects(path,bbox)] if DATA.exists() else []
+    source=next((path for path in candidates if covers(path,bbox)),None)
+    if source:return source,candidates,False
+    if cached_tiles_cover(candidates,bbox):return build_height_mosaic(candidates,bbox),candidates,True
+    return None,candidates,False
+
+def ensure_height_data(bbox,progress=None):
+    progress=progress or (lambda *_:None)
     with HEIGHT_LOCK:
         DATA.mkdir(parents=True,exist_ok=True);CACHE.mkdir(parents=True,exist_ok=True)
-        existing=next((path for path in DATA.rglob('*.tif') if covers(path,bbox)),None)
-        if existing:return existing,{'cached':True,'downloadedFiles':0,'sourceFiles':1,'mosaic':False,'sourceName':existing.name}
-        username,password=lantmateriet_credentials();target=DATA/'auto';result=lantmateriet_search(username,password,'dtm-cog',bbox)
+        progress('checking-cache','Kontrollerar serverns höjddatacache…')
+        existing,candidates,mosaic=cached_height_source(bbox)
+        if existing:return existing,{'cached':True,'downloadedFiles':0,'sourceFiles':len(candidates),'mosaic':mosaic,'sourceName':existing.name}
+        progress('authenticating','Ansluter servern till Lantmäteriet…')
+        auth=lantmateriet_auth();target=DATA/'auto'
+        progress('searching','Söker höjdrutor för arbetsområdet…')
+        result=lantmateriet_search(auth['username'],auth['password'],'dtm-cog',bbox,bearer_token=auth['bearer_token'])
         expected=expected_height_files(result)
         if not expected:raise ValueError('Lantmäteriet hittade ingen markhöjdmodell för arbetsområdet')
         before={path.name for path in target.glob('*.tif')} if target.exists() else set()
-        download_assets(result,target,username,password)
+        missing=sum(name not in before for name in expected)
+        progress('downloading',f'Hämtar {missing} höjdrutor från Lantmäteriet…' if missing else 'Kontrollerar hämtade höjdrutor…')
+        downloaded_paths=download_assets(result,target,auth['username'],auth['password'],bearer_token=auth['bearer_token'])
+        for path in downloaded_paths:
+            try:
+                with rasterio.open(path) as dataset:
+                    if not dataset.crs or dataset.width<1 or dataset.height<1:raise ValueError
+            except Exception as exc:raise ValueError(f'Höjddatafilen {path.name} är ofullständig eller ogiltig') from exc
         downloaded=sum(name not in before for name in expected)
-        candidates=[path for path in DATA.rglob('*.tif') if intersects(path,bbox)]
-        if not candidates:raise ValueError('Höjddata hämtades men kunde inte öppnas')
-        source=next((path for path in candidates if covers(path,bbox)),None)
-        mosaic=False
-        if source is None:source=build_height_mosaic(candidates,bbox);mosaic=True
+        progress('preparing','Förbereder höjddata för arbetsområdet…')
+        source,candidates,mosaic=cached_height_source(bbox)
+        if source is None:raise ValueError('De hämtade höjdrutorna täcker inte hela arbetsområdet')
         return source,{'cached':downloaded==0,'downloadedFiles':downloaded,'sourceFiles':len(candidates),'mosaic':mosaic,'sourceName':source.name}
 
 def dimensions_km(bbox):
     west,south,east,north=bbox; latitude=(south+north)/2
     return (east-west)*111.32*math.cos(math.radians(latitude)),(north-south)*111.32
+
+def validate_bbox(request):
+    bbox=[float(value) for value in request['bbox']]
+    if len(bbox)!=4 or bbox[0]>=bbox[2] or bbox[1]>=bbox[3]:raise ValueError('Ogiltigt kartområde')
+    width,height=dimensions_km(bbox)
+    if width>10.5 or height>10.5:raise ValueError(f'Prototypen stöder högst 10 × 10 km (valt {width:.1f} × {height:.1f} km)')
+    return bbox,width,height
+
+def contour_result(request,progress=None):
+    progress=progress or (lambda *_:None)
+    bbox,width,height=validate_bbox(request)
+    interval=float(request.get('interval',2.5));level=str(request.get('generalization','soft'))
+    if interval not in (2.5,5.0):raise ValueError('Ekvidistansen måste vara 2,5 eller 5 meter')
+    if level not in LEVELS:raise ValueError('Okänd detaljeringsnivå')
+    source,height_data=ensure_height_data(bbox,progress)
+    stat=source.stat();source_signature=[source.name,stat.st_size,int(stat.st_mtime)]
+    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['contours-v2',bbox,interval,level,source_signature],separators=(',',':'));output=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'.geojson')
+    with CONTOUR_LOCK:
+        if output.exists():progress('contour-cache','Färdiga höjdkurvor hittades i serverns cache…')
+        else:
+            progress('generating','Genererar och mjukar ut höjdkurvor…')
+            selected_generator=TILED_GENERATOR if width>2.2 or height>2.2 else GENERATOR
+            temporary=output.with_name(output.name+'.part')
+            command=[sys.executable,str(selected_generator),str(source),str(temporary),'--bbox',*map(str,bbox),'--interval',str(interval),'--terrain-smooth',str(LEVELS[level]),'--smooth','2','--simplify','1.5']
+            try:
+                subprocess.run(command,check=True,capture_output=True,text=True,timeout=300)
+                json.loads(temporary.read_text(encoding='utf-8'))
+                temporary.replace(output)
+            finally:temporary.unlink(missing_ok=True)
+    result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['heightData']=height_data
+    progress('complete','Höjdkurvorna är klara.')
+    return result
+
+def update_job(job_id,**changes):
+    with JOBS_LOCK:
+        if job_id in JOBS:JOBS[job_id].update(changes,updatedAt=time.time())
+
+def job_progress(job_id,stage,message):update_job(job_id,stage=stage,message=message)
+
+def run_contour_job(job_id,request):
+    try:
+        result=contour_result(request,lambda stage,message:job_progress(job_id,stage,message))
+        update_job(job_id,status='complete',stage='complete',message='Höjdkurvorna är klara.',result=result)
+    except LantmaterietCredentialsRequired as exc:update_job(job_id,status='error',stage='configuration',message=str(exc),code='lantmateriet_credentials_required')
+    except LantmaterietApiError as exc:update_job(job_id,status='error',stage='provider',message=str(exc),code='lantmateriet_api_error')
+    except subprocess.CalledProcessError as exc:update_job(job_id,status='error',stage='generation',message=exc.stderr.strip() or 'Kurvorna kunde inte genereras',code='contour_generation_error')
+    except Exception as exc:update_job(job_id,status='error',stage='failed',message=str(exc),code='height_job_error')
+
+def create_contour_job(request):
+    validate_bbox(request)
+    # Bound memory use: completed job results also live persistently in the contour cache.
+    cutoff=time.time()-86400
+    with JOBS_LOCK:
+        for old_id in [key for key,value in JOBS.items() if value.get('updatedAt',0)<cutoff]:JOBS.pop(old_id,None)
+        job_id=uuid.uuid4().hex
+        JOBS[job_id]={'id':job_id,'status':'queued','stage':'queued','message':'Höjdjobbet väntar…','createdAt':time.time(),'updatedAt':time.time()}
+    JOB_EXECUTOR.submit(run_contour_job,job_id,dict(request))
+    return public_job(job_id)
+
+def public_job(job_id):
+    with JOBS_LOCK:job=JOBS.get(job_id)
+    if not job:return None
+    return {key:value for key,value in job.items() if key not in ('createdAt','updatedAt')}
+
+def discard_delivered_job_result(job_id):
+    with JOBS_LOCK:
+        job=JOBS.get(job_id)
+        if job and job.get('status')=='complete':job.pop('result',None);job['delivered']=True
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs):super().__init__(*args,directory=str(STATIC),**kwargs)
@@ -608,36 +772,32 @@ class Handler(SimpleHTTPRequestHandler):
     def send_json(self,status,value):
         body=json.dumps(value,ensure_ascii=False).encode();self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
     def do_GET(self):
-        if self.path=='/api/health':return self.send_json(200,{'ok':True})
-        if self.path=='/api/height-status':
-            with LM_SESSION_LOCK:configured=bool(LM_SESSION.get('username') and LM_SESSION.get('password'))
-            return self.send_json(200,{'ok':True,'credentialsConfigured':configured,'collection':'dtm-cog'})
+        path=urllib.parse.urlparse(self.path).path
+        if path=='/api/health':return self.send_json(200,{'ok':True})
+        if path=='/api/height-status':
+            mode=lantmateriet_auth_mode();cached_files=len(list(DATA.rglob('*.tif'))) if DATA.exists() else 0
+            return self.send_json(200,{'ok':True,'credentialsConfigured':mode!='not-configured','authenticationMode':mode,'collection':'dtm-cog','cachedHeightFiles':cached_files})
+        if path.startswith('/api/contour-jobs/'):
+            job_id=path.rsplit('/',1)[-1];job=public_job(job_id)
+            if not job:return self.send_json(404,{'error':'Höjdjobbet hittades inte','code':'job_not_found'})
+            self.send_json(200,job)
+            if job.get('status')=='complete' and 'result' in job:discard_delivered_job_result(job_id)
+            return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/contours','/api/height-data','/api/lantmateriet-session','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover'):return self.send_json(404,{'error':'Okänd API-adress'})
+        path=urllib.parse.urlparse(self.path).path
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))))
-            if self.path=='/api/lantmateriet-session':return self.send_json(200,set_lantmateriet_credentials(request.get('username'),request.get('password')))
-            bbox=[float(v) for v in request['bbox']]
-            if len(bbox)!=4 or bbox[0]>=bbox[2] or bbox[1]>=bbox[3]:raise ValueError('Ogiltigt kartområde')
-            width,height=dimensions_km(bbox)
-            if width>10.5 or height>10.5:raise ValueError(f'Prototypen stöder högst 10 × 10 km (valt {width:.1f} × {height:.1f} km)')
-            if self.path=='/api/buildings':return self.send_json(200,osm_buildings(bbox))
-            if self.path=='/api/roads':return self.send_json(200,osm_roads(bbox))
-            if self.path=='/api/paved-areas':return self.send_json(200,osm_paved_areas(bbox))
-            if self.path=='/api/land-cover':return self.send_json(200,osm_land_cover(bbox))
-            source,height_data=ensure_height_data(bbox)
-            if self.path=='/api/height-data':return self.send_json(200,{'ok':True,**height_data})
-            interval=float(request.get('interval',2.5));level=str(request.get('generalization','soft'))
-            if interval not in (2.5,5.0):raise ValueError('Ekvidistansen måste vara 2,5 eller 5 meter')
-            if level not in LEVELS:raise ValueError('Okänd detaljeringsnivå')
-            CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps([bbox,interval,level,source.name],separators=(',',':'));output=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'.geojson')
-            if not output.exists():
-                selected_generator=TILED_GENERATOR if width>2.2 or height>2.2 else GENERATOR
-                command=[sys.executable,str(selected_generator),str(source),str(output),'--bbox',*map(str,bbox),'--interval',str(interval),'--terrain-smooth',str(LEVELS[level]),'--smooth','2','--simplify','1.5']
-                subprocess.run(command,check=True,capture_output=True,text=True,timeout=180)
-            result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['heightData']=height_data
-            return self.send_json(200,result)
+            if path=='/api/contour-jobs':return self.send_json(202,public_job(create_contour_job(request)['id']))
+            bbox,_,_=validate_bbox(request)
+            if path=='/api/buildings':return self.send_json(200,osm_buildings(bbox))
+            if path=='/api/roads':return self.send_json(200,osm_roads(bbox))
+            if path=='/api/paved-areas':return self.send_json(200,osm_paved_areas(bbox))
+            if path=='/api/land-cover':return self.send_json(200,osm_land_cover(bbox))
+            if path=='/api/height-data':
+                _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})
+            return self.send_json(200,contour_result(request))
         except LantmaterietCredentialsRequired as exc:return self.send_json(401,{'error':str(exc),'code':'lantmateriet_credentials_required'})
         except LantmaterietApiError as exc:return self.send_json(502,{'error':str(exc),'code':'lantmateriet_api_error'})
         except (ValueError,KeyError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})

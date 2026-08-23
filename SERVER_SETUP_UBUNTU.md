@@ -1,12 +1,15 @@
 # OMapMaker på Ubuntu
 
 Det här repot innehåller både webbappen och den lokala Python-servern. Servern
-hämtar OSM-objekt, hämtar Lantmäteriets markhöjdmodell efter att användaren har
-angivit sina Geotorget-uppgifter och genererar höjdkurvor.
+hämtar OSM-objekt och Lantmäteriets markhöjdmodell samt genererar höjdkurvor. En
+särskild OAuth2-applikation gör att telefonen inte behöver logga in på
+Geotorget.
 
 ## Säkerhetsregler
 
 - Lägg aldrig Geotorget-användarnamn eller lösenord i Git, en prompt eller en fil.
+- Lägg aldrig OAuth2-nycklar i Git, chatt, webbläsarlagring, miljövariabler eller
+  en okrypterad servicefil. Använd installationsskriptet nedan.
 - Mapparna `data/lantmateriet/` och `data/contour-cache/` ska stanna på servern.
 - Exponera inte port 8765 direkt mot internet.
 - GPS i telefonens webbläsare kräver HTTPS. Använd i första hand Tailscale Serve
@@ -38,10 +41,40 @@ test på samma lokala nät kan `OMAP_HOST=0.0.0.0 ./start_omapmaker.sh` använda
 men iPhone-GPS fungerar normalt inte över vanlig HTTP. Nästa rekommenderade steg
 är därför HTTPS via Tailscale Serve.
 
-## Geotorget
+## Automatisk höjddata via OAuth2
 
-När höjddata behövs frågar webbappen efter Geotorget-uppgifterna. Lösenordet
-hålls endast i serverprocessens minne och behöver anges igen efter omstart.
+Skapa först en separat applikation i Lantmäteriets API-portal, exempelvis
+`OMapMaker labserver1`. Lägg till API:t `STAC-hojd`, välj Client Credentials och
+generera Consumer Key och Consumer Secret. Kör sedan detta som den vanliga
+serveranvändaren:
+
+```bash
+chmod +x install_lantmateriet_oauth.sh
+./install_lantmateriet_oauth.sh
+```
+
+Skriptet frågar efter nycklarna lokalt, krypterar dem med systemd och installerar
+OMapMaker som en systemtjänst. Nycklarna skrivs inte till projektmappen. Det
+personliga Geotorget-lösenordet används inte. Tjänsten fortsätter vara bunden
+till `127.0.0.1:8765`; Tailscale Serve hanterar privat HTTPS.
+
+Kontrollera tjänsten med:
+
+```bash
+sudo systemctl status omapmaker.service
+curl http://127.0.0.1:8765/api/height-status
+```
+
+## Cachemodell
+
+- Lantmäteriets hämtade COG-filer sparas i `data/lantmateriet/auto/` och delas
+  av alla arbetsområden och användare på servern.
+- Servern hämtar endast de höjdrutor som saknas. Flera lokala rutor kan sättas
+  samman till ett arbetsområde utan ny API-hämtning.
+- Färdiga höjdkurvor sparas i `data/contour-cache/` per område, ekvidistans,
+  detaljeringsnivå och källdata.
+- Webbläsaren startar ett bakgrundsjobb och följer dess status. Ett avbrott i
+  mobilanslutningen stoppar inte serverns cache eller redan färdiga resultat.
 
 ## Kontroll
 

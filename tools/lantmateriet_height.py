@@ -21,6 +21,7 @@ from pathlib import Path
 
 
 API_ROOT = "https://api.lantmateriet.se/stac-hojd/v1"
+TOKEN_ENDPOINT = "https://apimanager.lantmateriet.se/oauth2/token"
 
 
 class ApiError(RuntimeError):
@@ -35,12 +36,24 @@ def credentials() -> tuple[str, str]:
     return username, password
 
 
-def request(url: str, username: str, password: str, *, payload: dict | None = None):
+def request(
+    url: str,
+    username: str = "",
+    password: str = "",
+    *,
+    bearer_token: str = "",
+    payload: dict | None = None,
+):
     headers = {
         "Accept": "application/geo+json, application/json",
         "User-Agent": "OMapMaker-height-import/0.1",
-        "Authorization": "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode(),
     }
+    if bearer_token:
+        headers["Authorization"] = "Bearer " + bearer_token
+    elif username and password:
+        headers["Authorization"] = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()
+    else:
+        raise ApiError("Autentisering saknas för Lantmäteriets API.")
     data = None
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
@@ -60,13 +73,52 @@ def request(url: str, username: str, password: str, *, payload: dict | None = No
         raise ApiError(f"Kunde inte nå Lantmäteriet: {exc.reason}") from exc
 
 
-def get_json(path: str, username: str, password: str) -> dict:
-    with request(API_ROOT + path, username, password) as response:
+def oauth_token(client_id: str, client_secret: str) -> tuple[str, int]:
+    """Exchange an OAuth2 client credential for a short-lived bearer token."""
+    if not client_id or not client_secret:
+        raise ApiError("OAuth2-nyckel saknas för Lantmäteriets API.")
+    body = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode("ascii")
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    req = urllib.request.Request(
+        TOKEN_ENDPOINT,
+        data=body,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": "Basic " + basic,
+            "User-Agent": "OMapMaker-height-import/0.2",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (400, 401, 403):
+            raise ApiError(
+                "Lantmäteriet nekade serverns OAuth2-nyckel. Kontrollera nyckeln och "
+                "att applikationen har åtkomst till STAC-hojd."
+            ) from exc
+        detail = exc.read(1000).decode("utf-8", "replace")
+        raise ApiError(f"HTTP {exc.code} när OAuth2-token hämtades: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise ApiError(f"Kunde inte nå Lantmäteriets OAuth2-tjänst: {exc.reason}") from exc
+    token = str(result.get("access_token") or "")
+    if not token:
+        raise ApiError("Lantmäteriets OAuth2-svar saknade access_token.")
+    try:
+        expires_in = max(60, int(result.get("expires_in", 3600)))
+    except (TypeError, ValueError):
+        expires_in = 3600
+    return token, expires_in
+
+
+def get_json(path: str, username: str = "", password: str = "", *, bearer_token: str = "") -> dict:
+    with request(API_ROOT + path, username, password, bearer_token=bearer_token) as response:
         return json.load(response)
 
 
-def collections(username: str, password: str) -> list[dict]:
-    return get_json("/collections", username, password).get("collections", [])
+def collections(username: str = "", password: str = "", *, bearer_token: str = "") -> list[dict]:
+    return get_json("/collections", username, password, bearer_token=bearer_token).get("collections", [])
 
 
 def choose_collection(items: list[dict], requested: str | None) -> str:
@@ -86,9 +138,16 @@ def choose_collection(items: list[dict], requested: str | None) -> str:
     raise ApiError("Ange --collection. Tillgängliga samlingar: " + available)
 
 
-def search(username: str, password: str, collection_id: str, bbox: list[float]) -> dict:
+def search(
+    username: str,
+    password: str,
+    collection_id: str,
+    bbox: list[float],
+    *,
+    bearer_token: str = "",
+) -> dict:
     payload = {"collections": [collection_id], "bbox": bbox, "limit": 100}
-    with request(API_ROOT + "/search", username, password, payload=payload) as response:
+    with request(API_ROOT + "/search", username, password, bearer_token=bearer_token, payload=payload) as response:
         return json.load(response)
 
 
@@ -107,7 +166,14 @@ def safe_filename(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", value) or "height.tif"
 
 
-def download_assets(result: dict, target: Path, username: str, password: str) -> list[Path]:
+def download_assets(
+    result: dict,
+    target: Path,
+    username: str = "",
+    password: str = "",
+    *,
+    bearer_token: str = "",
+) -> list[Path]:
     target.mkdir(parents=True, exist_ok=True)
     downloaded: list[Path] = []
     seen: set[str] = set()
@@ -125,9 +191,17 @@ def download_assets(result: dict, target: Path, username: str, password: str) ->
             downloaded.append(destination)
             continue
         print(f"Hämtar {destination.name} ...")
-        with request(href, username, password) as response, destination.open("wb") as output:
-            while chunk := response.read(1024 * 1024):
-                output.write(chunk)
+        temporary = destination.with_name(destination.name + ".part")
+        try:
+            with request(href, username, password, bearer_token=bearer_token) as response, temporary.open("wb") as output:
+                while chunk := response.read(1024 * 1024):
+                    output.write(chunk)
+            if temporary.stat().st_size == 0:
+                raise ApiError(f"Lantmäteriet returnerade en tom fil för {destination.name}.")
+            temporary.replace(destination)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
         downloaded.append(destination)
     return downloaded
 

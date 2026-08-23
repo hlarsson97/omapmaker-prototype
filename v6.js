@@ -243,23 +243,28 @@ if(!workspace){$('#workspaceSettingsButton').hidden=true;$('#layerNote').textCon
 if(location.hostname.includes('github.io')){for(const id of ['#fetchOsmLandCoverButton','#fetchOsmBuildingsButton','#fetchOsmPavedAreasButton','#fetchOsmRoadsButton','#generateContoursButton']){$(id).disabled=true;$(id).title='Kräver den lokala OMapMaker-servern'}$('#layerNote').textContent='Publik webbprototyp: GPS, manuell kartering och lokala arbetsområden fungerar. Automatisk hämtning och generering kräver den lokala servern.'}
 $('#export').onclick=()=>{const features=[...state.observations.map(o=>({type:'Feature',id:o.id,properties:{...o,coordinates:undefined},geometry:{type:'Point',coordinates:o.coordinates}})),...state.tracks.map(o=>({type:'Feature',id:o.id,properties:{objectType:o.objectType,symbol:o.symbol,category:'line',source:o.source,quality:o.quality,createdAt:o.createdAt,samples:o.coordinates.map(c=>({accuracy:c[2],time:c[3],altitude:c[4],altitudeAccuracy:c[5]}))},geometry:{type:'LineString',coordinates:o.coordinates.map(c=>c[4]==null?c.slice(0,2):[c[0],c[1],c[4]])}})),...state.areas.map(o=>({type:'Feature',id:o.id,properties:{objectType:o.objectType,symbol:o.symbol,category:'area',source:o.source,quality:o.quality,createdAt:o.createdAt},geometry:{type:'Polygon',coordinates:[[...o.coordinates.map(c=>c.slice(0,2)),o.coordinates[0].slice(0,2)]]}}))];const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({type:'FeatureCollection',properties:{app:'OMapMaker',version:6,standard:'ISOM 2017-2 v6'},features},null,2)],{type:'application/geo+json'}));a.download='omapmaker-field-v6.geojson';a.click()};
 $('#generateContoursButton').onclick=()=>{$('#layersSheet').close();const interval=Number(workspace?.contourInterval||2.5);const option=document.querySelector(`input[name=generatedInterval][value="${interval}"]`);if(option)option.checked=true;$('#contourStatus').textContent='';$('#contourSheet').showModal()};
-let lantmaterietLoginResolve=null;
-function finishLantmaterietLogin(result){if($('#lantmaterietLoginSheet').open)$('#lantmaterietLoginSheet').close();const resolve=lantmaterietLoginResolve;lantmaterietLoginResolve=null;if(resolve)resolve(result)}
-function requestLantmaterietLogin(){if(lantmaterietLoginResolve)return Promise.resolve(false);$('#lantmaterietUsername').value=localStorage.getItem('omapmaker.lantmaterietUsername')||'';$('#lantmaterietPassword').value='';$('#lantmaterietLoginStatus').textContent='';$('#lantmaterietLoginSheet').showModal();setTimeout(()=>($('#lantmaterietUsername').value?$('#lantmaterietPassword'):$('#lantmaterietUsername')).focus(),50);return new Promise(resolve=>{lantmaterietLoginResolve=resolve})}
-$('#cancelLantmaterietLogin').onclick=()=>finishLantmaterietLogin(false);
-$('#lantmaterietLoginSheet').addEventListener('cancel',event=>{event.preventDefault();finishLantmaterietLogin(false)});
-$('#lantmaterietLoginForm').onsubmit=async event=>{event.preventDefault();const button=$('#submitLantmaterietLogin'),status=$('#lantmaterietLoginStatus'),username=$('#lantmaterietUsername').value.trim(),password=$('#lantmaterietPassword').value;button.disabled=true;status.textContent='Kontrollerar behörigheten…';try{const response=await fetch('/api/lantmateriet-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}),data=await response.json();if(!response.ok)throw new Error(data.error||'Inloggningen misslyckades');localStorage.setItem('omapmaker.lantmaterietUsername',username);$('#lantmaterietPassword').value='';finishLantmaterietLogin(true)}catch(error){status.textContent=error.message}finally{button.disabled=false}};
-async function ensureAutomaticHeightData(bbox,status){while(true){status.textContent='Kontrollerar höjddata för arbetsområdet…';const response=await fetch('/api/height-data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bbox})}),data=await response.json();if(response.status===401&&data.code==='lantmateriet_credentials_required'){status.textContent='Lantmäteriets API behöver anslutas.';if(await requestLantmaterietLogin())continue;throw new Error('Hämtningen avbröts eftersom Lantmäteriet inte anslöts')}if(!response.ok)throw new Error(data.error||'Höjddata kunde inte hämtas');return data}}
+const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
+async function jsonResponse(response){let data;try{data=await response.json()}catch{throw new Error(`Servern svarade inte korrekt (HTTP ${response.status})`)}if(!response.ok)throw new Error(data.error||data.message||`Serverfel ${response.status}`);return data}
+async function runContourJob(payload,status){
+  status.textContent='Startar höjdjobb på servern…';
+  const created=await jsonResponse(await fetch('/api/contour-jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));
+  if(!created.id)throw new Error('Servern returnerade inget jobbnummer');
+  for(let attempt=0;attempt<900;attempt++){
+    await wait(attempt<5?700:1200);
+    const job=await jsonResponse(await fetch(`/api/contour-jobs/${encodeURIComponent(created.id)}`,{cache:'no-store'}));
+    status.textContent=job.message||'Höjdjobbet arbetar…';
+    if(job.status==='complete')return job.result;
+    if(job.status==='error')throw new Error(job.message||'Höjdjobbet misslyckades');
+  }
+  throw new Error('Höjdjobbet tog för lång tid. Det kan fortsätta på servern; försök igen om en stund.');
+}
 $('#runContourGeneration').onclick=async()=>{
   const bbox=workspaceBbox();if(!bbox)return toast('Skapa eller öppna ett arbetsområde först');
   const button=$('#runContourGeneration'),status=$('#contourStatus');
   const payload={bbox,interval:Number(document.querySelector('input[name=generatedInterval]:checked').value),generalization:document.querySelector('input[name=generalization]:checked').value};
   button.disabled=true;button.textContent='Arbetar…';
   try{
-    const heightData=await ensureAutomaticHeightData(bbox,status);
-    status.textContent=heightData.downloadedFiles?`${heightData.downloadedFiles} höjddatarutor hämtade. Genererar kurvor…`:'Höjddata finns i cachen. Genererar kurvor…';
-    const response=await fetch('/api/contours',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const data=await response.json();if(!response.ok)throw new Error(data.error||'Höjdtjänsten svarade med ett fel');
+    const data=await runContourJob(payload,status);
     if(data.type!=='FeatureCollection')throw new Error('Ogiltigt svar från höjdtjänsten');
     projectContourData=data;await storeContourData(data);layerPrefs.projectContours=true;$('#projectContoursVisible').checked=true;saveLayerPrefs();renderProjectContours();refreshContourMeta();
     status.textContent=`Klart: ${data.features.length} kurvlinjer`;toast('Höjdkurvor genererade');setTimeout(()=>$('#contourSheet').close(),700);

@@ -1,7 +1,10 @@
 import sys
 import tempfile
+import json
+import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import rasterio
@@ -9,6 +12,7 @@ from rasterio.transform import from_origin
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import height_server as server
+import lantmateriet_height as lm_height
 
 
 class RoadClassificationTests(unittest.TestCase):
@@ -154,6 +158,14 @@ class AutomaticHeightDataTests(unittest.TestCase):
             with self.assertRaises(server.LantmaterietCredentialsRequired):server.lantmateriet_credentials()
         finally:server.LM_SESSION.clear();server.LM_SESSION.update(previous)
 
+    def test_missing_server_auth_requests_oauth_configuration(self):
+        previous=dict(server.LM_SESSION)
+        try:
+            server.LM_SESSION.update({'username':'','password':''})
+            with patch.dict(os.environ,{'CREDENTIALS_DIRECTORY':'','LM_OAUTH_CLIENT_ID':'','LM_OAUTH_CLIENT_SECRET':''},clear=False):
+                with self.assertRaisesRegex(server.LantmaterietCredentialsRequired,'OAuth2-nyckel'):server.lantmateriet_auth()
+        finally:server.LM_SESSION.clear();server.LM_SESSION.update(previous)
+
     def test_two_adjacent_height_tiles_form_covering_mosaic(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);first=root/'west.tif';second=root/'east.tif'
@@ -166,6 +178,57 @@ class AutomaticHeightDataTests(unittest.TestCase):
                 server.CACHE=root/'cache';bbox=[18.0,59.0,18.002,59.001];mosaic=server.build_height_mosaic([first,second],bbox)
                 self.assertTrue(mosaic.exists());self.assertTrue(server.covers(mosaic,bbox))
             finally:server.CACHE=previous_cache
+
+    def test_two_cached_tiles_are_reused_without_provider_login(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);data=root/'data';data.mkdir();first=data/'west.tif';second=data/'east.tif'
+            profile={'driver':'GTiff','width':10,'height':10,'count':1,'dtype':'float32','crs':'EPSG:4326','transform':from_origin(18.0,59.001,0.0001,0.0001),'nodata':-9999}
+            with rasterio.open(first,'w',**profile) as dataset:dataset.write(np.ones((1,10,10),dtype='float32'))
+            profile['transform']=from_origin(18.001,59.001,0.0001,0.0001)
+            with rasterio.open(second,'w',**profile) as dataset:dataset.write(np.full((1,10,10),2,dtype='float32'))
+            previous_data,previous_cache=server.DATA,server.CACHE
+            try:
+                server.DATA=data;server.CACHE=root/'cache';bbox=[18.0,59.0,18.002,59.001]
+                source,metadata=server.ensure_height_data(bbox)
+                self.assertTrue(source.exists());self.assertTrue(metadata['cached']);self.assertEqual(metadata['sourceFiles'],2)
+            finally:server.DATA,server.CACHE=previous_data,previous_cache
+
+    def test_systemd_credentials_select_oauth_mode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            (root/server.OAUTH_CLIENT_ID_CREDENTIAL).write_text('client-id',encoding='utf-8')
+            (root/server.OAUTH_CLIENT_SECRET_CREDENTIAL).write_text('client-secret',encoding='utf-8')
+            with patch.dict(os.environ,{'CREDENTIALS_DIRECTORY':str(root)},clear=False):
+                self.assertEqual(server.lantmateriet_auth_mode(),'oauth2')
+
+
+class OAuthTests(unittest.TestCase):
+    def test_client_credentials_exchange_returns_token_and_expiry(self):
+        class Response:
+            def __enter__(self):return self
+            def __exit__(self,*_):return False
+            def read(self,*_):return json.dumps({'access_token':'short-lived-token','expires_in':900}).encode()
+        captured={}
+        def open_request(request,timeout):
+            captured['request']=request;captured['timeout']=timeout;return Response()
+        with patch('urllib.request.urlopen',open_request):
+            token,expires=lm_height.oauth_token('client-id','client-secret')
+        self.assertEqual((token,expires),('short-lived-token',900))
+        self.assertEqual(captured['request'].full_url,lm_height.TOKEN_ENDPOINT)
+        self.assertEqual(captured['request'].data,b'grant_type=client_credentials')
+        self.assertTrue(captured['request'].get_header('Authorization').startswith('Basic '))
+
+
+class ContourJobTests(unittest.TestCase):
+    def test_completed_background_job_exposes_result(self):
+        expected={'type':'FeatureCollection','features':[]}
+        with patch.object(server,'contour_result',return_value=expected):
+            job={'id':'test-job','status':'queued','stage':'queued','message':'väntar','createdAt':0,'updatedAt':0}
+            with server.JOBS_LOCK:server.JOBS['test-job']=job
+            server.run_contour_job('test-job',{'bbox':[18,59,18.01,59.01]})
+        result=server.public_job('test-job')
+        self.assertEqual(result['status'],'complete');self.assertEqual(result['result'],expected)
+        with server.JOBS_LOCK:server.JOBS.pop('test-job',None)
 
 
 if __name__ == '__main__':
