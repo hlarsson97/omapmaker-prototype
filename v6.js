@@ -242,33 +242,55 @@ if(!workspace){$('#workspaceSettingsButton').hidden=true;$('#layerNote').textCon
 }
 if(location.hostname.includes('github.io')){for(const id of ['#fetchOsmLandCoverButton','#fetchOsmBuildingsButton','#fetchOsmPavedAreasButton','#fetchOsmRoadsButton','#generateContoursButton']){$(id).disabled=true;$(id).title='Kräver den lokala OMapMaker-servern'}$('#layerNote').textContent='Publik webbprototyp: GPS, manuell kartering och lokala arbetsområden fungerar. Automatisk hämtning och generering kräver den lokala servern.'}
 $('#export').onclick=()=>{const features=[...state.observations.map(o=>({type:'Feature',id:o.id,properties:{...o,coordinates:undefined},geometry:{type:'Point',coordinates:o.coordinates}})),...state.tracks.map(o=>({type:'Feature',id:o.id,properties:{objectType:o.objectType,symbol:o.symbol,category:'line',source:o.source,quality:o.quality,createdAt:o.createdAt,samples:o.coordinates.map(c=>({accuracy:c[2],time:c[3],altitude:c[4],altitudeAccuracy:c[5]}))},geometry:{type:'LineString',coordinates:o.coordinates.map(c=>c[4]==null?c.slice(0,2):[c[0],c[1],c[4]])}})),...state.areas.map(o=>({type:'Feature',id:o.id,properties:{objectType:o.objectType,symbol:o.symbol,category:'area',source:o.source,quality:o.quality,createdAt:o.createdAt},geometry:{type:'Polygon',coordinates:[[...o.coordinates.map(c=>c.slice(0,2)),o.coordinates[0].slice(0,2)]]}}))];const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({type:'FeatureCollection',properties:{app:'OMapMaker',version:6,standard:'ISOM 2017-2 v6'},features},null,2)],{type:'application/geo+json'}));a.download='omapmaker-field-v6.geojson';a.click()};
-$('#generateContoursButton').onclick=()=>{$('#layersSheet').close();const interval=Number(workspace?.contourInterval||2.5);const option=document.querySelector(`input[name=generatedInterval][value="${interval}"]`);if(option)option.checked=true;$('#contourStatus').textContent='';$('#contourSheet').showModal()};
+let activeContourJobId=null;
+const formatBytes=value=>{const bytes=Number(value||0);if(!bytes)return '';if(bytes>=1024*1024*1024)return `${(bytes/(1024*1024*1024)).toFixed(1).replace('.',',')} GB`;if(bytes>=1024*1024)return `${Math.round(bytes/(1024*1024))} MB`;return `${Math.max(1,Math.round(bytes/1024))} kB`};
+function setContourControlsRunning(running){
+  $('#runContourGeneration').disabled=running;$('#runContourGeneration').textContent=running?'Arbetar…':'Generera höjdkurvor';$('#cancelContourGeneration').hidden=!running;$('#cancelContourGeneration').disabled=false;$('#cancelContourGeneration').textContent='Avbryt';
+  document.querySelectorAll('#contourSheet input[type=radio]').forEach(input=>input.disabled=running);
+}
+function renderContourJob(job){
+  const panel=$('#contourProgressPanel'),progress=$('#contourProgress'),value=$('#contourProgressValue'),transfer=$('#contourTransferText');panel.hidden=false;
+  const stageLabels={'queued':'Väntar','checking-cache':'Kontrollerar cache','height-cache':'Höjddata i cache','authenticating':'Ansluter','searching':'Söker höjddata','downloading':'Hämtar höjddata','preparing':'Förbereder höjddata','contour-cache':'Kurvor i cache','generating':'Skapar höjdkurvor','cancelling':'Avbryter','complete':'Klart','cancelled':'Avbrutet'};
+  $('#contourStageText').textContent=stageLabels[job.stage]||'Arbetar';$('#contourStatus').textContent=job.message||'Höjdjobbet arbetar…';
+  const percent=Number(job.progressPercent);if(!job.progressIndeterminate&&Number.isFinite(percent)){progress.value=Math.max(0,Math.min(100,percent));value.textContent=`${Math.round(percent)} %`}else{progress.removeAttribute('value');value.textContent=''}
+  const loaded=formatBytes(job.loadedBytes),total=formatBytes(job.totalBytes),fileCount=Number(job.fileCount||0),fileIndex=Number(job.fileIndex||0);transfer.textContent=loaded?(total?`${loaded} av ${total}${fileCount>1?` · ruta ${fileIndex}/${fileCount}`:''}`:`${loaded} hämtat${fileCount>1?` · ruta ${fileIndex}/${fileCount}`:''}`):'';
+  if(job.heightDataCached===true){$('#contourCacheInfo').className='contour-cache-info cached';$('#contourCacheInfo').textContent='Höjddata för arbetsområdet återanvänds från serverns cache.'}
+  else if(job.heightDataCached===false){$('#contourCacheInfo').className='contour-cache-info download';$('#contourCacheInfo').textContent='Ny höjddata hämtas och sparas på servern för framtida användning.'}
+}
+async function refreshContourCacheInfo(){
+  const info=$('#contourCacheInfo'),bbox=workspaceBbox();if(!bbox)return;info.className='contour-cache-info';info.textContent='Kontrollerar serverns cache…';
+  try{const data=await jsonResponse(await fetch('/api/height-coverage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bbox})}));if(data.cached){info.className='contour-cache-info cached';info.textContent=`Höjddata finns redan på servern${data.sourceFiles?` · ${data.sourceFiles} ${data.sourceFiles===1?'fil':'filer'}`:''}.`}else{info.className='contour-cache-info download';info.textContent='Höjddata saknas för delar av området och hämtas vid generering.'}}
+  catch(error){info.className='contour-cache-info';info.textContent=`Cache kunde inte kontrolleras: ${error.message}`}
+}
+$('#generateContoursButton').onclick=()=>{$('#layersSheet').close();const interval=Number(workspace?.contourInterval||2.5);const option=document.querySelector(`input[name=generatedInterval][value="${interval}"]`);if(option&&!activeContourJobId)option.checked=true;if(!activeContourJobId){$('#contourStatus').textContent='';$('#contourProgressPanel').hidden=true;refreshContourCacheInfo()}$('#contourSheet').showModal()};
 const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
 async function jsonResponse(response){let data;try{data=await response.json()}catch{throw new Error(`Servern svarade inte korrekt (HTTP ${response.status})`)}if(!response.ok)throw new Error(data.error||data.message||`Serverfel ${response.status}`);return data}
 async function runContourJob(payload,status){
   status.textContent='Startar höjdjobb på servern…';
   const created=await jsonResponse(await fetch('/api/contour-jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));
-  if(!created.id)throw new Error('Servern returnerade inget jobbnummer');
+  if(!created.id)throw new Error('Servern returnerade inget jobbnummer');activeContourJobId=created.id;renderContourJob(created);
   for(let attempt=0;attempt<900;attempt++){
     await wait(attempt<5?700:1200);
     const job=await jsonResponse(await fetch(`/api/contour-jobs/${encodeURIComponent(created.id)}`,{cache:'no-store'}));
-    status.textContent=job.message||'Höjdjobbet arbetar…';
-    if(job.status==='complete')return job.result;
+    renderContourJob(job);
+    if(job.status==='complete'){if(!job.result)throw new Error('Höjdkurvorna skapades men resultatet kunde inte hämtas. Försök igen; serverns cache gör nästa körning snabb.');return job.result}
+    if(job.status==='cancelled'){const error=new Error(job.message||'Genereringen avbröts.');error.cancelled=true;throw error}
     if(job.status==='error')throw new Error(job.message||'Höjdjobbet misslyckades');
   }
   throw new Error('Höjdjobbet tog för lång tid. Det kan fortsätta på servern; försök igen om en stund.');
 }
+$('#cancelContourGeneration').onclick=async()=>{if(!activeContourJobId)return;const button=$('#cancelContourGeneration');button.disabled=true;button.textContent='Avbryter…';try{const job=await jsonResponse(await fetch(`/api/contour-jobs/${encodeURIComponent(activeContourJobId)}`,{method:'DELETE'}));renderContourJob(job)}catch(error){button.disabled=false;button.textContent='Avbryt';$('#contourStatus').textContent=`Kunde inte avbryta: ${error.message}`}};
 $('#runContourGeneration').onclick=async()=>{
   const bbox=workspaceBbox();if(!bbox)return toast('Skapa eller öppna ett arbetsområde först');
   const button=$('#runContourGeneration'),status=$('#contourStatus');
   const payload={bbox,interval:Number(document.querySelector('input[name=generatedInterval]:checked').value),generalization:document.querySelector('input[name=generalization]:checked').value};
-  button.disabled=true;button.textContent='Arbetar…';
+  setContourControlsRunning(true);$('#contourProgressPanel').hidden=false;
   try{
     const data=await runContourJob(payload,status);
     if(data.type!=='FeatureCollection')throw new Error('Ogiltigt svar från höjdtjänsten');
     projectContourData=data;await storeContourData(data);layerPrefs.projectContours=true;$('#projectContoursVisible').checked=true;saveLayerPrefs();renderProjectContours();refreshContourMeta();
     status.textContent=`Klart: ${data.features.length} kurvlinjer`;toast('Höjdkurvor genererade');setTimeout(()=>$('#contourSheet').close(),700);
-  }catch(error){status.textContent=location.hostname.includes('github.io')?'Höjdtjänsten är ännu inte driftsatt. Starta den lokala prototypen för att generera kurvor.':error.message}
-  finally{button.disabled=false;button.textContent='Generera höjdkurvor'}
+  }catch(error){status.textContent=location.hostname.includes('github.io')?'Höjdtjänsten är ännu inte driftsatt. Starta den lokala prototypen för att generera kurvor.':error.message;if(error.cancelled)toast('Genereringen avbröts')}
+  finally{activeContourJobId=null;setContourControlsRunning(false);refreshContourCacheInfo()}
 };
 setMode(mode);labels();save();

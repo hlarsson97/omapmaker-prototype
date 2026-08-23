@@ -15,12 +15,13 @@ LEVELS={'detailed':2,'normal':5,'soft':10}
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
 HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':''}
 OAUTH_LOCK=threading.Lock();OAUTH_STATE={'accessToken':'','expiresAt':0.0}
-JOBS_LOCK=threading.Lock();JOBS={};JOB_EXECUTOR=ThreadPoolExecutor(max_workers=2,thread_name_prefix='omapmaker-contours')
+JOBS_LOCK=threading.Lock();JOBS={};JOB_CANCEL_EVENTS={};JOB_EXECUTOR=ThreadPoolExecutor(max_workers=2,thread_name_prefix='omapmaker-contours')
 
 OAUTH_CLIENT_ID_CREDENTIAL='lantmateriet_oauth_client_id'
 OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
 
 class LantmaterietCredentialsRequired(RuntimeError):pass
+class ContourJobCancelled(RuntimeError):pass
 
 def overpass_json(query):
     last_error=None
@@ -661,30 +662,44 @@ def cached_height_source(bbox):
     if cached_tiles_cover(candidates,bbox):return build_height_mosaic(candidates,bbox),candidates,True
     return None,candidates,False
 
-def ensure_height_data(bbox,progress=None):
-    progress=progress or (lambda *_:None)
+def height_cache_status(bbox):
+    candidates=[path for path in DATA.rglob('*.tif') if intersects(path,bbox)] if DATA.exists() else []
+    covered=any(covers(path,bbox) for path in candidates) or cached_tiles_cover(candidates,bbox)
+    return {'ok':True,'cached':covered,'sourceFiles':len(candidates),'sourceBytes':sum(path.stat().st_size for path in candidates)}
+
+def ensure_height_data(bbox,progress=None,cancel_check=None):
+    progress=progress or (lambda *_,**__:None);cancel_check=cancel_check or (lambda:None)
     with HEIGHT_LOCK:
+        cancel_check()
         DATA.mkdir(parents=True,exist_ok=True);CACHE.mkdir(parents=True,exist_ok=True)
-        progress('checking-cache','Kontrollerar serverns höjddatacache…')
+        progress('checking-cache','Kontrollerar serverns höjddatacache…',progressIndeterminate=True)
         existing,candidates,mosaic=cached_height_source(bbox)
-        if existing:return existing,{'cached':True,'downloadedFiles':0,'sourceFiles':len(candidates),'mosaic':mosaic,'sourceName':existing.name}
-        progress('authenticating','Ansluter servern till Lantmäteriet…')
+        if existing:
+            progress('height-cache','Höjddata finns redan på servern.',progressPercent=100,progressIndeterminate=False,heightDataCached=True)
+            return existing,{'cached':True,'downloadedFiles':0,'sourceFiles':len(candidates),'mosaic':mosaic,'sourceName':existing.name}
+        cancel_check();progress('authenticating','Ansluter servern till Lantmäteriet…',progressIndeterminate=True,heightDataCached=False)
         auth=lantmateriet_auth();target=DATA/'auto'
-        progress('searching','Söker höjdrutor för arbetsområdet…')
+        cancel_check();progress('searching','Söker höjdrutor för arbetsområdet…',progressIndeterminate=True,heightDataCached=False)
         result=lantmateriet_search(auth['username'],auth['password'],'dtm-cog',bbox,bearer_token=auth['bearer_token'])
         expected=expected_height_files(result)
         if not expected:raise ValueError('Lantmäteriet hittade ingen markhöjdmodell för arbetsområdet')
         before={path.name for path in target.glob('*.tif')} if target.exists() else set()
         missing=sum(name not in before for name in expected)
-        progress('downloading',f'Hämtar {missing} höjdrutor från Lantmäteriet…' if missing else 'Kontrollerar hämtade höjdrutor…')
-        downloaded_paths=download_assets(result,target,auth['username'],auth['password'],bearer_token=auth['bearer_token'])
+        progress('downloading',f'Hämtar {missing} höjdrutor från Lantmäteriet…' if missing else 'Kontrollerar hämtade höjdrutor…',progressIndeterminate=True,heightDataCached=False,fileCount=len(expected))
+        def download_progress(info):
+            total=info.get('totalBytes',0);loaded=info.get('loadedBytes',0);percent=round(loaded*100/total,1) if total else None
+            file_label=f"Höjdruta {info.get('fileIndex',1)} av {info.get('fileCount',len(expected))}"
+            message=f"{file_label} finns redan på servern." if info.get('cached') else f"Hämtar {file_label.lower()} från Lantmäteriet…"
+            progress('downloading',message,progressPercent=percent,progressIndeterminate=percent is None,loadedBytes=loaded,totalBytes=total,currentFile=info.get('filename'),fileIndex=info.get('fileIndex'),fileCount=info.get('fileCount'),heightDataCached=False)
+        downloaded_paths=download_assets(result,target,auth['username'],auth['password'],bearer_token=auth['bearer_token'],progress_callback=download_progress,cancel_check=cancel_check)
         for path in downloaded_paths:
+            cancel_check()
             try:
                 with rasterio.open(path) as dataset:
                     if not dataset.crs or dataset.width<1 or dataset.height<1:raise ValueError
             except Exception as exc:raise ValueError(f'Höjddatafilen {path.name} är ofullständig eller ogiltig') from exc
         downloaded=sum(name not in before for name in expected)
-        progress('preparing','Förbereder höjddata för arbetsområdet…')
+        cancel_check();progress('preparing','Förbereder höjddata för arbetsområdet…',progressIndeterminate=True,heightDataCached=False)
         source,candidates,mosaic=cached_height_source(bbox)
         if source is None:raise ValueError('De hämtade höjdrutorna täcker inte hela arbetsområdet')
         return source,{'cached':downloaded==0,'downloadedFiles':downloaded,'sourceFiles':len(candidates),'mosaic':mosaic,'sourceName':source.name}
@@ -700,44 +715,72 @@ def validate_bbox(request):
     if width>10.5 or height>10.5:raise ValueError(f'Prototypen stöder högst 10 × 10 km (valt {width:.1f} × {height:.1f} km)')
     return bbox,width,height
 
-def contour_result(request,progress=None):
-    progress=progress or (lambda *_:None)
+def run_contour_generator(command,cancel_check,timeout=300):
+    process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+    deadline=time.monotonic()+timeout
+    while True:
+        try:
+            stdout,stderr=process.communicate(timeout=.25)
+            break
+        except subprocess.TimeoutExpired:
+            try:cancel_check()
+            except ContourJobCancelled:
+                process.terminate()
+                try:process.communicate(timeout=3)
+                except subprocess.TimeoutExpired:process.kill();process.communicate()
+                raise
+            if time.monotonic()>=deadline:
+                process.kill();stdout,stderr=process.communicate()
+                raise subprocess.TimeoutExpired(command,timeout,output=stdout,stderr=stderr)
+    if process.returncode:raise subprocess.CalledProcessError(process.returncode,command,output=stdout,stderr=stderr)
+
+def contour_result(request,progress=None,cancel_check=None):
+    progress=progress or (lambda *_,**__:None);cancel_check=cancel_check or (lambda:None)
     bbox,width,height=validate_bbox(request)
     interval=float(request.get('interval',2.5));level=str(request.get('generalization','soft'))
     if interval not in (2.5,5.0):raise ValueError('Ekvidistansen måste vara 2,5 eller 5 meter')
     if level not in LEVELS:raise ValueError('Okänd detaljeringsnivå')
-    source,height_data=ensure_height_data(bbox,progress)
+    cancel_check();source,height_data=ensure_height_data(bbox,progress,cancel_check)
     stat=source.stat();source_signature=[source.name,stat.st_size,int(stat.st_mtime)]
     CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['contours-v2',bbox,interval,level,source_signature],separators=(',',':'));output=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'.geojson')
     with CONTOUR_LOCK:
-        if output.exists():progress('contour-cache','Färdiga höjdkurvor hittades i serverns cache…')
+        cancel_check()
+        if output.exists():progress('contour-cache','Färdiga höjdkurvor finns redan på servern.',progressPercent=100,progressIndeterminate=False,contoursCached=True)
         else:
-            progress('generating','Genererar och mjukar ut höjdkurvor…')
+            progress('generating','Genererar och mjukar ut höjdkurvor…',progressIndeterminate=True,contoursCached=False)
             selected_generator=TILED_GENERATOR if width>2.2 or height>2.2 else GENERATOR
             temporary=output.with_name(output.name+'.part')
             command=[sys.executable,str(selected_generator),str(source),str(temporary),'--bbox',*map(str,bbox),'--interval',str(interval),'--terrain-smooth',str(LEVELS[level]),'--smooth','2','--simplify','1.5']
             try:
-                subprocess.run(command,check=True,capture_output=True,text=True,timeout=300)
+                run_contour_generator(command,cancel_check)
                 json.loads(temporary.read_text(encoding='utf-8'))
                 temporary.replace(output)
             finally:temporary.unlink(missing_ok=True)
+    cancel_check()
     result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['heightData']=height_data
-    progress('complete','Höjdkurvorna är klara.')
+    progress('complete','Höjdkurvorna är klara.',progressPercent=100,progressIndeterminate=False)
     return result
 
 def update_job(job_id,**changes):
     with JOBS_LOCK:
         if job_id in JOBS:JOBS[job_id].update(changes,updatedAt=time.time())
 
-def job_progress(job_id,stage,message):update_job(job_id,stage=stage,message=message)
+def job_progress(job_id,stage,message,**details):update_job(job_id,stage=stage,message=message,**details)
+
+def check_job_cancelled(job_id):
+    with JOBS_LOCK:event=JOB_CANCEL_EVENTS.get(job_id)
+    if event and event.is_set():raise ContourJobCancelled('Genereringen avbröts.')
 
 def run_contour_job(job_id,request):
     try:
-        result=contour_result(request,lambda stage,message:job_progress(job_id,stage,message))
+        check_job_cancelled(job_id);update_job(job_id,status='running')
+        result=contour_result(request,lambda stage,message,**details:job_progress(job_id,stage,message,**details),lambda:check_job_cancelled(job_id))
         update_job(job_id,status='complete',stage='complete',message='Höjdkurvorna är klara.',result=result)
+    except ContourJobCancelled:update_job(job_id,status='cancelled',stage='cancelled',message='Genereringen avbröts.',progressIndeterminate=False)
     except LantmaterietCredentialsRequired as exc:update_job(job_id,status='error',stage='configuration',message=str(exc),code='lantmateriet_credentials_required')
     except LantmaterietApiError as exc:update_job(job_id,status='error',stage='provider',message=str(exc),code='lantmateriet_api_error')
     except subprocess.CalledProcessError as exc:update_job(job_id,status='error',stage='generation',message=exc.stderr.strip() or 'Kurvorna kunde inte genereras',code='contour_generation_error')
+    except subprocess.TimeoutExpired:update_job(job_id,status='error',stage='generation',message='Genereringen tog för lång tid och stoppades.',code='contour_generation_timeout')
     except Exception as exc:update_job(job_id,status='error',stage='failed',message=str(exc),code='height_job_error')
 
 def create_contour_job(request):
@@ -745,21 +788,38 @@ def create_contour_job(request):
     # Bound memory use: completed job results also live persistently in the contour cache.
     cutoff=time.time()-86400
     with JOBS_LOCK:
-        for old_id in [key for key,value in JOBS.items() if value.get('updatedAt',0)<cutoff]:JOBS.pop(old_id,None)
+        for old_id in [key for key,value in JOBS.items() if value.get('updatedAt',0)<cutoff]:JOBS.pop(old_id,None);JOB_CANCEL_EVENTS.pop(old_id,None)
         job_id=uuid.uuid4().hex
-        JOBS[job_id]={'id':job_id,'status':'queued','stage':'queued','message':'Höjdjobbet väntar…','createdAt':time.time(),'updatedAt':time.time()}
+        JOBS[job_id]={'id':job_id,'status':'queued','stage':'queued','message':'Höjdjobbet väntar…','progressIndeterminate':True,'createdAt':time.time(),'updatedAt':time.time()}
+        JOB_CANCEL_EVENTS[job_id]=threading.Event()
     JOB_EXECUTOR.submit(run_contour_job,job_id,dict(request))
     return public_job(job_id)
 
 def public_job(job_id):
     with JOBS_LOCK:job=JOBS.get(job_id)
     if not job:return None
-    return {key:value for key,value in job.items() if key not in ('createdAt','updatedAt')}
+    return {key:value for key,value in job.items() if key not in ('createdAt','updatedAt','resultCleanupScheduled','deliveredAt')}
 
 def discard_delivered_job_result(job_id):
     with JOBS_LOCK:
         job=JOBS.get(job_id)
-        if job and job.get('status')=='complete':job.pop('result',None);job['delivered']=True
+        if job and job.get('status')=='complete':job.pop('result',None);job['delivered']=True;JOB_CANCEL_EVENTS.pop(job_id,None)
+
+def mark_job_result_delivered(job_id):
+    with JOBS_LOCK:
+        job=JOBS.get(job_id)
+        if not job or job.get('resultCleanupScheduled'):return
+        job['resultCleanupScheduled']=True;job['deliveredAt']=time.time()
+    timer=threading.Timer(300,discard_delivered_job_result,args=(job_id,));timer.daemon=True;timer.start()
+
+def cancel_contour_job(job_id):
+    with JOBS_LOCK:
+        job=JOBS.get(job_id);event=JOB_CANCEL_EVENTS.get(job_id)
+        if not job:return None
+        if job.get('status') in ('complete','error','cancelled'):return {key:value for key,value in job.items() if key not in ('createdAt','updatedAt','resultCleanupScheduled','deliveredAt')}
+        if event:event.set()
+        job.update(status='cancelling',stage='cancelling',message='Avbryter genereringen…',progressIndeterminate=True,updatedAt=time.time())
+        return {key:value for key,value in job.items() if key not in ('createdAt','updatedAt','resultCleanupScheduled','deliveredAt')}
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs):super().__init__(*args,directory=str(STATIC),**kwargs)
@@ -781,12 +841,19 @@ class Handler(SimpleHTTPRequestHandler):
             job_id=path.rsplit('/',1)[-1];job=public_job(job_id)
             if not job:return self.send_json(404,{'error':'Höjdjobbet hittades inte','code':'job_not_found'})
             self.send_json(200,job)
-            if job.get('status')=='complete' and 'result' in job:discard_delivered_job_result(job_id)
+            if job.get('status')=='complete' and 'result' in job:mark_job_result_delivered(job_id)
             return
         return super().do_GET()
+    def do_DELETE(self):
+        path=urllib.parse.urlparse(self.path).path
+        if path.startswith('/api/contour-jobs/'):
+            job_id=path.rsplit('/',1)[-1];job=cancel_contour_job(job_id)
+            if not job:return self.send_json(404,{'error':'Höjdjobbet hittades inte','code':'job_not_found'})
+            return self.send_json(202,job)
+        return self.send_json(404,{'error':'Okänd API-adress'})
     def do_POST(self):
         path=urllib.parse.urlparse(self.path).path
-        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover'):return self.send_json(404,{'error':'Okänd API-adress'})
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))))
             if path=='/api/contour-jobs':return self.send_json(202,public_job(create_contour_job(request)['id']))
@@ -795,6 +862,7 @@ class Handler(SimpleHTTPRequestHandler):
             if path=='/api/roads':return self.send_json(200,osm_roads(bbox))
             if path=='/api/paved-areas':return self.send_json(200,osm_paved_areas(bbox))
             if path=='/api/land-cover':return self.send_json(200,osm_land_cover(bbox))
+            if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})
             return self.send_json(200,contour_result(request))

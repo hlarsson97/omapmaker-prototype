@@ -193,6 +193,17 @@ class AutomaticHeightDataTests(unittest.TestCase):
                 self.assertTrue(source.exists());self.assertTrue(metadata['cached']);self.assertEqual(metadata['sourceFiles'],2)
             finally:server.DATA,server.CACHE=previous_data,previous_cache
 
+    def test_cache_status_reports_coverage_and_size(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);data=root/'data';data.mkdir();source=data/'tile.tif'
+            profile={'driver':'GTiff','width':10,'height':10,'count':1,'dtype':'float32','crs':'EPSG:4326','transform':from_origin(18.0,59.001,0.0001,0.0001),'nodata':-9999}
+            with rasterio.open(source,'w',**profile) as dataset:dataset.write(np.ones((1,10,10),dtype='float32'))
+            previous_data=server.DATA
+            try:
+                server.DATA=data;status=server.height_cache_status([18.0001,59.0001,18.0009,59.0009])
+                self.assertTrue(status['cached']);self.assertEqual(status['sourceFiles'],1);self.assertGreater(status['sourceBytes'],0)
+            finally:server.DATA=previous_data
+
     def test_systemd_credentials_select_oauth_mode(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
@@ -229,6 +240,34 @@ class ContourJobTests(unittest.TestCase):
         result=server.public_job('test-job')
         self.assertEqual(result['status'],'complete');self.assertEqual(result['result'],expected)
         with server.JOBS_LOCK:server.JOBS.pop('test-job',None)
+
+    def test_job_can_be_cancelled(self):
+        job_id='cancel-job'
+        with server.JOBS_LOCK:
+            server.JOBS[job_id]={'id':job_id,'status':'running','stage':'downloading','message':'hämtar','createdAt':0,'updatedAt':0}
+            server.JOB_CANCEL_EVENTS[job_id]=server.threading.Event()
+        result=server.cancel_contour_job(job_id)
+        self.assertEqual(result['status'],'cancelling')
+        with self.assertRaises(server.ContourJobCancelled):server.check_job_cancelled(job_id)
+        with server.JOBS_LOCK:server.JOBS.pop(job_id,None);server.JOB_CANCEL_EVENTS.pop(job_id,None)
+
+
+class HeightDownloadProgressTests(unittest.TestCase):
+    def test_download_reports_byte_progress(self):
+        payload=b'x'*(1024*1024+17)
+        class Response:
+            headers={'Content-Length':str(len(payload))}
+            def __init__(self):self.offset=0
+            def __enter__(self):return self
+            def __exit__(self,*_):return False
+            def read(self,size):
+                chunk=payload[self.offset:self.offset+size];self.offset+=len(chunk);return chunk
+        result={'features':[{'assets':{'data':{'href':'https://example.test/tile.tif','type':'image/tiff','roles':['data']}}}]}
+        updates=[]
+        with tempfile.TemporaryDirectory() as temporary,patch.object(lm_height,'request',return_value=Response()):
+            paths=lm_height.download_assets(result,Path(temporary),bearer_token='token',progress_callback=updates.append)
+            self.assertEqual(paths[0].read_bytes(),payload)
+        self.assertEqual(updates[-1]['loadedBytes'],len(payload));self.assertEqual(updates[-1]['totalBytes'],len(payload))
 
 
 if __name__ == '__main__':

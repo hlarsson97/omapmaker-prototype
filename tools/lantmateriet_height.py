@@ -173,10 +173,13 @@ def download_assets(
     password: str = "",
     *,
     bearer_token: str = "",
+    progress_callback=None,
+    cancel_check=None,
 ) -> list[Path]:
     target.mkdir(parents=True, exist_ok=True)
     downloaded: list[Path] = []
     seen: set[str] = set()
+    assets = []
     for feature in result.get("features", []):
         candidates = sorted(asset_candidates(feature))
         if not candidates:
@@ -185,17 +188,39 @@ def download_assets(
         if href in seen:
             continue
         seen.add(href)
+        assets.append(href)
+
+    for file_index, href in enumerate(assets, start=1):
+        if cancel_check:
+            cancel_check()
         destination = target / safe_filename(href)
         if destination.exists() and destination.stat().st_size > 0:
             print(f"Finns redan: {destination.name}")
+            if progress_callback:
+                size = destination.stat().st_size
+                progress_callback({"filename": destination.name, "fileIndex": file_index, "fileCount": len(assets), "loadedBytes": size, "totalBytes": size, "cached": True})
             downloaded.append(destination)
             continue
         print(f"Hämtar {destination.name} ...")
         temporary = destination.with_name(destination.name + ".part")
         try:
             with request(href, username, password, bearer_token=bearer_token) as response, temporary.open("wb") as output:
+                try:
+                    total_bytes = max(0, int(response.headers.get("Content-Length", "0")))
+                except (TypeError, ValueError):
+                    total_bytes = 0
+                loaded_bytes = 0
+                if progress_callback:
+                    progress_callback({"filename": destination.name, "fileIndex": file_index, "fileCount": len(assets), "loadedBytes": 0, "totalBytes": total_bytes, "cached": False})
                 while chunk := response.read(1024 * 1024):
+                    if cancel_check:
+                        cancel_check()
                     output.write(chunk)
+                    loaded_bytes += len(chunk)
+                    if progress_callback:
+                        progress_callback({"filename": destination.name, "fileIndex": file_index, "fileCount": len(assets), "loadedBytes": loaded_bytes, "totalBytes": total_bytes, "cached": False})
+                if cancel_check:
+                    cancel_check()
             if temporary.stat().st_size == 0:
                 raise ApiError(f"Lantmäteriet returnerade en tom fil för {destination.name}.")
             temporary.replace(destination)
