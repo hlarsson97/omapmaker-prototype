@@ -26,6 +26,25 @@ def simplify_line(points, tolerance):
     return np.asarray(kept)
 
 
+def simplify_geographic_line(points, tolerance):
+    """Reduce WGS84 vertices using an approximate metric distance."""
+    result = np.asarray(points)
+    if tolerance <= 0 or len(result) <= 2:
+        return result
+    latitude = float(np.mean(result[:, 1]))
+    metres_lon = 111320 * math.cos(math.radians(latitude))
+    metres_lat = 111320
+    kept = [result[0]]
+    tolerance_squared = tolerance * tolerance
+    for point in result[1:-1]:
+        dx = (point[0] - kept[-1][0]) * metres_lon
+        dy = (point[1] - kept[-1][1]) * metres_lat
+        if dx * dx + dy * dy >= tolerance_squared:
+            kept.append(point)
+    kept.append(result[-1])
+    return np.asarray(kept)
+
+
 def smooth_line(points, iterations):
     """Round raster stair-steps with conservative Chaikin corner cutting."""
     result = np.asarray(points)
@@ -47,6 +66,62 @@ def smooth_line(points, iterations):
             smoothed.append(source[-1])
         result = np.asarray(smoothed)
     return result
+
+
+def contour_levels(minimum, maximum, interval, base_elevation=0.0):
+    """Return integer-indexed levels anchored to one shared vertical datum."""
+    epsilon = 1e-9
+    first = math.ceil((minimum - base_elevation) / interval - epsilon)
+    last = math.floor((maximum - base_elevation) / interval + epsilon)
+    return [(index, base_elevation + index * interval) for index in range(first, last + 1)]
+
+
+def clip_segment_to_box(first, second, bounds):
+    """Clip one WGS84 segment to an axis-aligned box with Liang-Barsky."""
+    west, south, east, north = bounds
+    x0, y0 = first
+    x1, y1 = second
+    dx = x1 - x0
+    dy = y1 - y0
+    start = 0.0
+    end = 1.0
+    for direction, distance in ((-dx, x0 - west), (dx, east - x0), (-dy, y0 - south), (dy, north - y0)):
+        if abs(direction) < 1e-15:
+            if distance < 0:
+                return None
+            continue
+        ratio = distance / direction
+        if direction < 0:
+            start = max(start, ratio)
+        else:
+            end = min(end, ratio)
+        if start > end:
+            return None
+    return ([x0 + start * dx, y0 + start * dy], [x0 + end * dx, y0 + end * dy])
+
+
+def clip_polyline_to_box(points, bounds):
+    """Clip a polyline into one or more parts while preserving intersections."""
+    parts = []
+    current = []
+    for first, second in zip(points, points[1:]):
+        clipped = clip_segment_to_box(first, second, bounds)
+        if clipped is None:
+            if len(current) >= 2:
+                parts.append(current)
+            current = []
+            continue
+        start, end = clipped
+        if current and abs(current[-1][0] - start[0]) < 1e-12 and abs(current[-1][1] - start[1]) < 1e-12:
+            if abs(current[-1][0] - end[0]) >= 1e-12 or abs(current[-1][1] - end[1]) >= 1e-12:
+                current.append(end)
+        else:
+            if len(current) >= 2:
+                parts.append(current)
+            current = [start, end]
+    if len(current) >= 2:
+        parts.append(current)
+    return parts
 
 
 def box_blur(values, radius, passes=2):
@@ -97,12 +172,20 @@ def main():
         help="Utjämningsradie för höjdytan i rasterceller/meter (standard 2)",
     )
     parser.add_argument("--max-points", type=int, default=1600)
+    parser.add_argument("--base-elevation", type=float, default=0.0, help="Gemensam nollnivå i RH 2000")
     parser.add_argument(
         "--bbox",
         nargs=4,
         type=float,
         metavar=("WEST", "SOUTH", "EAST", "NORTH"),
         help="Beskär i WGS84 innan kurvor skapas",
+    )
+    parser.add_argument(
+        "--clip-bbox",
+        nargs=4,
+        type=float,
+        metavar=("WEST", "SOUTH", "EAST", "NORTH"),
+        help="Beskär färdiga kurvor exakt efter utjämning (WGS84)",
     )
     args = parser.parse_args()
 
@@ -125,47 +208,53 @@ def main():
             raise SystemExit("Höjdmodellen saknar giltiga värden")
 
         heights = box_blur(heights, args.terrain_smooth)
-        low = math.ceil(float(valid.min()) / args.interval) * args.interval
-        high = math.floor(float(valid.max()) / args.interval) * args.interval
         generator = contour_generator(x=xs, y=ys, z=heights, name="serial", corner_mask=True)
         transformer = Transformer.from_crs(dataset.crs, "EPSG:4326", always_xy=True)
         source_crs = str(dataset.crs)
         features = []
 
-        for level in np.arange(low, high + args.interval / 2, args.interval):
-            index_contour = round(level / args.interval) % 5 == 0
+        for level_index, level in contour_levels(float(valid.min()), float(valid.max()), args.interval, args.base_elevation):
+            index_contour = level_index % 5 == 0
             for line in generator.lines(float(level)):
                 if len(line) < 2:
                     continue
-                stride = max(1, math.ceil(len(line) / args.max_points))
-                line = line[::stride]
-                if args.simplify > 0 and len(line) > 2:
-                    line = simplify_line(line, args.simplify)
                 line = smooth_line(line, args.smooth)
                 longitude, latitude = transformer.transform(line[:, 0], line[:, 1])
-                coordinates = [
-                    [round(float(x), 7), round(float(y), 7)]
-                    for x, y in zip(longitude, latitude)
-                ]
-                features.append({
-                    "type": "Feature",
-                    "properties": {
-                        "elevation": float(level),
-                        "interval": args.interval,
-                        "symbol": "102" if index_contour else "101",
-                        "indexContour": index_contour,
-                        "source": "Lantmäteriet Markhöjdmodell",
-                        "license": "CC BY 4.0",
-                        "crsHeight": "RH 2000",
-                    },
-                    "geometry": {"type": "LineString", "coordinates": coordinates},
-                })
+                unrounded = [[float(x), float(y)] for x, y in zip(longitude, latitude)]
+                parts = clip_polyline_to_box(unrounded, args.clip_bbox) if args.clip_bbox else [unrounded]
+                for part in parts:
+                    part = simplify_geographic_line(part, args.simplify)
+                    stride = max(1, math.ceil(len(part) / args.max_points))
+                    if stride > 1:
+                        sampled = part[::stride]
+                        if not np.array_equal(sampled[-1], part[-1]):
+                            sampled = np.vstack((sampled, part[-1]))
+                        part = sampled
+                    coordinates = [[round(x, 7), round(y, 7)] for x, y in part]
+                    if len(coordinates) < 2 or coordinates[0] == coordinates[-1] and len(coordinates) < 4:
+                        continue
+                    features.append({
+                        "type": "Feature",
+                        "properties": {
+                            "elevation": float(level),
+                            "interval": args.interval,
+                            "baseElevation": args.base_elevation,
+                            "symbol": "102" if index_contour else "101",
+                            "indexContour": index_contour,
+                            "source": "Lantmäteriet Markhöjdmodell",
+                            "license": "CC BY 4.0",
+                            "crsHeight": "RH 2000",
+                        },
+                        "geometry": {"type": "LineString", "coordinates": coordinates},
+                    })
 
     result = {
         "type": "FeatureCollection",
         "properties": {
             "generator": "OMapMaker",
             "interval": args.interval,
+            "baseElevation": args.base_elevation,
+            "verticalDatum": "RH 2000",
             "source": args.input.name,
             "sourceCrs": source_crs,
             "bboxWgs84": args.bbox,

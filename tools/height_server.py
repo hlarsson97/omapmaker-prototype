@@ -742,7 +742,8 @@ def contour_result(request,progress=None,cancel_check=None):
     if level not in LEVELS:raise ValueError('Okänd detaljeringsnivå')
     cancel_check();source,height_data=ensure_height_data(bbox,progress,cancel_check)
     stat=source.stat();source_signature=[source.name,stat.st_size,int(stat.st_mtime)]
-    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['contours-v2',bbox,interval,level,source_signature],separators=(',',':'));output=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'.geojson')
+    base_elevation=0.0;vertical_datum='RH 2000'
+    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['contours-v3-seamless',bbox,interval,level,base_elevation,vertical_datum,source_signature],separators=(',',':'));output=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'.geojson')
     with CONTOUR_LOCK:
         cancel_check()
         if output.exists():progress('contour-cache','Färdiga höjdkurvor finns redan på servern.',progressPercent=100,progressIndeterminate=False,contoursCached=True)
@@ -750,14 +751,14 @@ def contour_result(request,progress=None,cancel_check=None):
             progress('generating','Genererar och mjukar ut höjdkurvor…',progressIndeterminate=True,contoursCached=False)
             selected_generator=TILED_GENERATOR if width>2.2 or height>2.2 else GENERATOR
             temporary=output.with_name(output.name+'.part')
-            command=[sys.executable,str(selected_generator),str(source),str(temporary),'--bbox',*map(str,bbox),'--interval',str(interval),'--terrain-smooth',str(LEVELS[level]),'--smooth','2','--simplify','1.5']
+            command=[sys.executable,str(selected_generator),str(source),str(temporary),'--bbox',*map(str,bbox),'--interval',str(interval),'--base-elevation',str(base_elevation),'--terrain-smooth',str(LEVELS[level]),'--smooth','2','--simplify','1.5']
             try:
                 run_contour_generator(command,cancel_check)
                 json.loads(temporary.read_text(encoding='utf-8'))
                 temporary.replace(output)
             finally:temporary.unlink(missing_ok=True)
     cancel_check()
-    result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['heightData']=height_data
+    result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['baseElevation']=base_elevation;result['properties']['verticalDatum']=vertical_datum;result['properties']['heightData']=height_data
     progress('complete','Höjdkurvorna är klara.',progressPercent=100,progressIndeterminate=False)
     return result
 

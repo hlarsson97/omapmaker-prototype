@@ -13,6 +13,8 @@ from rasterio.transform import from_origin
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import height_server as server
 import lantmateriet_height as lm_height
+import generate_contours as contour_generator
+import generate_contours_tiled as tiled_generator
 
 
 class RoadClassificationTests(unittest.TestCase):
@@ -250,6 +252,38 @@ class ContourJobTests(unittest.TestCase):
         self.assertEqual(result['status'],'cancelling')
         with self.assertRaises(server.ContourJobCancelled):server.check_job_cancelled(job_id)
         with server.JOBS_LOCK:server.JOBS.pop(job_id,None);server.JOB_CANCEL_EVENTS.pop(job_id,None)
+
+
+class ContourSeamTests(unittest.TestCase):
+    def test_levels_are_anchored_to_zero_rh2000(self):
+        self.assertEqual(contour_generator.contour_levels(1.0,14.9,5.0),[(1,5.0),(2,10.0)])
+        self.assertEqual(contour_generator.contour_levels(-6.0,6.0,5.0),[(-1,-5.0),(0,0.0),(1,5.0)])
+
+    def test_neighbouring_height_ranges_share_the_same_levels(self):
+        first=dict(contour_generator.contour_levels(1.0,11.0,5.0))
+        second=dict(contour_generator.contour_levels(9.0,21.0,5.0))
+        self.assertEqual(first[2],second[2]);self.assertEqual(first[2],10.0)
+
+    def test_polyline_is_clipped_exactly_to_tile_core(self):
+        parts=contour_generator.clip_polyline_to_box([[17.9,59.0],[18.05,59.02],[18.2,59.0]],[18.0,58.9,18.1,59.1])
+        self.assertEqual(len(parts),1);self.assertAlmostEqual(parts[0][0][0],18.0);self.assertAlmostEqual(parts[0][-1][0],18.1)
+
+    def test_internal_tile_gets_halo_but_outer_boundary_is_clamped(self):
+        full=[18.0,59.0,18.1,59.1]
+        internal=tiled_generator.expanded_tile_bbox([18.02,59.02,18.04,59.04],full,60,59.05)
+        edge=tiled_generator.expanded_tile_bbox([18.0,59.0,18.02,59.02],full,60,59.05)
+        self.assertLess(internal[0],18.02);self.assertGreater(internal[2],18.04)
+        self.assertEqual(edge[0],18.0);self.assertEqual(edge[1],59.0)
+
+    def test_neighbouring_tile_endpoints_are_snapped_together(self):
+        features=[
+            {'type':'Feature','properties':{'elevation':10.0,'_tileRow':0,'_tileColumn':0},'geometry':{'type':'LineString','coordinates':[[18.04,59.0],[18.05,59.0]]}},
+            {'type':'Feature','properties':{'elevation':10.0,'_tileRow':0,'_tileColumn':1},'geometry':{'type':'LineString','coordinates':[[18.05,59.00002],[18.06,59.01]]}},
+        ]
+        stats=tiled_generator.snap_tile_seams(features,1,2,[18.0,58.9,18.1,59.1])
+        self.assertEqual(stats['snappedPairs'],1)
+        self.assertEqual(features[0]['geometry']['coordinates'][-1],features[1]['geometry']['coordinates'][0])
+        self.assertNotIn('_tileColumn',features[0]['properties'])
 
 
 class HeightDownloadProgressTests(unittest.TestCase):
