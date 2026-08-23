@@ -3,6 +3,10 @@ import tempfile
 import json
 import os
 import unittest
+import uuid
+import urllib.request
+import urllib.error
+import threading
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +20,37 @@ import lantmateriet_height as lm_height
 import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
 from test_map_store import CentralMapStoreTests
+from map_store import MapStore
+
+
+class QuietHandler(server.Handler):
+    def log_message(self, *_):pass
+
+
+class CentralStorageApiTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary=tempfile.TemporaryDirectory();self.previous_store=server.MAP_STORE;server.MAP_STORE=MapStore(Path(self.temporary.name)/'api.sqlite3')
+        self.http=server.ThreadingHTTPServer(('127.0.0.1',0),QuietHandler);self.thread=threading.Thread(target=self.http.serve_forever,daemon=True);self.thread.start();self.base=f'http://127.0.0.1:{self.http.server_address[1]}'
+
+    def tearDown(self):
+        self.http.shutdown();self.http.server_close();self.thread.join(timeout=2);server.MAP_STORE=self.previous_store;self.temporary.cleanup()
+
+    def request(self,path,payload=None,device=None):
+        data=json.dumps(payload).encode() if payload is not None else None;headers={'Content-Type':'application/json'}
+        if device:headers['X-OMapMaker-Device']=device
+        with urllib.request.urlopen(urllib.request.Request(self.base+path,data=data,headers=headers),timeout=3) as response:return response.status,json.load(response)
+
+    def test_submission_endpoint_keeps_observation_out_of_global_map(self):
+        device=str(uuid.uuid4());observation=str(uuid.uuid4());submission=str(uuid.uuid4())
+        feature={'type':'Feature','id':observation,'properties':{'clientObservationId':observation,'version':1,'category':'point','objectType':'boulder','symbol':'206','source':'manual','quality':'unverified','accuracy':0},'geometry':{'type':'Point','coordinates':[18,59]}}
+        status,receipt=self.request('/api/submissions',{'clientSubmissionId':submission,'features':[feature]},device)
+        self.assertEqual(status,201);self.assertEqual(receipt['status'],'submitted')
+        _,storage=self.request('/api/storage-status');self.assertEqual(storage['pendingObservations'],1);self.assertEqual(storage['globalObjects'],0)
+        _,global_map=self.request('/api/global-objects?bbox=17.9,58.9,18.1,59.1');self.assertEqual(global_map['features'],[])
+
+    def test_submission_requires_anonymous_device_identifier(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/submissions',{'clientSubmissionId':'missing','features':[]})
+        self.assertEqual(caught.exception.code,400)
 
 
 class RoadClassificationTests(unittest.TestCase):
