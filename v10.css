@@ -1,0 +1,50 @@
+:root{--mode-color:#075b3a;--mode-color-translucent:#075b3aed;--mode-soft:#ddef68}
+body.manual-mode{--mode-color:#286fc0;--mode-color-translucent:#286fc0ed;--mode-soft:#b9d8fb}
+#map{background:#f6f2e6}
+
+/* Editing belongs to the left; map navigation belongs to the right. */
+#toolbar{left:10px!important;right:auto!important;bottom:calc(24px + env(safe-area-inset-bottom))!important;width:min(310px,calc(100vw - 78px))!important;align-items:stretch}
+#toolbar .tool-row{width:100%!important;margin:0!important;align-self:stretch!important}
+#toolbar .utility-row{justify-content:space-between!important;min-height:30px;padding:0 3px}
+#toolbar .utility-row button{min-height:30px;border:0;border-radius:9px;padding:5px 8px;background:#fffdf3ed;color:var(--mode-color);font-size:10px;font-weight:850;box-shadow:0 2px 7px #17241c25}
+#toolbar.collapsed .tool-row{display:none}
+#toolbar.collapsed{width:auto!important}
+#toolbar.collapsed .utility-row{gap:10px}
+#editBar{left:10px!important;right:auto!important;width:min(310px,calc(100vw - 78px))!important;bottom:calc(178px + env(safe-area-inset-bottom))!important}
+
+#mapNavControls{position:fixed;z-index:1060;right:10px;bottom:calc(92px + env(safe-area-inset-bottom));display:grid;gap:6px}
+#mapNavControls button{display:grid;place-items:center;width:42px;height:42px;border:0;border-radius:12px;background:#fffdf3ed;color:#17241c;font-size:21px;font-weight:900;box-shadow:0 2px 9px #17241c35;backdrop-filter:blur(7px);cursor:pointer}
+#mapNavControls button:disabled{opacity:.5}
+#mapNavControls button.busy{color:transparent;position:relative}
+#mapNavControls button.busy::after{content:"";position:absolute;width:15px;height:15px;border:2px solid #aab3ad;border-top-color:var(--mode-color);border-radius:50%;animation:nav-spin .8s linear infinite}
+@keyframes nav-spin{to{transform:rotate(360deg)}}
+
+/* Green GPS mode and blue manual mode without altering official map colours. */
+#modeSwitch button.active,body.manual-mode #manualMode.active{background:var(--mode-color)!important;color:#fff}
+#modeHint,body.manual-mode #modeHint{background:var(--mode-color-translucent)!important}
+#toolbar .tool-main.active-tool{background:var(--mode-color-translucent)!important}
+#toolbar .tool-main.active-tool span{color:#e6f1ea!important}
+body.manual-mode #draftHint{color:#205b9d}
+body.manual-mode #gpsQuality:focus-visible,body.manual-mode #modeSwitch button:focus-visible,body.manual-mode #toolbar button:focus-visible,body.manual-mode header button:focus-visible,body.manual-mode #layersButton:focus-visible,body.manual-mode #mapNavControls button:focus-visible{outline-color:var(--mode-soft)}
+
+/* Layer controls are cards: status, visibility and action stay together. */
+#layersSheet form{max-height:92dvh;overflow:auto}
+#layersSheet .layer-section{display:grid;gap:8px;margin:0 0 18px!important}
+#layersSheet .layer-card{overflow:hidden;border:1px solid #dce3dc;border-radius:12px;background:#f9faf6;box-shadow:0 1px 3px #17241c09}
+#layersSheet .layer-card>label{display:grid!important;grid-template-columns:auto minmax(0,1fr)!important;align-items:start!important;gap:9px!important;min-height:0!important;margin:0!important;padding:11px 12px!important;border:0!important}
+#layersSheet .layer-card label>span{display:block;min-width:0;line-height:1.25}
+#layersSheet .layer-card label small{display:block;margin-top:3px;color:#738077;font-size:9px;font-weight:600;letter-spacing:0;line-height:1.3}
+#layersSheet .layer-card>button{width:calc(100% - 16px)!important;min-height:38px!important;margin:0 8px 8px!important;border-radius:9px!important;font-size:11px!important}
+#layersSheet .local-card .range-label{grid-template-columns:1fr auto!important;margin:0 10px 8px!important;padding:8px 2px 2px!important;border-top:1px solid #e1e6e1!important;font-size:10px!important}
+#layersSheet .local-card .range-label input{grid-column:1/3}
+#layersSheet .basemap-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+#layersSheet .basemap-grid label{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:8px;min-height:54px;margin:0;padding:10px;border:1px solid #dce3dc;border-radius:11px;background:#f9faf6;font-size:11px;font-weight:800}
+#layersSheet .basemap-grid label:has(input:checked){border-color:var(--mode-color);box-shadow:inset 0 0 0 1px var(--mode-color)}
+#layersSheet .basemap-grid small{display:block;margin-top:2px;color:#77827b;font-size:8px;font-weight:550;letter-spacing:0;line-height:1.25}
+#layersSheet input[type=radio],#layersSheet input[type=checkbox]{accent-color:var(--mode-color)}
+#layersSheet .workspace-panel{margin-top:4px}
+#layersSheet .workspace-panel[hidden],#layersSheet .workspace-action[hidden]{display:none!important}
+#layerNote{margin:7px 0 0}
+
+@media(max-width:520px){#toolbar{width:min(290px,calc(100vw - 74px))!important}#editBar{width:min(290px,calc(100vw - 74px))!important}.leaflet-control-attribution{max-width:calc(100vw - 8px);white-space:normal;line-height:1.1}}
+@media(min-width:720px){#toolbar{width:300px!important}#editBar{width:300px!important}}
