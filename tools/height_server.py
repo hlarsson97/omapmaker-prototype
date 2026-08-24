@@ -892,7 +892,7 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(404,{'error':'Okänd API-adress'})
     def do_POST(self):
         path=urllib.parse.urlparse(self.path).path
-        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=self.read_json()
             if path=='/api/submissions':return self.send_json(201,MAP_STORE.submit(self.device_id(),request.get('clientSubmissionId'),request.get('features')))
@@ -907,6 +907,12 @@ class Handler(SimpleHTTPRequestHandler):
                 max_age=request.get('maxAgeSeconds')
                 include_layer=request.get('includeLayer',True) is not False
                 return self.send_json(200,MAP_STORE.resolve_layer(layer_type,bbox,parameters,max_age,include_layer))
+            if path=='/api/map-layers/mosaic':
+                layer_type=str(request.get('layerType',''))
+                if layer_type not in CENTRAL_LAYER_TYPES:raise ValueError('Okänd central lagertyp')
+                parameters=request.get('parameters') or {}
+                if not isinstance(parameters,dict):raise ValueError('Lagrets parametrar är ogiltiga')
+                return self.send_json(200,MAP_STORE.mosaic_layer(layer_type,bbox,parameters))
             if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3}))
             if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':3}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1}))

@@ -109,6 +109,20 @@ class CentralMapStoreTests(unittest.TestCase):
             self.assertEqual(resolved['layer']['properties']['centralLayerRevision'],1)
             self.assertFalse(store.resolve_layer('buildings',[18,59,18.02,59.02],{'importVersion':4})['found'])
 
+    def test_layer_mosaic_combines_intersecting_work_areas_and_deduplicates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=MapStore(Path(temporary)/'map.sqlite3');parameters={'importVersion':3}
+            shared=self.feature(longitude=18.01,latitude=59.01);shared['id']='shared'
+            west=self.feature(longitude=18.0,latitude=59.0);west['id']='west'
+            east=self.feature(longitude=18.02,latitude=59.02);east['id']='east'
+            store.store_layer('buildings',[17.99,58.99,18.015,59.015],parameters,{'type':'FeatureCollection','properties':{'source':'OpenStreetMap'},'features':[west,shared]})
+            store.store_layer('buildings',[18.005,59.005,18.03,59.03],parameters,{'type':'FeatureCollection','properties':{'source':'OpenStreetMap'},'features':[shared,east]})
+            result=store.mosaic_layer('buildings',[17.995,58.995,18.025,59.025],parameters)
+            self.assertTrue(result['found']);self.assertEqual(result['metadata']['layerCount'],2)
+            self.assertEqual({feature['id'] for feature in result['layer']['features']},{'west','shared','east'})
+            self.assertTrue(result['layer']['properties']['centralMosaic'])
+            self.assertFalse(store.mosaic_layer('buildings',[17.995,58.995,18.025,59.025],{'importVersion':4})['found'])
+
     def test_layer_revision_changes_only_when_snapshot_content_changes(self):
         with tempfile.TemporaryDirectory() as temporary:
             store=MapStore(Path(temporary)/'map.sqlite3');bbox=[18,59,18.1,59.1];parameters={'importVersion':3}

@@ -416,6 +416,75 @@ class MapStore:
             result['layer'] = layer
         return result
 
+    def mosaic_layer(self, layer_type, bbox, parameters=None):
+        """Merge current snapshots intersecting a viewport into one clipped layer.
+
+        Work areas use :meth:`resolve_layer`, which deliberately requires one
+        snapshot to cover the complete work area.  The global map instead moves
+        freely across work-area boundaries, so it needs every matching snapshot
+        that intersects the current viewport.
+        """
+        west, south, east, north = self._normalized_bbox(bbox)
+        parameters_json = self._parameters_json(parameters)
+        with self.connection() as connection:
+            rows = connection.execute('''
+                SELECT id,layer_type,west,south,east,north,parameters_json,source,
+                       source_license,feature_count,status,revision,payload_zlib,
+                       created_at,updated_at
+                FROM map_layers
+                WHERE layer_type=? AND status='active'
+                  AND east>=? AND west<=? AND north>=? AND south<=?
+                ORDER BY updated_at DESC, ((east-west)*(north-south)) ASC
+            ''', (str(layer_type), west, east, south, north)).fetchall()
+            rows = [row for row in rows if self._parameters_json(json.loads(row['parameters_json'])) == parameters_json]
+            if not rows:
+                return {'found': False}
+            accessed_at = utc_now()
+            connection.executemany('UPDATE map_layers SET last_accessed_at=? WHERE id=?', ((accessed_at, row['id']) for row in rows))
+
+        features = []
+        seen = set()
+        layer_properties = {}
+        for row in rows:
+            layer = json.loads(zlib.decompress(row['payload_zlib']))
+            if not layer_properties:
+                layer_properties = dict(layer.get('properties') or {})
+            for feature in layer.get('features') or []:
+                if not self._feature_intersects(feature, [west, south, east, north]):
+                    continue
+                properties = feature.get('properties') or {}
+                identity = feature.get('id') or properties.get('sourceId')
+                if identity is None:
+                    identity = hashlib.sha256(json.dumps(
+                        [feature.get('geometry'), properties], ensure_ascii=False,
+                        sort_keys=True, separators=(',', ':')
+                    ).encode()).hexdigest()
+                key = str(identity)
+                if key in seen:
+                    continue
+                seen.add(key)
+                features.append(feature)
+
+        layer_properties.update({
+            'centralStorage': True,
+            'centralMosaic': True,
+            'centralLayerIds': [row['id'] for row in rows],
+            'centralLayerRevision': max(int(row['revision'] or 1) for row in rows),
+            'centralLayerUpdatedAt': max(row['updated_at'] for row in rows),
+            'requestedBboxWgs84': [west, south, east, north],
+        })
+        return {
+            'found': True,
+            'metadata': {
+                'layerType': str(layer_type),
+                'layerCount': len(rows),
+                'featureCount': len(features),
+                'bbox': [west, south, east, north],
+                'parameters': json.loads(parameters_json),
+            },
+            'layer': {'type': 'FeatureCollection', 'properties': layer_properties, 'features': features},
+        }
+
     def get_layer(self, layer_id):
         with self.connection() as connection:
             row = connection.execute('SELECT payload_zlib FROM map_layers WHERE id=?', (str(layer_id),)).fetchone()

@@ -67,6 +67,14 @@ class CentralStorageApiTests(unittest.TestCase):
         _,result=self.request('/api/map-layers/resolve',{'bbox':[18,59,18.01,59.01],'layerType':'roads','parameters':{'importVersion':999}})
         self.assertFalse(result['found']);self.assertNotIn('layer',result)
 
+    def test_central_layer_mosaic_returns_partial_viewport_coverage(self):
+        collection={'type':'FeatureCollection','properties':{'source':'OpenStreetMap'},'features':[{'type':'Feature','id':'building-1','properties':{'sourceId':'way/1'},'geometry':{'type':'Point','coordinates':[18.005,59.005]}}]}
+        server.MAP_STORE.store_layer('buildings',[18,59,18.01,59.01],{'importVersion':3},collection)
+        status,result=self.request('/api/map-layers/mosaic',{'bbox':[17.995,58.995,18.02,59.02],'layerType':'buildings','parameters':{'importVersion':3}})
+        self.assertEqual(status,200);self.assertTrue(result['found'])
+        self.assertEqual(result['metadata']['layerCount'],1);self.assertEqual(len(result['layer']['features']),1)
+        self.assertTrue(result['layer']['properties']['centralMosaic'])
+
 
 class RoadClassificationTests(unittest.TestCase):
     def test_motorway_ramp_is_wide_road(self):
