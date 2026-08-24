@@ -7,6 +7,7 @@ global map objects.  A submission is evidence, not an automatic map edit.
 from __future__ import annotations
 
 import datetime
+import base64
 import hashlib
 import json
 import math
@@ -192,13 +193,26 @@ class MapStore:
 
                 CREATE TABLE IF NOT EXISTS global_objects (
                     id TEXT PRIMARY KEY,
-                    status TEXT NOT NULL DEFAULT 'approved',
+                    short_id TEXT UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'preliminary',
                     category TEXT NOT NULL,
                     object_type TEXT NOT NULL,
                     symbol TEXT NOT NULL,
                     geometry_json TEXT NOT NULL,
                     evidence_count INTEGER NOT NULL DEFAULT 0,
+                    independent_contributors INTEGER NOT NULL DEFAULT 0,
+                    agreement_count INTEGER NOT NULL DEFAULT 0,
+                    conflict_count INTEGER NOT NULL DEFAULT 0,
+                    existence_score REAL,
+                    classification_score REAL,
+                    position_score REAL,
                     quality_score REAL,
+                    median_accuracy REAL,
+                    position_spread REAL,
+                    explanation_json TEXT,
+                    revision INTEGER NOT NULL DEFAULT 1,
+                    first_observed_at TEXT,
+                    last_observed_at TEXT,
                     west REAL NOT NULL,
                     south REAL NOT NULL,
                     east REAL NOT NULL,
@@ -208,6 +222,22 @@ class MapStore:
                     deleted_at TEXT
                 );
                 CREATE INDEX IF NOT EXISTS global_objects_bbox ON global_objects(west, south, east, north);
+
+                CREATE TABLE IF NOT EXISTS candidate_observations (
+                    candidate_id TEXT NOT NULL REFERENCES global_objects(id),
+                    observation_id TEXT NOT NULL UNIQUE REFERENCES observations(id),
+                    linked_at TEXT NOT NULL,
+                    PRIMARY KEY(candidate_id, observation_id)
+                );
+                CREATE INDEX IF NOT EXISTS candidate_observations_candidate ON candidate_observations(candidate_id);
+
+                CREATE TABLE IF NOT EXISTS contributor_profiles (
+                    contributor_hash TEXT PRIMARY KEY,
+                    reliability_score REAL NOT NULL DEFAULT 0.5,
+                    supported_count INTEGER NOT NULL DEFAULT 0,
+                    contradicted_count INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
+                );
             ''')
             # Keep installations made before the central layer catalogue gained
             # revisions readable without a manual database migration.
@@ -221,6 +251,26 @@ class MapStore:
             for column, statement in migrations.items():
                 if column not in columns:
                     connection.execute(statement)
+            global_columns = {row['name'] for row in connection.execute('PRAGMA table_info(global_objects)').fetchall()}
+            global_migrations = {
+                'short_id': 'ALTER TABLE global_objects ADD COLUMN short_id TEXT',
+                'independent_contributors': 'ALTER TABLE global_objects ADD COLUMN independent_contributors INTEGER NOT NULL DEFAULT 0',
+                'agreement_count': 'ALTER TABLE global_objects ADD COLUMN agreement_count INTEGER NOT NULL DEFAULT 0',
+                'conflict_count': 'ALTER TABLE global_objects ADD COLUMN conflict_count INTEGER NOT NULL DEFAULT 0',
+                'existence_score': 'ALTER TABLE global_objects ADD COLUMN existence_score REAL',
+                'classification_score': 'ALTER TABLE global_objects ADD COLUMN classification_score REAL',
+                'position_score': 'ALTER TABLE global_objects ADD COLUMN position_score REAL',
+                'median_accuracy': 'ALTER TABLE global_objects ADD COLUMN median_accuracy REAL',
+                'position_spread': 'ALTER TABLE global_objects ADD COLUMN position_spread REAL',
+                'explanation_json': 'ALTER TABLE global_objects ADD COLUMN explanation_json TEXT',
+                'revision': 'ALTER TABLE global_objects ADD COLUMN revision INTEGER NOT NULL DEFAULT 1',
+                'first_observed_at': 'ALTER TABLE global_objects ADD COLUMN first_observed_at TEXT',
+                'last_observed_at': 'ALTER TABLE global_objects ADD COLUMN last_observed_at TEXT',
+            }
+            for column, statement in global_migrations.items():
+                if column not in global_columns:
+                    connection.execute(statement)
+            connection.execute('CREATE UNIQUE INDEX IF NOT EXISTS global_objects_short_id ON global_objects(short_id)')
 
     @staticmethod
     def _normalized_bbox(bbox):
@@ -371,6 +421,180 @@ class MapStore:
             row = connection.execute('SELECT payload_zlib FROM map_layers WHERE id=?', (str(layer_id),)).fetchone()
         return json.loads(zlib.decompress(row['payload_zlib'])) if row else None
 
+    @staticmethod
+    def _distance_metres(first, second):
+        longitude_1, latitude_1 = first;longitude_2, latitude_2 = second
+        latitude_radians = math.radians((latitude_1 + latitude_2) / 2)
+        x = math.radians(longitude_2 - longitude_1) * math.cos(latitude_radians)
+        y = math.radians(latitude_2 - latitude_1)
+        return 6_371_008.8 * math.sqrt(x * x + y * y)
+
+    @staticmethod
+    def _accuracy_weight(source, accuracy):
+        if str(source).lower().startswith('gps'):
+            value = float(accuracy if accuracy is not None else 30)
+            if value <= 2:return 1.0
+            if value <= 4:return .92
+            if value <= 8:return .8
+            if value <= 15:return .6
+            if value <= 30:return .38
+            return .2
+        return .55
+
+    @staticmethod
+    def _short_candidate_id(candidate_id):
+        try:raw=uuid.UUID(str(candidate_id)).bytes
+        except (ValueError,TypeError,AttributeError):raw=hashlib.sha256(str(candidate_id).encode()).digest()[:16]
+        encoded = base64.b32encode(raw).decode().rstrip('=')[:7]
+        return f'OM-{encoded}'
+
+    @staticmethod
+    def _score_status(existence, classification, quality, independent, conflicts):
+        if independent >= 2 and conflicts / max(1, independent) >= .34:
+            return 'conflicted'
+        if quality >= 80 and existence >= 65 and classification >= 75:
+            return 'confirmed'
+        if quality >= 60 and existence >= 60:
+            return 'reliable'
+        if quality >= 30:
+            return 'preliminary'
+        return 'uncertain'
+
+    def _new_point_candidate(self, connection, feature, now):
+        candidate_id = uuid.uuid4().hex
+        short_id = self._short_candidate_id(candidate_id)
+        longitude, latitude = feature['geometry']['coordinates'][:2]
+        properties = feature['properties']
+        connection.execute('''
+            INSERT INTO global_objects(
+                id,short_id,status,category,object_type,symbol,geometry_json,
+                evidence_count,independent_contributors,agreement_count,conflict_count,
+                existence_score,classification_score,position_score,quality_score,
+                median_accuracy,position_spread,explanation_json,revision,
+                first_observed_at,last_observed_at,west,south,east,north,created_at,updated_at,deleted_at
+            ) VALUES(?,?,'preliminary','point',?,?,?,0,0,0,0,0,0,0,0,NULL,NULL,'{}',1,?,?, ?,?,?,?, ?,?,NULL)
+        ''', (candidate_id, short_id, properties['objectType'], properties['symbol'], json.dumps(feature['geometry'],separators=(',',':')), properties.get('createdAt') or now, properties.get('createdAt') or now, longitude, latitude, longitude, latitude, now, now))
+        return candidate_id
+
+    def _matching_point_candidate(self, connection, feature):
+        longitude, latitude = feature['geometry']['coordinates'][:2]
+        accuracy = float(feature['properties'].get('accuracy') or 6)
+        latitude_delta = 40 / 111_320
+        longitude_delta = latitude_delta / max(.1, math.cos(math.radians(latitude)))
+        rows = connection.execute('''
+            SELECT * FROM global_objects
+            WHERE category='point' AND deleted_at IS NULL AND status!='removed'
+              AND west BETWEEN ? AND ? AND south BETWEEN ? AND ?
+        ''', (longitude-longitude_delta, longitude+longitude_delta, latitude-latitude_delta, latitude+latitude_delta)).fetchall()
+        matches=[]
+        for row in rows:
+            coordinate=json.loads(row['geometry_json'])['coordinates'][:2]
+            distance=self._distance_metres([longitude,latitude],coordinate)
+            same_class=row['object_type']==feature['properties']['objectType'] or row['symbol']==feature['properties']['symbol']
+            reference_accuracy=max(accuracy,float(row['median_accuracy'] or 4))
+            radius=max(5,min(12,reference_accuracy*1.2)) if same_class else max(3,min(7,reference_accuracy*.7))
+            if distance<=radius:matches.append((0 if same_class else 1,distance,row['id']))
+        return min(matches)[2] if matches else None
+
+    def _attach_point_observation(self, connection, observation_id, feature, now):
+        candidate_id=self._matching_point_candidate(connection,feature) or self._new_point_candidate(connection,feature,now)
+        connection.execute('INSERT OR IGNORE INTO candidate_observations(candidate_id,observation_id,linked_at) VALUES(?,?,?)',(candidate_id,observation_id,now))
+        return candidate_id
+
+    def _candidate_rows(self, connection, candidate_id):
+        return connection.execute('''
+            SELECT o.*,COALESCE(p.reliability_score,0.5) AS reliability_score
+            FROM candidate_observations link
+            JOIN observations o ON o.id=link.observation_id
+            LEFT JOIN contributor_profiles p ON p.contributor_hash=o.contributor_hash
+            WHERE link.candidate_id=? AND o.is_current=1 AND o.status='submitted' AND o.deleted_at IS NULL
+            ORDER BY o.submitted_at DESC
+        ''',(candidate_id,)).fetchall()
+
+    def _recalculate_candidate(self, connection, candidate_id, now):
+        rows=self._candidate_rows(connection,candidate_id)
+        if not rows:
+            connection.execute("UPDATE global_objects SET status='removed',deleted_at=?,updated_at=?,revision=revision+1 WHERE id=? AND status!='removed'",(now,now,candidate_id))
+            return
+        # A contributor is one independent voice per candidate even if the same
+        # device submitted the object repeatedly.
+        independent={}
+        for row in rows:independent.setdefault(row['contributor_hash'],row)
+        evidence=[]
+        for row in independent.values():
+            geometry=json.loads(row['geometry_json']);coordinate=geometry['coordinates'][:2]
+            measurement=self._accuracy_weight(row['source'],row['accuracy'])
+            reliability=max(.25,min(.95,float(row['reliability_score'] or .5)))
+            evidence.append({'row':row,'coordinate':coordinate,'weight':measurement*reliability,'measurement':measurement,'reliability':reliability})
+        class_weights={}
+        for item in evidence:
+            key=(item['row']['object_type'],item['row']['symbol']);class_weights[key]=class_weights.get(key,0)+item['weight']
+        winner=max(class_weights,key=lambda key:(class_weights[key],key[1],key[0]));total_weight=sum(class_weights.values());winner_weight=class_weights[winner]
+        winning=[item for item in evidence if (item['row']['object_type'],item['row']['symbol'])==winner]
+        coordinate_weight=sum(item['weight'] for item in winning) or 1
+        longitude=sum(item['coordinate'][0]*item['weight'] for item in winning)/coordinate_weight
+        latitude=sum(item['coordinate'][1]*item['weight'] for item in winning)/coordinate_weight
+        distances=[self._distance_metres(item['coordinate'],[longitude,latitude]) for item in winning]
+        spread=math.sqrt(sum(distance*distance for distance in distances)/max(1,len(distances)))
+        effective_accuracy=[]
+        for item in winning:
+            if str(item['row']['source']).lower().startswith('gps') and item['row']['accuracy'] is not None:effective_accuracy.append(max(1,float(item['row']['accuracy'])))
+            else:effective_accuracy.append(12.0)
+        ordered=sorted(effective_accuracy);middle=len(ordered)//2
+        median_accuracy=ordered[middle] if len(ordered)%2 else (ordered[middle-1]+ordered[middle])/2
+        independent_count=len(evidence);agreement_count=len(winning);conflict_count=independent_count-agreement_count
+        existence=round(max(0,min(100,30+65*(1-math.exp(-sum(item['weight'] for item in evidence)/.8)))))
+        share=winner_weight/max(.001,total_weight)
+        classification=round(max(0,min(100,55+25*share+15*min(1,(independent_count-1)/2)-40*(1-share))))
+        position=round(max(0,min(100,100-min(80,median_accuracy*3+spread*2))))
+        latest=max((row['created_at'] or row['submitted_at']) for row in rows);earliest=min((row['created_at'] or row['submitted_at']) for row in rows)
+        try:age_days=max(0,(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(latest.replace('Z','+00:00'))).total_seconds()/86400)
+        except (ValueError,TypeError):age_days=0
+        recency=max(45,100-min(55,age_days/365*12))
+        quality=round(max(0,min(100,.32*existence+.28*classification+.25*position+.15*recency)))
+        status=self._score_status(existence,classification,quality,independent_count,conflict_count)
+        explanation={
+            'model':'point-evidence-v1','status':status,
+            'summary':f'{agreement_count} av {independent_count} oberoende bidrag stöder ISOM {winner[1]}.',
+            'existence':{'score':existence,'reason':f'{independent_count} oberoende bidrag med sammanlagd evidensvikt {sum(item["weight"] for item in evidence):.2f}.'},
+            'classification':{'score':classification,'reason':f'{agreement_count} samstämmiga och {conflict_count} motstridiga bidrag.'},
+            'position':{'score':position,'reason':f'Median noggrannhet {median_accuracy:.1f} m och positionsspridning {spread:.1f} m.'},
+            'quality':{'score':quality,'reason':'Viktad kombination av existens, klassificering, position och aktualitet.'},
+        }
+        geometry={'type':'Point','coordinates':[longitude,latitude]}
+        previous=connection.execute('SELECT object_type,symbol,geometry_json,status,quality_score FROM global_objects WHERE id=?',(candidate_id,)).fetchone()
+        changed=not previous or previous['object_type']!=winner[0] or previous['symbol']!=winner[1] or previous['geometry_json']!=json.dumps(geometry,separators=(',',':')) or previous['status']!=status or round(float(previous['quality_score'] or 0))!=quality
+        connection.execute('''
+            UPDATE global_objects SET status=?,object_type=?,symbol=?,geometry_json=?,evidence_count=?,independent_contributors=?,agreement_count=?,conflict_count=?,existence_score=?,classification_score=?,position_score=?,quality_score=?,median_accuracy=?,position_spread=?,explanation_json=?,revision=revision+?,first_observed_at=?,last_observed_at=?,west=?,south=?,east=?,north=?,updated_at=?,deleted_at=NULL WHERE id=?
+        ''',(status,winner[0],winner[1],json.dumps(geometry,separators=(',',':')),len(rows),independent_count,agreement_count,conflict_count,existence,classification,position,quality,round(median_accuracy,2),round(spread,2),json.dumps(explanation,ensure_ascii=False,separators=(',',':')),1 if changed else 0,earliest,latest,longitude,latitude,longitude,latitude,now,candidate_id))
+
+    def _refresh_contributor_profiles(self, connection, now):
+        rows=connection.execute('''
+            SELECT link.candidate_id,o.contributor_hash,o.object_type,o.symbol,o.submitted_at,g.object_type AS candidate_type,g.symbol AS candidate_symbol,g.independent_contributors
+            FROM candidate_observations link JOIN observations o ON o.id=link.observation_id JOIN global_objects g ON g.id=link.candidate_id
+            WHERE o.is_current=1 AND o.status='submitted' AND o.deleted_at IS NULL AND g.category='point'
+            ORDER BY o.submitted_at DESC
+        ''').fetchall()
+        active_contributors={row['contributor_hash'] for row in rows}
+        for contributor in active_contributors:connection.execute('INSERT OR IGNORE INTO contributor_profiles VALUES(?,0.5,0,0,?)',(contributor,now))
+        votes={}
+        for row in rows:
+            if row['independent_contributors']<2:continue
+            votes.setdefault((row['candidate_id'],row['contributor_hash']),row)
+        scores={}
+        for row in votes.values():
+            supported=int(row['object_type']==row['candidate_type'] and row['symbol']==row['candidate_symbol'])
+            current=scores.setdefault(row['contributor_hash'],[0,0]);current[0]+=supported;current[1]+=1-supported
+        for contributor,(supported,contradicted) in scores.items():
+            reliability=max(.25,min(.95,(2+supported)/(4+supported+contradicted)))
+            connection.execute('UPDATE contributor_profiles SET reliability_score=?,supported_count=?,contradicted_count=?,updated_at=? WHERE contributor_hash=?',(round(reliability,4),supported,contradicted,now,contributor))
+
+    def _rebuild_point_model(self, connection, now):
+        candidate_ids=[row['id'] for row in connection.execute("SELECT id FROM global_objects WHERE category='point'").fetchall()]
+        for candidate_id in candidate_ids:self._recalculate_candidate(connection,candidate_id,now)
+        self._refresh_contributor_profiles(connection,now)
+        for candidate_id in candidate_ids:self._recalculate_candidate(connection,candidate_id,now)
+
     def submit(self, device_id, client_submission_id, features):
         contributor = contributor_hash(device_id)
         try:
@@ -381,6 +605,7 @@ class MapStore:
             raise ValueError(f'Välj mellan 1 och {MAX_FEATURES_PER_SUBMISSION} observationer')
         validated = [validate_observation_feature(feature) for feature in features]
         now = utc_now()
+        touched_candidates=set()
         with self.connection() as connection:
             existing = connection.execute('SELECT id,status,feature_count,created_at FROM submissions WHERE contributor_hash=? AND client_submission_id=?', (contributor, client_submission_id)).fetchone()
             if existing:
@@ -389,15 +614,23 @@ class MapStore:
             connection.execute('INSERT INTO submissions VALUES(?,?,?,?,?,?,?)', (submission_id, client_submission_id, contributor, 'submitted', len(validated), now, now))
             for feature, bbox in validated:
                 properties = feature['properties'];client_id = properties['clientObservationId'];version = properties['version']
-                current = connection.execute('SELECT version FROM observations WHERE contributor_hash=? AND client_observation_id=? AND is_current=1', (contributor, client_id)).fetchone()
+                current = connection.execute('''SELECT o.version,link.candidate_id FROM observations o LEFT JOIN candidate_observations link ON link.observation_id=o.id WHERE o.contributor_hash=? AND o.client_observation_id=? AND o.is_current=1''', (contributor, client_id)).fetchone()
                 if current and version <= current['version']:
                     raise ValueError('En ny version av observationen måste ha ett högre versionsnummer')
+                if current and current['candidate_id']:touched_candidates.add(current['candidate_id'])
                 connection.execute('UPDATE observations SET is_current=0,updated_at=? WHERE contributor_hash=? AND client_observation_id=? AND is_current=1', (now, contributor, client_id))
+                observation_id=uuid.uuid4().hex
                 connection.execute('''
                     INSERT INTO observations(id,submission_id,contributor_hash,client_observation_id,version,is_current,status,category,object_type,symbol,source,quality,accuracy,geometry_json,properties_json,west,south,east,north,created_at,submitted_at,updated_at,deleted_at)
                     VALUES(?,?,?,?,?,1,'submitted',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)
-                ''', (uuid.uuid4().hex, submission_id, contributor, client_id, version, properties['category'], properties['objectType'], properties['symbol'], properties['source'], properties['quality'], properties['accuracy'], json.dumps(feature['geometry'],separators=(',',':')), json.dumps(properties,ensure_ascii=False,separators=(',',':')), *bbox, properties['createdAt'], now, now))
-        return {'id':submission_id,'status':'submitted','featureCount':len(validated),'createdAt':now,'idempotent':False}
+                ''', (observation_id, submission_id, contributor, client_id, version, properties['category'], properties['objectType'], properties['symbol'], properties['source'], properties['quality'], properties['accuracy'], json.dumps(feature['geometry'],separators=(',',':')), json.dumps(properties,ensure_ascii=False,separators=(',',':')), *bbox, properties['createdAt'], now, now))
+                if properties['category']=='point':touched_candidates.add(self._attach_point_observation(connection,observation_id,feature,now))
+            if touched_candidates:self._rebuild_point_model(connection,now)
+            candidate_rows=[]
+            if touched_candidates:
+                placeholders=','.join('?' for _ in touched_candidates)
+                candidate_rows=connection.execute(f'SELECT id,short_id,status,quality_score FROM global_objects WHERE id IN ({placeholders}) AND status!=\'removed\'',tuple(touched_candidates)).fetchall()
+        return {'id':submission_id,'status':'processed','featureCount':len(validated),'candidateCount':len(candidate_rows),'candidates':[{'id':row['id'],'shortId':row['short_id'],'status':row['status'],'qualityScore':row['quality_score']} for row in candidate_rows],'createdAt':now,'idempotent':False}
 
     def withdraw(self, device_id, client_observation_ids):
         contributor = contributor_hash(device_id)
@@ -409,19 +642,70 @@ class MapStore:
             except (ValueError, TypeError, AttributeError):raise ValueError('Observationens id är ogiltigt')
         now = utc_now();changed = 0
         with self.connection() as connection:
+            affected=set()
             for observation_id in normalized:
+                linked=connection.execute('''SELECT link.candidate_id FROM observations o JOIN candidate_observations link ON link.observation_id=o.id WHERE o.contributor_hash=? AND o.client_observation_id=? AND o.is_current=1''',(contributor,observation_id)).fetchone()
+                if linked:affected.add(linked['candidate_id'])
                 cursor = connection.execute("UPDATE observations SET status='withdrawn',deleted_at=?,updated_at=? WHERE contributor_hash=? AND client_observation_id=? AND is_current=1 AND status!='withdrawn'", (now, now, contributor, observation_id))
                 changed += cursor.rowcount
-        return {'ok':True,'withdrawn':changed,'updatedAt':now}
+            if affected:self._rebuild_point_model(connection,now)
+        return {'ok':True,'withdrawn':changed,'candidatesUpdated':len(affected),'updatedAt':now}
 
     def global_objects(self, bbox):
-        west, south, east, north = [float(value) for value in bbox]
+        west, south, east, north = self._normalized_bbox(bbox)
         with self.connection() as connection:
-            rows = connection.execute("SELECT * FROM global_objects WHERE status='approved' AND deleted_at IS NULL AND east>=? AND west<=? AND north>=? AND south<=?", (west,east,south,north)).fetchall()
+            rows = connection.execute("SELECT * FROM global_objects WHERE status!='removed' AND deleted_at IS NULL AND east>=? AND west<=? AND north>=? AND south<=?", (west,east,south,north)).fetchall()
         features=[]
         for row in rows:
-            features.append({'type':'Feature','id':row['id'],'properties':{'category':row['category'],'objectType':row['object_type'],'symbol':row['symbol'],'evidenceCount':row['evidence_count'],'qualityScore':row['quality_score'],'status':'approved'},'geometry':json.loads(row['geometry_json'])})
-        return {'type':'FeatureCollection','properties':{'source':'OMapMaker global map','bboxWgs84':bbox},'features':features}
+            features.append({'type':'Feature','id':row['id'],'properties':{
+                'shortId':row['short_id'] or self._short_candidate_id(row['id']),'category':row['category'],'objectType':row['object_type'],'symbol':row['symbol'],
+                'observationCount':row['evidence_count'],'independentContributors':row['independent_contributors'],'agreementCount':row['agreement_count'],'conflictCount':row['conflict_count'],
+                'existenceScore':round(row['existence_score'] or 0),'classificationScore':round(row['classification_score'] or 0),'positionScore':round(row['position_score'] or 0),'qualityScore':round(row['quality_score'] or 0),
+                'status':row['status'],'revision':row['revision'],'lastObservedAt':row['last_observed_at']
+            },'geometry':json.loads(row['geometry_json'])})
+        return {'type':'FeatureCollection','properties':{'source':'OMapMaker global map','model':'point-evidence-v1','bboxWgs84':bbox},'features':features}
+
+    def global_object_detail(self, object_id):
+        with self.connection() as connection:
+            row=connection.execute("SELECT * FROM global_objects WHERE id=? AND status!='removed' AND deleted_at IS NULL",(str(object_id),)).fetchone()
+            if not row:return None
+            profile_rows=connection.execute('''
+                SELECT COALESCE(p.reliability_score,0.5) AS reliability,o.source,o.accuracy,o.object_type,o.symbol
+                FROM candidate_observations link JOIN observations o ON o.id=link.observation_id
+                LEFT JOIN contributor_profiles p ON p.contributor_hash=o.contributor_hash
+                WHERE link.candidate_id=? AND o.is_current=1 AND o.status='submitted' AND o.deleted_at IS NULL
+            ''',(row['id'],)).fetchall()
+        explanation=json.loads(row['explanation_json'] or '{}')
+        reliabilities=[float(item['reliability']) for item in profile_rows]
+        detail={
+            'id':row['id'],'shortId':row['short_id'] or self._short_candidate_id(row['id']),'status':row['status'],'category':row['category'],'objectType':row['object_type'],'symbol':row['symbol'],'revision':row['revision'],
+            'scores':{'existence':round(row['existence_score'] or 0),'classification':round(row['classification_score'] or 0),'position':round(row['position_score'] or 0),'quality':round(row['quality_score'] or 0)},
+            'evidence':{'observations':row['evidence_count'],'independentContributors':row['independent_contributors'],'agreeing':row['agreement_count'],'conflicting':row['conflict_count'],'medianAccuracyMetres':row['median_accuracy'],'positionSpreadMetres':row['position_spread'],'averageContributorReliability':round(100*sum(reliabilities)/max(1,len(reliabilities))) if reliabilities else 50},
+            'firstObservedAt':row['first_observed_at'],'lastObservedAt':row['last_observed_at'],'explanation':explanation,'geometry':json.loads(row['geometry_json'])
+        }
+        return detail
+
+    def evidence_grid(self, bbox, grid_metres=12):
+        west,south,east,north=self._normalized_bbox(bbox);grid=max(5,min(100,float(grid_metres)));reference_latitude=(south+north)/2
+        longitude_metres=111_320*max(.1,math.cos(math.radians(reference_latitude)));latitude_metres=111_320
+        with self.connection() as connection:
+            rows=connection.execute('''
+                SELECT contributor_hash,object_type,symbol,source,accuracy,geometry_json
+                FROM observations WHERE category='point' AND is_current=1 AND status='submitted' AND deleted_at IS NULL
+                  AND east>=? AND west<=? AND north>=? AND south<=?
+            ''',(west,east,south,north)).fetchall()
+        cells={}
+        for row in rows:
+            longitude,latitude=json.loads(row['geometry_json'])['coordinates'][:2]
+            x=math.floor(longitude*longitude_metres/grid);y=math.floor(latitude*latitude_metres/grid);key=(x,y)
+            cell=cells.setdefault(key,{'count':0,'contributors':set(),'classes':{},'accuracy':[]})
+            cell['count']+=1;cell['contributors'].add(row['contributor_hash']);classification=(row['object_type'],row['symbol']);cell['classes'][classification]=cell['classes'].get(classification,0)+1
+            if row['accuracy'] is not None:cell['accuracy'].append(float(row['accuracy']))
+        features=[]
+        for (x,y),cell in cells.items():
+            dominant=max(cell['classes'],key=cell['classes'].get);dominant_count=cell['classes'][dominant]
+            features.append({'type':'Feature','properties':{'observationCount':cell['count'],'independentContributors':len(cell['contributors']),'dominantObjectType':dominant[0],'dominantSymbol':dominant[1],'agreementScore':round(100*dominant_count/cell['count']),'averageAccuracyMetres':round(sum(cell['accuracy'])/len(cell['accuracy']),1) if cell['accuracy'] else None,'gridMetres':grid},'geometry':{'type':'Point','coordinates':[(x+.5)*grid/longitude_metres,(y+.5)*grid/latitude_metres]}})
+        return {'type':'FeatureCollection','properties':{'source':'OMapMaker aggregated evidence','privacy':'No contributor identifiers or raw observation ids','gridMetres':grid,'bboxWgs84':[west,south,east,north]},'features':features}
 
     def status(self):
         with self.connection() as connection:
@@ -429,5 +713,6 @@ class MapStore:
             layer_rows = connection.execute("SELECT layer_type,COUNT(*) AS count FROM map_layers WHERE status='active' GROUP BY layer_type").fetchall()
             submissions = connection.execute('SELECT COUNT(*) FROM submissions').fetchone()[0]
             observations = connection.execute("SELECT COUNT(*) FROM observations WHERE is_current=1 AND status='submitted'").fetchone()[0]
-            global_objects = connection.execute("SELECT COUNT(*) FROM global_objects WHERE status='approved' AND deleted_at IS NULL").fetchone()[0]
-        return {'ok':True,'centralStorage':True,'layers':layers,'layersByType':{row['layer_type']:row['count'] for row in layer_rows},'submissions':submissions,'pendingObservations':observations,'globalObjects':global_objects}
+            global_objects = connection.execute("SELECT COUNT(*) FROM global_objects WHERE status!='removed' AND deleted_at IS NULL").fetchone()[0]
+            profiles = connection.execute('SELECT COUNT(*) FROM contributor_profiles').fetchone()[0]
+        return {'ok':True,'centralStorage':True,'candidateModel':'point-evidence-v1','layers':layers,'layersByType':{row['layer_type']:row['count'] for row in layer_rows},'submissions':submissions,'pendingObservations':observations,'globalObjects':global_objects,'contributorProfiles':profiles}

@@ -865,6 +865,14 @@ class Handler(SimpleHTTPRequestHandler):
         if path=='/api/global-objects':
             try:return self.send_json(200,MAP_STORE.global_objects(self.query_bbox()))
             except (ValueError,KeyError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path.startswith('/api/global-objects/'):
+            result=MAP_STORE.global_object_detail(path.rsplit('/',1)[-1])
+            return self.send_json(200,result) if result else self.send_json(404,{'error':'Det globala objektet hittades inte'})
+        if path=='/api/evidence':
+            try:
+                query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query);grid=float((query.get('grid') or [12])[0])
+                return self.send_json(200,MAP_STORE.evidence_grid(self.query_bbox(),grid))
+            except (ValueError,KeyError) as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/height-status':
             mode=lantmateriet_auth_mode();cached_files=len(list(DATA.rglob('*.tif'))) if DATA.exists() else 0
             return self.send_json(200,{'ok':True,'credentialsConfigured':mode!='not-configured','authenticationMode':mode,'collection':'dtm-cog','cachedHeightFiles':cached_files})

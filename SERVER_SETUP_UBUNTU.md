@@ -85,11 +85,14 @@ innehåller:
 - en central katalog och komprimerad kopia av genererade höjdkurvor och hämtade
   OSM-lager, med täckningsområde, parametrar, källuppgift och revision,
 - frivilligt insända observationer med versionshistorik,
-- en separat, inledningsvis tom tabell för granskade globala kartobjekt.
+- automatiskt beräknade globala punktkandidater, evidenslänkar och pseudonyma
+  bidragsprofiler.
 
 Lokala fältobjekt skickas aldrig automatiskt. Användaren måste först öppna
 granskningsdialogen, välja varje objekt och godkänna att dess exakta geometri
-skickas. En insänd observation blir inte automatiskt ett globalt kartobjekt.
+skickas. En insänd punktobservation behandlas automatiskt och kan bli ett
+preliminärt globalt kartobjekt; linjer och områden lagras tills motsvarande
+geometrimodeller införs.
 Enhets-id:t lagras inte i databasen; servern lagrar endast ett envägshashat,
 pseudonymt bidrags-id för versionshantering och återkallning.
 
@@ -110,9 +113,11 @@ Kontrollera lagringen med:
 curl http://127.0.0.1:8765/api/storage-status
 ```
 
-API:t skiljer uttryckligen på `/api/submissions` (ogranskade observationer) och
-`/api/global-objects` (godkända kartobjekt). Det finns ännu inget automatiskt
-flöde mellan dem.
+API:t skiljer uttryckligen på `/api/submissions` (observationer),
+`/api/global-objects` (automatiskt beräknade kandidater) och `/api/evidence`
+(integritetsbevarande rutnätsaggregering). Upprepade rapporter från samma
+pseudonyma enhet räknas som en oberoende röst per kandidat. Inga bidrags-id
+levereras till klienten.
 
 ## Kontroll
 

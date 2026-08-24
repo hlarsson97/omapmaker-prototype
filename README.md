@@ -13,8 +13,9 @@ Ubuntu finns i `SERVER_SETUP_UBUNTU.md`.
 - Appen skickar inga objekt eller GPS-spår automatiskt.
 - Frivillig publicering kräver val av objekt, förhandsgranskning och ett
   uttryckligt godkännande.
-- Servern lagrar insända observationer separat från godkända globala
-  kartobjekt. En observation ändrar därför aldrig kartan direkt.
+- Servern lagrar insända observationer separat och låter en automatisk,
+  förklarbar evidensmodell skapa globala punktkandidater. En enda uttryckligen
+  insänd observation blir synlig men kan få preliminär status.
 - Serverlagrade lager och observationer ligger i `data/omapmaker.sqlite3` och
   ingår inte i Git.
 - Externa lager återanvänds automatiskt från serverns centrala katalog när en
@@ -22,4 +23,7 @@ Ubuntu finns i `SERVER_SETUP_UBUNTU.md`.
   snabba lokala kopian.
 - Lokala godkännanden, avvisningar och typändringar läggs ovanpå nästa central
   lagerversion och skrivs därför inte över av en vanlig källuppdatering.
+- Globala punktobjekt redovisar existens-, klassificerings-, positions- och
+  kvalitetspoäng. En aggregerad evidenskarta kan slås på separat och innehåller
+  inga bidrags-id eller råa observations-id.
 

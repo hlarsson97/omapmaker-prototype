@@ -40,13 +40,16 @@ class CentralStorageApiTests(unittest.TestCase):
         if device:headers['X-OMapMaker-Device']=device
         with urllib.request.urlopen(urllib.request.Request(self.base+path,data=data,headers=headers),timeout=3) as response:return response.status,json.load(response)
 
-    def test_submission_endpoint_keeps_observation_out_of_global_map(self):
+    def test_submission_endpoint_creates_scored_global_candidate(self):
         device=str(uuid.uuid4());observation=str(uuid.uuid4());submission=str(uuid.uuid4())
         feature={'type':'Feature','id':observation,'properties':{'clientObservationId':observation,'version':1,'category':'point','objectType':'boulder','symbol':'206','source':'manual','quality':'unverified','accuracy':0},'geometry':{'type':'Point','coordinates':[18,59]}}
         status,receipt=self.request('/api/submissions',{'clientSubmissionId':submission,'features':[feature]},device)
-        self.assertEqual(status,201);self.assertEqual(receipt['status'],'submitted')
-        _,storage=self.request('/api/storage-status');self.assertEqual(storage['pendingObservations'],1);self.assertEqual(storage['globalObjects'],0)
-        _,global_map=self.request('/api/global-objects?bbox=17.99,58.99,18.01,59.01');self.assertEqual(global_map['features'],[])
+        self.assertEqual(status,201);self.assertEqual(receipt['status'],'processed');self.assertEqual(receipt['candidateCount'],1)
+        _,storage=self.request('/api/storage-status');self.assertEqual(storage['pendingObservations'],1);self.assertEqual(storage['globalObjects'],1)
+        _,global_map=self.request('/api/global-objects?bbox=17.99,58.99,18.01,59.01');self.assertEqual(len(global_map['features']),1)
+        candidate=global_map['features'][0]
+        _,detail=self.request('/api/global-objects/'+candidate['id']);self.assertEqual(detail['shortId'],candidate['properties']['shortId']);self.assertIn('quality',detail['scores'])
+        _,evidence=self.request('/api/evidence?bbox=17.99,58.99,18.01,59.01&grid=12');self.assertEqual(evidence['features'][0]['properties']['observationCount'],1)
 
     def test_submission_requires_anonymous_device_identifier(self):
         with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/submissions',{'clientSubmissionId':'missing','features':[]})
