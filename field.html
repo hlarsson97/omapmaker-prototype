@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=6"><link rel="stylesheet" href="v6.css?v=7"><link rel="stylesheet" href="v7.css?v=7"><link rel="stylesheet" href="v8.css?v=8"><link rel="stylesheet" href="v9.css?v=28"><link rel="stylesheet" href="v10.css?v=1"><link rel="stylesheet" href="v11.css?v=1"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=6"><link rel="stylesheet" href="v6.css?v=7"><link rel="stylesheet" href="v7.css?v=7"><link rel="stylesheet" href="v8.css?v=8"><link rel="stylesheet" href="v9.css?v=28"><link rel="stylesheet" href="v10.css?v=1"><link rel="stylesheet" href="v11.css?v=2"></head>
 <body class="gps-mode">
 <header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><button id="export">Exportera</button></header>
 <main id="map"></main>
@@ -42,10 +42,10 @@
     <label>Pappersstorlek<select id="exportPaper"><option value="A5">A5</option><option value="A4" selected>A4</option><option value="A3">A3</option></select></label>
     <label>Orientering<select id="exportOrientation"><option value="landscape" selected>Liggande</option><option value="portrait">Stående</option></select></label>
     <label>Marginaler<select id="exportMargin"><option value="5">Små · 5 mm</option><option value="10" selected>Normala · 10 mm</option><option value="15">Stora · 15 mm</option><option value="20">Extra stora · 20 mm</option></select></label>
-    <label>Kartutnitt<select id="exportExtent"><option value="workspace">Hela arbetsområdet</option><option value="view">Aktuell kartvy</option></select></label>
-  </div></fieldset>
+    <label>Kartutnitt<select id="exportExtent"><option value="selection">Valt utskriftsområde</option><option value="view">Kartans nuvarande centrum</option></select></label>
+  </div><div class="print-area-choice"><div><b id="printAreaDimensions">–</b><span id="printAreaSummary">Utskriftsområdet är inte valt.</span></div><button id="choosePrintArea" type="button">Välj område på kartan</button></div></fieldset>
   <fieldset class="export-section peripheral-section"><legend>Information på kartans framsida</legend>
-    <div class="required-information"><label><input type="checkbox" checked disabled> Planerad skala <output id="exportScaleValue">–</output></label><label><input type="checkbox" checked disabled> Ekvidistans <output id="exportContourValue">–</output></label></div>
+    <div class="required-information"><label><input type="checkbox" checked disabled> Skala <output id="exportScaleValue">–</output></label><label><input type="checkbox" checked disabled> Ekvidistans <output id="exportContourValue">–</output></label></div>
     <p class="required-note">Skala och ekvidistans är obligatoriska enligt ISOM 2.13.</p>
     <div class="optional-information">
       <label><input id="includeMapName" type="checkbox" checked><span>Kartans namn</span><input id="exportMapName" type="text" maxlength="80"></label>
@@ -57,7 +57,7 @@
       <label><input id="includeCopyright" type="checkbox"><span>Copyright</span><input id="exportCopyright" type="text" maxlength="160" placeholder="© år och rättighetshavare"></label>
     </div>
   </fieldset>
-  <div id="exportComplianceNote" class="export-warning"><b>Förhandsversion</b><span>Fysisk skala, magnetisk nord, grafiska minimimått och IOF-kalibrerade tryckfärger är ännu inte verifierade. PDF-filen ska därför inte användas som tävlingskarta utan kartkontroll.</span></div>
+  <div id="exportComplianceNote" class="export-warning"><b>Kalibrerad förhandsversion</b><span>Välj 100 % eller Verklig storlek i utskriftsdialogen och kontrollera 50 mm-linjen. Magnetisk nord, grafiska minimimått och IOF-kalibrerade tryckfärger återstår.</span></div>
   <button id="preparePrint" type="submit" class="export-primary">Förbered PDF / utskrift</button>
   <button id="exportGeojson" type="button" class="export-secondary">Exportera redigerbar GeoJSON</button>
 </form></dialog>
@@ -72,6 +72,8 @@
 </section>
 <dialog id="objectSheet"><form method="dialog"><div class="sheet-head"><div><small id="sheetCategory"></small><h2 id="sheetTitle">Välj objekt</h2></div><button value="cancel">×</button></div><div id="sheetOptions"></div></form></dialog>
 <section id="printInformation" aria-label="Kartinformation"><h2 id="printMapTitle"></h2><dl id="printMetadata"></dl></section>
+<section id="printAreaPicker" hidden aria-label="Välj utskriftsområde"><div><small>UTSKRIFTSOMRÅDE</small><h2>Flytta kartan under ramen</h2><p id="printAreaPickerSummary">–</p></div><div><button id="centerPrintOnWorkspace" type="button">Centrera arbetsområdet</button><button id="cancelPrintArea" type="button">Avbryt</button><button id="confirmPrintArea" type="button">Använd området</button></div></section>
+<div id="printScaleCheck"><span>50 mm kontrollmått · skriv ut i 100 %</span></div>
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=34"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=35"></script></body></html>

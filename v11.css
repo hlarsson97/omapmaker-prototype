@@ -6,6 +6,11 @@
 #exportSheet .export-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #exportSheet .export-grid label{display:grid;gap:5px;margin:0;color:#243229;font-size:10px;font-weight:850}
 #exportSheet select,#exportSheet input[type=text],#exportSheet input[type=number]{width:100%;min-width:0;border:1px solid #d5ddd5;border-radius:10px;background:#fff;padding:10px;font:inherit;font-size:13px;color:#17241c}
+#exportSheet .print-area-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:10px;border-radius:10px;background:#eef3ec}
+#exportSheet .print-area-choice>div{display:grid;gap:2px;min-width:0}
+#exportSheet .print-area-choice b{font-size:12px;color:#075b3a}
+#exportSheet .print-area-choice span{font-size:9px;color:#6d796f;line-height:1.3}
+#exportSheet .print-area-choice button{flex:none;min-height:38px;border:0;border-radius:9px;padding:0 12px;background:#075b3a;color:#fff;font-size:10px;font-weight:900}
 #exportSheet .required-information{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 #exportSheet .required-information label{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;margin:0;padding:10px;border-radius:10px;background:#eef3ec;font-size:11px}
 #exportSheet .required-information output{color:#075b3a;font-weight:900}
@@ -19,9 +24,19 @@
 #exportSheet .export-primary{background:#075b3a;color:#fff}
 #exportSheet .export-primary:disabled{opacity:.5}
 #exportSheet .export-secondary{margin-top:8px;background:#e9eee8;color:#075b3a}
-#printInformation,#printPrototypeMark{display:none}
+#printInformation,#printPrototypeMark,#printScaleCheck,#printAreaPicker{display:none}
+#printAreaPicker{position:fixed;z-index:1600;top:calc(10px + env(safe-area-inset-top));left:50%;width:min(720px,calc(100vw - 20px));transform:translateX(-50%);padding:12px 14px;border-radius:15px;background:#fffdf3f2;box-shadow:0 5px 25px #17241c45;backdrop-filter:blur(10px);align-items:center;justify-content:space-between;gap:14px}
+#printAreaPicker:not([hidden]){display:flex}
+#printAreaPicker small{display:block;margin-bottom:3px;color:#075b3a;font-size:8px;font-weight:900;letter-spacing:.14em}
+#printAreaPicker h2{margin:0;font:20px/1.05 Georgia,serif}
+#printAreaPicker p{margin:4px 0 0;color:#5e6b62;font-size:10px}
+#printAreaPicker>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+#printAreaPicker button{min-height:38px;border:0;border-radius:10px;padding:0 11px;background:#e7eee7;color:#075b3a;font-size:10px;font-weight:900}
+#printAreaPicker #confirmPrintArea{background:#075b3a;color:#fff}
+body.print-area-mode>header,body.print-area-mode>#gpsQuality,body.print-area-mode>#modeSwitch,body.print-area-mode>#modeHint,body.print-area-mode>#draftHint,body.print-area-mode>#layersButton,body.print-area-mode>#mapNavControls,body.print-area-mode>#editBar,body.print-area-mode>#toolbar{visibility:hidden!important;pointer-events:none!important}
+.print-area-boundary{filter:drop-shadow(0 0 2px #fff)}
 
-@media(max-width:520px){#exportSheet .export-grid,#exportSheet .required-information{grid-template-columns:1fr}#exportSheet .optional-information label{grid-template-columns:auto 1fr}#exportSheet .optional-information label>input:last-child{grid-column:1/3}}
+@media(max-width:520px){#exportSheet .export-grid,#exportSheet .required-information{grid-template-columns:1fr}#exportSheet .optional-information label{grid-template-columns:auto 1fr}#exportSheet .optional-information label>input:last-child{grid-column:1/3}#exportSheet .print-area-choice{align-items:stretch;flex-direction:column}#printAreaPicker{align-items:stretch;flex-direction:column}#printAreaPicker>div:last-child{justify-content:stretch}#printAreaPicker button{flex:1}}
 
 @media print{
   html,body{width:100%;height:100%;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}
@@ -35,5 +50,7 @@
   #printInformation dl div{display:contents}
   #printInformation dt{font-weight:700}
   #printInformation dd{margin:0}
+  #printScaleCheck{display:block!important;position:fixed;z-index:10001;top:4mm;left:4mm;width:50mm;border-top:.35mm solid #111;color:#111;font:2mm/1.1 Arial,sans-serif;text-align:center}
+  #printScaleCheck span{display:block;padding-top:1mm;background:#ffffffe6}
   #printPrototypeMark{display:block!important;position:fixed;z-index:10001;top:3mm;right:3mm;padding:1.5mm 2mm;background:#fff3;color:#672c24;font:700 2.5mm/1 Arial,sans-serif;letter-spacing:.05em}
 }
