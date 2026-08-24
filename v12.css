@@ -1,0 +1,21 @@
+.generated-object-popup{min-width:245px}
+.generated-object-popup>b,.generated-object-popup>small{display:block}
+.generated-object-popup>small{margin-top:4px;color:#68736c;font-size:10px;line-height:1.35}
+.generated-object-popup .generated-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px}
+.generated-object-popup button{min-height:34px;border:0;border-radius:8px;padding:7px 6px;background:#e7efe9;color:#114a31;font-size:10px;font-weight:850}
+.generated-object-popup button[data-generated-action="exclude"]{background:#f4e7e5;color:#8a302b}
+.generated-object-popup button[data-generated-action="reset"]{background:#edf0ed;color:#526159}
+.generated-object-popup button[data-generated-edit]{grid-column:1/-1;background:#286fc0;color:#fff}
+.generated-object-popup button:disabled{opacity:.45}
+.generated-object-popup select{width:100%;margin-top:9px;border:1px solid #d5ddd6;border-radius:8px;padding:8px;background:#fff;font-size:11px}
+.generated-object.excluded{stroke:#a13d38!important;fill:#fff!important;stroke-dasharray:5 4;opacity:.42}
+.generated-object.edited{filter:drop-shadow(0 0 1px rgba(40,111,192,.5))}
+.generated-edit-shape{pointer-events:none;filter:drop-shadow(0 0 2px rgba(40,111,192,.75))}
+.geometry-handle span,.geometry-midpoint span{display:block;border-radius:50%;box-sizing:border-box}
+.geometry-handle span{width:20px;height:20px;background:#286fc0;border:3px solid #fff;box-shadow:0 1px 4px #0006}
+.geometry-handle.selected span{background:#bd3e34;transform:scale(1.12)}
+.geometry-midpoint span{width:14px;height:14px;background:#fff;border:2px solid #286fc0;box-shadow:0 1px 3px #0005}
+body.generated-geometry-editing #modeSwitch,body.generated-geometry-editing #layersButton,body.generated-geometry-editing #toolbar{opacity:.28;pointer-events:none}
+body.generated-geometry-editing #editBar{border:2px solid #286fc0}
+#editBar button.hidden{display:none}
+@media print{.generated-object.excluded{display:none}.geometry-handle,.geometry-midpoint,.generated-edit-shape{display:none!important}}
