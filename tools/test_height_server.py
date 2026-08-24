@@ -184,12 +184,85 @@ class LandCoverTests(unittest.TestCase):
         self.assertEqual(server.land_cover_classification({'landuse': 'meadow'}, True)[:2], ('open_land', '401'))
         self.assertEqual(server.land_cover_classification({'landuse': 'farmland'}, True)[:2], ('cultivated_land', '412'))
 
-    def test_residential_land_is_low_confidence_tomtmark(self):
+    def test_residential_land_is_never_directly_tomtmark(self):
         result = server.land_cover_classification({'landuse': 'residential'}, True, 1800, 35)
-        self.assertEqual(result, ('residential_land', '520', 'low', 'small-residential-polygon'))
+        self.assertIsNone(result)
 
     def test_large_residential_area_is_not_tomtmark(self):
         self.assertIsNone(server.land_cover_classification({'landuse': 'residential'}, True, 25000, 120))
+
+    def test_residential_building_generates_conservative_520_candidate(self):
+        elements = [self.osm_way(1, {'building': 'detached'}, [
+            (18.10000, 59.20000), (18.10018, 59.20000),
+            (18.10018, 59.20009), (18.10000, 59.20009), (18.10000, 59.20000),
+        ])]
+        features = server.restricted_area_features(elements, [18.099, 59.199, 18.102, 59.202])
+        self.assertEqual(len(features), 1)
+        properties = features[0]['properties']
+        self.assertEqual(properties['isomSymbol'], '520')
+        self.assertEqual(properties['restrictedKind'], 'home-zone')
+        self.assertEqual(properties['boundary'], 'unclear')
+        self.assertEqual(properties['bufferMetres'], 20.0)
+
+    def test_apartment_and_unspecified_residential_buildings_are_not_automatic_520(self):
+        apartment = self.osm_way(20, {'building': 'apartments'}, [
+            (18.10000, 59.20000), (18.10030, 59.20000),
+            (18.10030, 59.20015), (18.10000, 59.20015), (18.10000, 59.20000),
+        ])
+        residential = self.osm_way(21, {'building': 'residential'}, [
+            (18.10040, 59.20000), (18.10070, 59.20000),
+            (18.10070, 59.20015), (18.10040, 59.20015), (18.10040, 59.20000),
+        ])
+        self.assertEqual(server.restricted_area_features([apartment, residential], [18.099, 59.199, 18.102, 59.202]), [])
+
+    def test_public_path_cuts_residential_520_candidate(self):
+        house = self.osm_way(1, {'building': 'house'}, [
+            (18.10000, 59.20000), (18.10018, 59.20000),
+            (18.10018, 59.20009), (18.10000, 59.20009), (18.10000, 59.20000),
+        ])
+        footway = self.osm_way(2, {'highway': 'footway'}, [
+            (18.10009, 59.19970), (18.10009, 59.20040),
+        ])
+        without_path = server.restricted_area_features([house], [18.099, 59.199, 18.102, 59.202])[0]
+        with_path = server.restricted_area_features([house, footway], [18.099, 59.199, 18.102, 59.202])[0]
+        self.assertLess(with_path['properties']['areaSquareMetres'], without_path['properties']['areaSquareMetres'])
+        self.assertEqual(with_path['properties']['pathOverlapMetres'], 1.5)
+
+    def test_small_residential_landuse_only_clips_a_house_zone(self):
+        boundary = self.osm_way(3, {'landuse': 'residential'}, [
+            (18.09985, 59.19985), (18.10035, 59.19985),
+            (18.10035, 59.20025), (18.09985, 59.20025), (18.09985, 59.19985),
+        ])
+        self.assertEqual(server.restricted_area_features([boundary], [18.099, 59.199, 18.102, 59.202]), [])
+        house = self.osm_way(4, {'building': 'house'}, [
+            (18.10000, 59.20000), (18.10018, 59.20000),
+            (18.10018, 59.20009), (18.10000, 59.20009), (18.10000, 59.20000),
+        ])
+        feature = server.restricted_area_features([boundary, house], [18.099, 59.199, 18.102, 59.202])[0]
+        self.assertTrue(feature['properties']['clippedToSmallResidentialArea'])
+
+    def test_closed_industrial_fence_generates_clear_520_boundary(self):
+        industrial = self.osm_way(5, {'landuse': 'industrial'}, [
+            (18.1000, 59.2000), (18.1008, 59.2000),
+            (18.1008, 59.2005), (18.1000, 59.2005), (18.1000, 59.2000),
+        ])
+        fence = self.osm_way(6, {'barrier': 'fence', 'access': 'private'}, [
+            (18.1001, 59.2001), (18.1007, 59.2001),
+            (18.1007, 59.2004), (18.1001, 59.2004), (18.1001, 59.2001),
+        ])
+        feature = server.restricted_area_features([industrial, fence], [18.099, 59.199, 18.102, 59.202])[0]
+        self.assertEqual(feature['properties']['restrictedKind'], 'industrial-enclosure')
+        self.assertEqual(feature['properties']['classificationConfidence'], 'high')
+        self.assertEqual(feature['properties']['boundary'], 'clear')
+
+    @staticmethod
+    def osm_way(identifier, tags, coordinates):
+        return {
+            'type': 'way',
+            'id': identifier,
+            'tags': tags,
+            'geometry': [{'lon': lon, 'lat': lat} for lon, lat in coordinates],
+        }
 
     def test_water_tag_is_accepted_without_natural_tag(self):
         self.assertEqual(server.land_cover_classification({'water': 'lake'}, True, 1000, 30)[:2], ('water_301', '301'))
