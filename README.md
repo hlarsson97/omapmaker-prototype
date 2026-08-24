@@ -13,7 +13,8 @@ Kartans symboler, mått och generalisering ska följa **ISOM 2017-2, Revision 6
 (januari 2024)**. Färger, färgordning och framtida PDF-/tryckexport ska följa
 **IOF Map Specifications - Printing and Colour Definitions (februari 2022)**.
 Exakta utgåvor, användningsområden, licenser och dokumentfingeravtryck finns i
-[`SOURCES.md`](SOURCES.md).
+[`SOURCES.md`](SOURCES.md). Prototypens nuvarande avvikelser och planerade
+åtgärder för hela kapitel 2 finns i [`ISOM_COMPLIANCE.md`](ISOM_COMPLIANCE.md).
 
 ## Integritet och gemensam karta
 
