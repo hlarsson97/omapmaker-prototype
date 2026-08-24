@@ -221,6 +221,8 @@ def download_assets(
                         progress_callback({"filename": destination.name, "fileIndex": file_index, "fileCount": len(assets), "loadedBytes": loaded_bytes, "totalBytes": total_bytes, "cached": False})
                 if cancel_check:
                     cancel_check()
+            if total_bytes and loaded_bytes != total_bytes:
+                raise ApiError(f"Lantmäteriet skickade {loaded_bytes} av {total_bytes} byte för {destination.name}.")
             if temporary.stat().st_size == 0:
                 raise ApiError(f"Lantmäteriet returnerade en tom fil för {destination.name}.")
             temporary.replace(destination)

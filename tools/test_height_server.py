@@ -237,8 +237,20 @@ class AutomaticHeightDataTests(unittest.TestCase):
             previous_cache=server.CACHE
             try:
                 server.CACHE=root/'cache';bbox=[18.0,59.0,18.002,59.001];mosaic=server.build_height_mosaic([first,second],bbox)
-                self.assertTrue(mosaic.exists());self.assertTrue(server.covers(mosaic,bbox))
+                self.assertTrue(mosaic.exists());self.assertTrue(server.covers(mosaic,bbox));self.assertTrue(server.height_validation_marker(mosaic).exists());self.assertFalse(mosaic.with_name(mosaic.name+'.part').exists())
             finally:server.CACHE=previous_cache
+
+    def test_corrupt_automatic_tile_is_discarded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);data=root/'data';automatic=data/'auto';automatic.mkdir(parents=True);source=automatic/'broken.tif'
+            profile={'driver':'GTiff','width':128,'height':128,'count':1,'dtype':'float32','crs':'EPSG:4326','transform':from_origin(18.0,59.01,0.0001,0.0001),'nodata':-9999,'tiled':True,'blockxsize':16,'blockysize':16,'compress':'deflate'}
+            with rasterio.open(source,'w',**profile) as dataset:dataset.write(np.random.default_rng(7).random((1,128,128),dtype=np.float32))
+            with source.open('r+b') as output:output.truncate(source.stat().st_size-256)
+            previous_data=server.DATA
+            try:
+                server.DATA=data;candidates=server.validated_height_candidates([18.0001,59.0001,18.009,59.009])
+                self.assertEqual(candidates,[]);self.assertFalse(source.exists())
+            finally:server.DATA=previous_data
 
     def test_two_cached_tiles_are_reused_without_provider_login(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -361,6 +373,20 @@ class HeightDownloadProgressTests(unittest.TestCase):
             paths=lm_height.download_assets(result,Path(temporary),bearer_token='token',progress_callback=updates.append)
             self.assertEqual(paths[0].read_bytes(),payload)
         self.assertEqual(updates[-1]['loadedBytes'],len(payload));self.assertEqual(updates[-1]['totalBytes'],len(payload))
+
+    def test_download_rejects_short_response(self):
+        payload=b'incomplete-height-data'
+        class Response:
+            headers={'Content-Length':str(len(payload)+100)}
+            def __init__(self):self.offset=0
+            def __enter__(self):return self
+            def __exit__(self,*_):return False
+            def read(self,size):
+                chunk=payload[self.offset:self.offset+size];self.offset+=len(chunk);return chunk
+        result={'features':[{'assets':{'data':{'href':'https://example.test/tile.tif','type':'image/tiff','roles':['data']}}}]}
+        with tempfile.TemporaryDirectory() as temporary,patch.object(lm_height,'request',return_value=Response()):
+            with self.assertRaisesRegex(lm_height.ApiError,'skickade'):lm_height.download_assets(result,Path(temporary),bearer_token='token')
+            self.assertFalse((Path(temporary)/'tile.tif').exists());self.assertFalse((Path(temporary)/'tile.tif.part').exists())
 
 
 if __name__ == '__main__':

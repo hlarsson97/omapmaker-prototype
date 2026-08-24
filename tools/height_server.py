@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local OMapMaker server with a contour-generation endpoint."""
 from __future__ import annotations
-import argparse, datetime, hashlib, json, math, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request, uuid
+import argparse, datetime, hashlib, json, math, os, re, subprocess, sys, threading, time, traceback, urllib.parse, urllib.request, uuid
 from concurrent.futures import ThreadPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,6 +13,7 @@ from map_store import MapStore
 
 ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE)
 LEVELS={'detailed':2,'normal':5,'soft':10}
+HEIGHT_VALIDATION_VERSION=1
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
 HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':''}
 OAUTH_LOCK=threading.Lock();OAUTH_STATE={'accessToken':'','expiresAt':0.0}
@@ -550,6 +551,57 @@ def projected_request_bounds(dataset,bbox):
     projected=[convert.transform(x,y) for x,y in ((bbox[0],bbox[1]),(bbox[0],bbox[3]),(bbox[2],bbox[1]),(bbox[2],bbox[3]))]
     return min(point[0] for point in projected),min(point[1] for point in projected),max(point[0] for point in projected),max(point[1] for point in projected)
 
+def height_validation_marker(path):return path.with_name(path.name+'.validated.json')
+
+def height_raster_signature(path):
+    stat=path.stat()
+    return {'version':HEIGHT_VALIDATION_VERSION,'size':stat.st_size,'mtimeNs':stat.st_mtime_ns}
+
+def remember_height_raster(path,checksum):
+    marker=height_validation_marker(path);temporary=marker.with_name(f'{marker.name}.{uuid.uuid4().hex}.part')
+    payload={**height_raster_signature(path),'checksum':int(checksum)}
+    try:temporary.write_text(json.dumps(payload,separators=(',',':')),encoding='utf-8');temporary.replace(marker)
+    finally:temporary.unlink(missing_ok=True)
+
+def validate_height_raster(path,remember=True):
+    """Fully read a raster once, then trust a size/mtime-bound marker."""
+    marker=height_validation_marker(path)
+    if remember and marker.exists():
+        try:
+            saved=json.loads(marker.read_text(encoding='utf-8'))
+            signature=height_raster_signature(path)
+            if all(saved.get(key)==value for key,value in signature.items()):return True,'',saved.get('checksum')
+        except (OSError,ValueError,TypeError,json.JSONDecodeError):pass
+    try:
+        with rasterio.open(path) as dataset:
+            if not dataset.crs or dataset.width<1 or dataset.height<1 or dataset.count<1:raise ValueError('rasterfilen saknar giltig geometri eller koordinatsystem')
+            checksum=dataset.checksum(1)
+        if remember:remember_height_raster(path,checksum)
+        return True,'',checksum
+    except Exception as exc:
+        marker.unlink(missing_ok=True)
+        return False,str(exc),None
+
+def discard_invalid_auto_raster(path):
+    try:is_automatic=path.resolve().parent==(DATA/'auto').resolve()
+    except OSError:is_automatic=False
+    if not is_automatic:return False
+    path.unlink(missing_ok=True);height_validation_marker(path).unlink(missing_ok=True)
+    print(f'Tar bort skadad cachad höjdruta: {path.name}',flush=True)
+    return True
+
+def validated_height_candidates(bbox):
+    candidates=[]
+    if not DATA.exists():return candidates
+    for path in DATA.rglob('*.tif'):
+        if not intersects(path,bbox):continue
+        valid,error,_=validate_height_raster(path)
+        if valid:candidates.append(path)
+        else:
+            removed=discard_invalid_auto_raster(path)
+            print(f"{'Hämtar om' if removed else 'Ignorerar'} oläsbar höjddatafil {path.name}: {error}",file=sys.stderr,flush=True)
+    return candidates
+
 def cached_tiles_cover(paths,bbox):
     """Return True when a set of axis-aligned rasters jointly covers bbox."""
     if not paths:return False
@@ -647,32 +699,42 @@ def build_height_mosaic(paths,bbox):
     signature=[]
     for path in sorted(paths):
         stat=path.stat();signature.append((str(path.resolve()),stat.st_size,int(stat.st_mtime)))
-    key=hashlib.sha256(json.dumps([bbox,signature],separators=(',',':')).encode()).hexdigest()[:20]
+    key=hashlib.sha256(json.dumps(['height-mosaic-v2',bbox,signature],separators=(',',':')).encode()).hexdigest()[:20]
     target=CACHE/(key+'-height-mosaic.tif')
-    if target.exists() and covers(target,bbox):return target
+    if target.exists():
+        valid,_,_=validate_height_raster(target)
+        if valid and covers(target,bbox):return target
+        target.unlink(missing_ok=True);height_validation_marker(target).unlink(missing_ok=True)
     opened=[rasterio.open(path) for path in paths]
+    temporary=target.with_name(target.name+'.part');temporary.unlink(missing_ok=True);height_validation_marker(temporary).unlink(missing_ok=True)
     try:
-        crs=opened[0].crs
-        if any(dataset.crs!=crs for dataset in opened):raise ValueError('Höjddatarutorna använder olika koordinatsystem')
-        bounds=projected_request_bounds(opened[0],bbox)
-        CACHE.mkdir(parents=True,exist_ok=True)
-        merge_rasters(opened,bounds=bounds,target_aligned_pixels=True,mem_limit=96,dst_path=target,dst_kwds={'driver':'GTiff','tiled':True,'blockxsize':256,'blockysize':256,'compress':'deflate','BIGTIFF':'IF_SAFER'})
+        try:
+            crs=opened[0].crs
+            if any(dataset.crs!=crs for dataset in opened):raise ValueError('Höjddatarutorna använder olika koordinatsystem')
+            bounds=projected_request_bounds(opened[0],bbox)
+            CACHE.mkdir(parents=True,exist_ok=True)
+            merge_rasters(opened,bounds=bounds,target_aligned_pixels=True,mem_limit=96,dst_path=temporary,dst_kwds={'driver':'GTiff','tiled':True,'blockxsize':256,'blockysize':256,'compress':'deflate','BIGTIFF':'IF_SAFER'})
+        finally:
+            for dataset in opened:dataset.close()
+        valid,error,checksum=validate_height_raster(temporary,remember=False)
+        if not valid or not covers(temporary,bbox):raise ValueError(f'Höjddatamosaiken kunde inte valideras: {error or "ofullständig geografisk täckning"}')
+        temporary.replace(target);remember_height_raster(target,checksum)
     finally:
-        for dataset in opened:dataset.close()
-    if not target.exists() or not covers(target,bbox):raise ValueError('De hämtade höjdrutorna täcker inte hela arbetsområdet')
+        temporary.unlink(missing_ok=True);height_validation_marker(temporary).unlink(missing_ok=True)
     return target
 
 def cached_height_source(bbox):
-    candidates=[path for path in DATA.rglob('*.tif') if intersects(path,bbox)] if DATA.exists() else []
+    candidates=validated_height_candidates(bbox)
     source=next((path for path in candidates if covers(path,bbox)),None)
     if source:return source,candidates,False
     if cached_tiles_cover(candidates,bbox):return build_height_mosaic(candidates,bbox),candidates,True
     return None,candidates,False
 
 def height_cache_status(bbox):
-    candidates=[path for path in DATA.rglob('*.tif') if intersects(path,bbox)] if DATA.exists() else []
-    covered=any(covers(path,bbox) for path in candidates) or cached_tiles_cover(candidates,bbox)
-    return {'ok':True,'cached':covered,'sourceFiles':len(candidates),'sourceBytes':sum(path.stat().st_size for path in candidates)}
+    with HEIGHT_LOCK:
+        candidates=validated_height_candidates(bbox)
+        covered=any(covers(path,bbox) for path in candidates) or cached_tiles_cover(candidates,bbox)
+        return {'ok':True,'cached':covered,'sourceFiles':len(candidates),'sourceBytes':sum(path.stat().st_size for path in candidates)}
 
 def ensure_height_data(bbox,progress=None,cancel_check=None):
     progress=progress or (lambda *_,**__:None);cancel_check=cancel_check or (lambda:None)
@@ -699,12 +761,18 @@ def ensure_height_data(bbox,progress=None,cancel_check=None):
             message=f"{file_label} finns redan på servern." if info.get('cached') else f"Hämtar {file_label.lower()} från Lantmäteriet…"
             progress('downloading',message,progressPercent=percent,progressIndeterminate=percent is None,loadedBytes=loaded,totalBytes=total,currentFile=info.get('filename'),fileIndex=info.get('fileIndex'),fileCount=info.get('fileCount'),heightDataCached=False)
         downloaded_paths=download_assets(result,target,auth['username'],auth['password'],bearer_token=auth['bearer_token'],progress_callback=download_progress,cancel_check=cancel_check)
-        for path in downloaded_paths:
-            cancel_check()
-            try:
-                with rasterio.open(path) as dataset:
-                    if not dataset.crs or dataset.width<1 or dataset.height<1:raise ValueError
-            except Exception as exc:raise ValueError(f'Höjddatafilen {path.name} är ofullständig eller ogiltig') from exc
+        for attempt in range(2):
+            invalid=[]
+            for path in downloaded_paths:
+                cancel_check();valid,error,_=validate_height_raster(path)
+                if not valid:invalid.append((path,error))
+            if not invalid:break
+            for path,_ in invalid:discard_invalid_auto_raster(path)
+            if attempt:
+                names=', '.join(path.name for path,_ in invalid)
+                raise ValueError(f'Höjddata kunde inte läsas efter två hämtningar: {names}')
+            progress('downloading','En skadad höjdruta upptäcktes och hämtas om automatiskt…',progressIndeterminate=True,heightDataCached=False,fileCount=len(expected))
+            downloaded_paths=download_assets(result,target,auth['username'],auth['password'],bearer_token=auth['bearer_token'],progress_callback=download_progress,cancel_check=cancel_check)
         downloaded=sum(name not in before for name in expected)
         cancel_check();progress('preparing','Förbereder höjddata för arbetsområdet…',progressIndeterminate=True,heightDataCached=False)
         source,candidates,mosaic=cached_height_source(bbox)
@@ -790,7 +858,9 @@ def run_contour_job(job_id,request):
     except LantmaterietApiError as exc:update_job(job_id,status='error',stage='provider',message=str(exc),code='lantmateriet_api_error')
     except subprocess.CalledProcessError as exc:update_job(job_id,status='error',stage='generation',message=exc.stderr.strip() or 'Kurvorna kunde inte genereras',code='contour_generation_error')
     except subprocess.TimeoutExpired:update_job(job_id,status='error',stage='generation',message='Genereringen tog för lång tid och stoppades.',code='contour_generation_timeout')
-    except Exception as exc:update_job(job_id,status='error',stage='failed',message=str(exc),code='height_job_error')
+    except Exception as exc:
+        print(f'Höjdkurvsjobb {job_id} misslyckades: {type(exc).__name__}: {exc}',file=sys.stderr,flush=True);traceback.print_exc()
+        update_job(job_id,status='error',stage='failed',message=str(exc) or 'Höjddata kunde inte läsas.',code='height_job_error')
 
 def create_contour_job(request):
     validate_bbox(request)
