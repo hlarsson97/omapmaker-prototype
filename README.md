@@ -7,6 +7,14 @@ GitHub Pages visar den statiska demonstrationsversionen. Funktioner som hämtar
 OSM-data eller Lantmäteriets höjddata kräver Python-servern. Instruktioner för
 Ubuntu finns i `SERVER_SETUP_UBUNTU.md`.
 
+## Normativa källor
+
+Kartans symboler, mått och generalisering ska följa **ISOM 2017-2, Revision 6
+(januari 2024)**. Färger, färgordning och framtida PDF-/tryckexport ska följa
+**IOF Map Specifications - Printing and Colour Definitions (februari 2022)**.
+Exakta utgåvor, användningsområden, licenser och dokumentfingeravtryck finns i
+[`SOURCES.md`](SOURCES.md).
+
 ## Integritet och gemensam karta
 
 - Nya GPS- och manuellt ritade objekt är alltid lokala utkast.
