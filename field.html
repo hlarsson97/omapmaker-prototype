@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=6"><link rel="stylesheet" href="v6.css?v=7"><link rel="stylesheet" href="v7.css?v=7"><link rel="stylesheet" href="v8.css?v=8"><link rel="stylesheet" href="v9.css?v=28"><link rel="stylesheet" href="v10.css?v=1"><link rel="stylesheet" href="v11.css?v=3"><link rel="stylesheet" href="v12.css?v=1"><link rel="stylesheet" href="v13.css?v=1"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=6"><link rel="stylesheet" href="v6.css?v=7"><link rel="stylesheet" href="v7.css?v=7"><link rel="stylesheet" href="v8.css?v=8"><link rel="stylesheet" href="v9.css?v=28"><link rel="stylesheet" href="v10.css?v=1"><link rel="stylesheet" href="v11.css?v=3"><link rel="stylesheet" href="v12.css?v=1"><link rel="stylesheet" href="v13.css?v=1"><link rel="stylesheet" href="v14.css?v=1"></head>
 <body class="gps-mode">
 <header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><button id="export">Exportera</button></header>
 <main id="map"></main>
@@ -25,16 +25,57 @@
     <div class="layer-card local-card"><label id="localDraftsLabel"><input id="objectsVisible" type="checkbox" checked><span>Lokala utkast<small id="localDraftsMeta">0 · endast på denna enhet</small></span></label><button id="reviewSubmissionButton" type="button">Granska och skicka observationer</button><label class="range-label">Egna objekts opacitet <output id="foregroundOpacityValue">100 %</output><input id="foregroundOpacity" type="range" min="20" max="100" value="100"></label></div>
   </fieldset>
   <fieldset class="layer-section generated-section"><legend>Genererade kartlager</legend>
-    <div class="layer-card"><label id="projectContoursLabel"><input id="projectContoursVisible" type="checkbox" checked><span>Genererade höjdkurvor<small id="projectContoursMeta">Inte genererade</small></span></label><button id="generateContoursButton" class="workspace-action" type="button">Generera höjdkurvor</button></div>
-    <div class="layer-card"><label id="osmLandCoverLabel"><input id="osmLandCoverVisible" type="checkbox" checked><span>OSM-mark, vatten och ISOM 520<small id="osmLandCoverMeta">Inte hämtat</small></span></label><button id="fetchOsmLandCoverButton" class="workspace-action" type="button">Hämta mark, vatten och ISOM 520</button></div>
-    <div class="layer-card"><label id="osmBuildingsLabel"><input id="osmBuildingsVisible" type="checkbox" checked><span>OSM-byggnader<small id="osmBuildingsMeta">Inte hämtade</small></span></label><button id="fetchOsmBuildingsButton" class="workspace-action" type="button">Hämta byggnader</button></div>
-    <div class="layer-card"><label id="osmPavedAreasLabel"><input id="osmPavedAreasVisible" type="checkbox" checked><span>OSM-hårdgjorda ytor · ISOM 501<small id="osmPavedAreasMeta">Inte hämtade</small></span></label><button id="fetchOsmPavedAreasButton" class="workspace-action" type="button">Hämta betydande hårdgjorda ytor</button></div>
-    <div class="layer-card"><label id="osmRoadsLabel"><input id="osmRoadsVisible" type="checkbox" checked><span>OSM-vägar och stigar<small id="osmRoadsMeta">Inte hämtade</small></span></label><button id="fetchOsmRoadsButton" class="workspace-action" type="button">Hämta vägar och stigar</button></div>
+    <div class="generation-launchers workspace-action">
+      <button id="generateContoursButton" type="button"><span><b>Generera höjdkurvor</b><small>Detaljerad · arbetsområdets ekvidistans</small></span><i>›</i></button>
+      <button id="generateSurfacesButton" type="button"><span><b>Generera ytor</b><small id="surfaceGenerationSummary">Standard</small></span><i>›</i></button>
+      <button id="generateLinesButton" type="button"><span><b>Generera linjeobjekt</b><small id="lineGenerationSummary">Standard</small></span><i>›</i></button>
+    </div>
+    <div class="layer-card"><label id="projectContoursLabel"><input id="projectContoursVisible" type="checkbox" checked><span>Genererade höjdkurvor<small id="projectContoursMeta">Inte genererade</small></span></label></div>
+    <div class="layer-card"><label id="osmLandCoverLabel"><input id="osmLandCoverVisible" type="checkbox" checked><span>Mark, vatten och ISOM 520<small id="osmLandCoverMeta">Inte hämtat</small></span></label></div>
+    <div class="layer-card"><label id="osmBuildingsLabel"><input id="osmBuildingsVisible" type="checkbox" checked><span>Byggnader<small id="osmBuildingsMeta">Inte hämtade</small></span></label></div>
+    <div class="layer-card"><label id="osmPavedAreasLabel"><input id="osmPavedAreasVisible" type="checkbox" checked><span>Hårdgjorda ytor · ISOM 501<small id="osmPavedAreasMeta">Inte hämtade</small></span></label></div>
+    <div class="layer-card"><label id="osmRoadsLabel"><input id="osmRoadsVisible" type="checkbox" checked><span>Vägar och stigar<small id="osmRoadsMeta">Inte hämtade</small></span></label></div>
   </fieldset>
   <fieldset class="layer-section reference-section"><legend>Referenslager</legend><div class="layer-card"><label><input id="contoursVisible" type="checkbox"><span>Referenskurvor från OpenTopoMap<small>Visas endast som jämförelseunderlag</small></span></label></div></fieldset>
   <div class="workspace-panel"><button id="workspaceSettingsButton" type="button" class="settings-button">Arbetsområdets inställningar</button><p id="layerNote">Generering och hämtning gäller hela arbetsområdet, oberoende av vilken del som syns på skärmen.</p></div>
 </form></dialog>
 <dialog id="contourSheet"><form method="dialog"><div class="sheet-head"><div><small>LANTMÄTERIET</small><h2>Generera höjdkurvor</h2></div><button value="cancel">×</button></div><div id="contourSettingsSummary" class="contour-settings-summary"><div><small>EKVIDISTANS</small><b>5 meter</b></div><div><small>DETALJNIVÅ</small><b>Detaljerad</b><span>cirka 2 m</span></div></div><p>Inställningarna gäller hela arbetsområdet. Ekvidistansen ändras under Arbetsområdets inställningar.</p><p>Höjddata kontrolleras och hämtas automatiskt för hela arbetsområdet, upp till 10 × 10 km. Första hämtningen kan ta några minuter.</p><p id="contourCacheInfo" class="contour-cache-info" role="status">Kontrollerar serverns cache…</p><div id="contourProgressPanel" class="contour-progress-panel" hidden><div><b id="contourStageText">Förbereder…</b><output id="contourProgressValue"></output></div><progress id="contourProgress" max="100"></progress><small id="contourTransferText"></small></div><div class="contour-actions"><button id="runContourGeneration" type="button">Generera höjdkurvor</button><button id="cancelContourGeneration" type="button" hidden>Avbryt</button></div><p id="contourStatus" role="status"></p></form></dialog>
+<dialog id="surfaceGenerationSheet" class="generation-sheet"><form id="surfaceGenerationForm"><div class="sheet-head"><div><small>KARTUNDERLAG</small><h2>Generera ytor</h2></div><button id="closeSurfaceGeneration" type="button" aria-label="Stäng">×</button></div>
+  <p class="generation-intro">Välj en profil eller finjustera vilka ytor som ska hämtas för hela arbetsområdet.</p>
+  <fieldset class="generation-profiles"><legend>Detaljnivå</legend>
+    <label><input type="radio" name="surfaceProfile" value="quick"><span><b>Snabbt utkast</b><small>De viktigaste ytorna och försiktig 520-tolkning.</small></span></label>
+    <label><input type="radio" name="surfaceProfile" value="standard"><span><b>Standard</b><small>Balanserat kartunderlag för fortsatt arbete.</small></span></label>
+    <label><input type="radio" name="surfaceProfile" value="detailed"><span><b>Detaljerad</b><small>Alla tillgängliga kategorier och mer långtgående 520-tolkning.</small></span></label>
+  </fieldset>
+  <fieldset class="generation-options"><legend>Ytor att generera</legend>
+    <label><input id="surfaceBuildings" type="checkbox"><span><b>Byggnader</b><small>ISOM 521 · OpenStreetMap</small></span></label>
+    <label><input id="surfaceWater" type="checkbox"><span><b>Vatten och sankmark</b><small>ISOM 301–313</small></span></label>
+    <label><input id="surfaceLand" type="checkbox"><span><b>Öppen och odlad mark</b><small>ISOM 401, 403 och 412</small></span></label>
+    <label><input id="surfacePaved" type="checkbox"><span><b>Hårdgjorda ytor</b><small>ISOM 501 · betydande ytor</small></span></label>
+    <label><input id="surfaceRestricted" type="checkbox"><span><b>Område som inte får beträdas</b><small>ISOM 520</small></span></label>
+  </fieldset>
+  <label class="generation-select">Tolkning av ISOM 520<select id="surfaceRestrictedMode"><option value="cautious">Försiktig · endast tydligare gränser</option><option value="balanced">Balanserad · rekommenderad</option><option value="detailed">Fördjupad · även osäkrare uppskattningar</option></select><small>Lantmäteriets fastighetsdata och flygbildstolkning ansluts i ett senare steg.</small></label>
+  <div class="generation-note"><b>Regenerering är säker</b><span>Centrala källdata återanvänds när de finns. Lokala korrigeringar och uteslutningar bevaras.</span></div>
+  <button id="runSurfaceGeneration" class="generation-primary" type="submit">Generera valda ytor</button><p id="surfaceGenerationStatus" class="generation-status" role="status"></p>
+</form></dialog>
+<dialog id="lineGenerationSheet" class="generation-sheet"><form id="lineGenerationForm"><div class="sheet-head"><div><small>KARTUNDERLAG</small><h2>Generera linjeobjekt</h2></div><button id="closeLineGeneration" type="button" aria-label="Stäng">×</button></div>
+  <p class="generation-intro">Välj vilka linjeobjekt som ska hämtas och visas i arbetsområdet.</p>
+  <fieldset class="generation-profiles"><legend>Detaljnivå</legend>
+    <label><input type="radio" name="lineProfile" value="quick"><span><b>Snabbt utkast</b><small>Vägar och stigar.</small></span></label>
+    <label><input type="radio" name="lineProfile" value="standard"><span><b>Standard</b><small>Även vattendrag och diken.</small></span></label>
+    <label><input type="radio" name="lineProfile" value="detailed"><span><b>Detaljerad</b><small>Alla linjekategorier som motorn stöder.</small></span></label>
+  </fieldset>
+  <fieldset class="generation-options"><legend>Linjer att generera</legend>
+    <label><input id="lineRoads" type="checkbox"><span><b>Vägar och fordonsstråk</b><small>ISOM 502–504</small></span></label>
+    <label><input id="linePaths" type="checkbox"><span><b>Stigar och gångstråk</b><small>ISOM 505–506</small></span></label>
+    <label><input id="lineFaintPaths" type="checkbox"><span><b>Otydliga stigar</b><small>ISOM 507 · ingår i Detaljerad</small></span></label>
+    <label><input id="lineWatercourses" type="checkbox"><span><b>Vattendrag och diken</b><small>ISOM 304–306 och 309</small></span></label>
+    <label class="future-option"><input type="checkbox" disabled><span><b>Staket och murar</b><small>Kommer när datakällan är ansluten</small></span></label>
+    <label class="future-option"><input type="checkbox" disabled><span><b>Järnvägar och tekniska linjer</b><small>Planerad generator</small></span></label>
+  </fieldset>
+  <div class="generation-note"><b>Samma globala underlag</b><span>Profilerna styr urvalet i arbetsområdet. Källdata kan återanvändas av andra kartor.</span></div>
+  <button id="runLineGeneration" class="generation-primary" type="submit">Generera valda linjer</button><p id="lineGenerationStatus" class="generation-status" role="status"></p>
+</form></dialog>
 <dialog id="workspaceSettingsSheet"><form id="workspaceSettingsForm"><div class="sheet-head"><div><small>ARBETSOMRÅDE</small><h2>Inställningar</h2></div><button type="button" id="closeWorkspaceSettings">×</button></div><label>Namn<input id="editWorkspaceName" required maxlength="60"></label><div class="settings-grid"><label>Planerad utskriftsskala<select id="editWorkspaceScale"><option value="7500">1:7 500</option><option value="10000">1:10 000</option><option value="15000">1:15 000</option></select></label><label>Ekvidistans för höjdkurvor<select id="editWorkspaceContour"><option value="2.5">2,5 meter</option><option value="5">5 meter</option></select><small>Används vid automatisk generering.</small></label></div><fieldset><legend>Symbolvisning</legend><label><input type="radio" name="symbolDisplayMode" value="print"> Utskriftsläge <small>Symbolerna följer kartskalan när du zoomar.</small></label><label><input type="radio" name="symbolDisplayMode" value="digital"> Digitalt läge <small>Symbolerna behåller en användbar storlek på skärmen.</small></label></fieldset><p>PDF-export kommer alltid att använda kartnormen och den planerade utskriftsskalan.</p><button type="submit" class="settings-save">Spara inställningar</button></form></dialog>
 <dialog id="exportSheet"><form id="exportForm"><div class="sheet-head"><div><small>PDF OCH UTSKRIFT</small><h2>Förbered karta</h2></div><button id="closeExportSheet" type="button" aria-label="Stäng">×</button></div>
   <p class="export-intro">Välj pappersformat och vilken information som ska följa med. Nästa steg öppnar webbläsarens utskriftsdialog, där kartan kan sparas som PDF eller skickas till en skrivare.</p>
@@ -76,4 +117,4 @@
 <div id="printScaleCheck"><span>50 mm kontrollmått · skriv ut i 100 %</span></div>
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=42"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=43"></script></body></html>

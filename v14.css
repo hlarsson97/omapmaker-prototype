@@ -1,0 +1,42 @@
+/* Generation recipes: one clear launcher per geometry family. */
+#layersSheet .generation-launchers{display:grid;grid-template-columns:1fr;gap:7px;margin-bottom:2px}
+#layersSheet .generation-launchers[hidden]{display:none!important}
+#layersSheet .generation-launchers>button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:48px;padding:9px 12px;border:1px solid #cfdad2;border-radius:11px;background:#edf4ef;color:#0b603c;text-align:left}
+#layersSheet .generation-launchers>button:hover{background:#e4efe8}
+#layersSheet .generation-launchers span{display:grid;gap:2px}
+#layersSheet .generation-launchers b{font:800 12px/1.2 system-ui,sans-serif}
+#layersSheet .generation-launchers small{color:#64766b;font:650 8.5px/1.25 system-ui,sans-serif;letter-spacing:0}
+#layersSheet .generation-launchers i{font:500 25px/1 Georgia,serif}
+
+.generation-sheet form{width:min(520px,calc(100vw - 28px));max-height:min(90dvh,780px);overflow:auto}
+.generation-intro{margin:0 0 14px;color:#53665a;font-size:12px;line-height:1.45}
+.generation-sheet fieldset{min-width:0;margin:0 0 14px;padding:0;border:0}
+.generation-sheet legend{margin-bottom:7px;color:#0b603c;font-size:9px;font-weight:850;letter-spacing:.12em;text-transform:uppercase}
+.generation-profiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.generation-profiles legend{grid-column:1/-1}
+.generation-profiles label{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:7px;min-height:84px;padding:10px 8px;border:1px solid #d9e1db;border-radius:11px;background:#fafbf8;cursor:pointer}
+.generation-profiles label:has(input:checked){border-color:#0b6b43;background:#e9f4ed;box-shadow:inset 0 0 0 1px #0b6b43}
+.generation-profiles input,.generation-options input{margin:2px 0 0;accent-color:#0b6b43}
+.generation-profiles span,.generation-options span{display:grid;gap:3px;min-width:0}
+.generation-profiles b,.generation-options b{font-size:11px;line-height:1.25}
+.generation-profiles small,.generation-options small,.generation-select small{color:#738078;font-size:8.5px;font-weight:550;line-height:1.35;letter-spacing:0}
+.generation-options{display:grid;gap:6px}
+.generation-options label{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:9px;padding:10px 11px;border:1px solid #dce3dd;border-radius:10px;background:#fafbf8;cursor:pointer}
+.generation-options label:has(input:checked){border-color:#9dc4ae;background:#f0f7f2}
+.generation-options .future-option{opacity:.55;cursor:not-allowed}
+.generation-select{display:grid;gap:6px;margin:0 0 14px;font-size:11px;font-weight:800}
+.generation-select select{width:100%;min-height:44px;padding:8px 10px;border:1px solid #cfd8d1;border-radius:10px;background:#fff;font:600 12px/1.2 system-ui,sans-serif}
+.generation-note{display:grid;gap:3px;margin:0 0 14px;padding:11px 12px;border-radius:11px;background:#f0f3ec;color:#506159}
+.generation-note b{color:#1a573e;font-size:10px}
+.generation-note span{font-size:9px;line-height:1.4}
+.generation-primary{width:100%;min-height:48px;border:0;border-radius:11px;background:#0b6b43;color:#fff;font-weight:850}
+.generation-primary:disabled{opacity:.55}
+.generation-status{min-height:18px;margin:8px 2px 0;color:#52635a;font-size:10px;line-height:1.35}
+
+@media(max-width:520px){
+  .generation-sheet form{width:calc(100vw - 16px);max-height:94dvh}
+  .generation-profiles{grid-template-columns:1fr}
+  .generation-profiles label{min-height:0}
+}
+
+@media print{.generation-sheet{display:none!important}}
