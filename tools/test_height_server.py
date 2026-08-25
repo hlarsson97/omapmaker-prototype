@@ -191,12 +191,16 @@ class LandCoverTests(unittest.TestCase):
     def test_large_residential_area_is_not_tomtmark(self):
         self.assertIsNone(server.land_cover_classification({'landuse': 'residential'}, True, 25000, 120))
 
-    def test_unbounded_residential_building_is_not_turned_into_a_green_bubble(self):
+    def test_unbounded_single_home_gets_compact_square_estimate(self):
         elements = [self.osm_way(1, {'building': 'detached'}, [
             (18.10000, 59.20000), (18.10018, 59.20000),
             (18.10018, 59.20009), (18.10000, 59.20009), (18.10000, 59.20000),
         ])]
-        self.assertEqual(server.restricted_area_features(elements, [18.099, 59.199, 18.102, 59.202]), [])
+        feature = server.restricted_area_features(elements, [18.099, 59.199, 18.102, 59.202])[0]
+        self.assertEqual(feature['properties']['restrictedKind'], 'residential-estimate')
+        self.assertEqual(feature['properties']['classificationConfidence'], 'low')
+        self.assertEqual(feature['properties']['classificationReason'], 'merged-square-home-estimate')
+        self.assertLess(feature['properties']['areaSquareMetres'], 2500)
 
     def test_apartment_and_unspecified_residential_buildings_are_not_automatic_520(self):
         apartment = self.osm_way(20, {'building': 'apartments'}, [
@@ -240,9 +244,9 @@ class LandCoverTests(unittest.TestCase):
         self.assertEqual(feature['properties']['isomSymbol'], '520')
         self.assertEqual(feature['properties']['restrictedKind'], 'residential-boundary')
         self.assertEqual(feature['properties']['boundaryEvidence'], 'landuse=residential')
-        self.assertEqual(feature['properties']['generatorVersion'], 3)
+        self.assertEqual(feature['properties']['generatorVersion'], 4)
 
-    def test_residential_boundary_with_multiple_homes_is_omitted(self):
+    def test_residential_boundary_with_multiple_homes_gets_merged_compact_estimates(self):
         boundary = self.osm_way(30, {'landuse': 'residential'}, [
             (18.0997, 59.1997), (18.1008, 59.1997),
             (18.1008, 59.2004), (18.0997, 59.2004), (18.0997, 59.1997),
@@ -255,7 +259,10 @@ class LandCoverTests(unittest.TestCase):
             (18.10040, 59.20000), (18.10056, 59.20000),
             (18.10056, 59.20008), (18.10040, 59.20008), (18.10040, 59.20000),
         ])
-        self.assertEqual(server.restricted_area_features([boundary, first, second], [18.099, 59.199, 18.102, 59.202]), [])
+        feature = server.restricted_area_features([boundary, first, second], [18.099, 59.199, 18.102, 59.202])[0]
+        self.assertEqual(feature['properties']['restrictedKind'], 'residential-estimate')
+        self.assertEqual(feature['properties']['buildingCount'], 2)
+        self.assertLess(feature['properties']['areaSquareMetres'], feature['properties'].get('parcelAreaSquareMetres', 10000))
 
     def test_closed_residential_fence_is_used_as_clear_boundary(self):
         house = self.osm_way(40, {'building': 'detached'}, [
@@ -280,7 +287,9 @@ class LandCoverTests(unittest.TestCase):
             (18.09985, 59.19985), (18.10035, 59.19985),
             (18.10035, 59.20025), (18.09985, 59.20025),
         ])
-        self.assertEqual(server.restricted_area_features([house, open_fence], [18.099, 59.199, 18.102, 59.202]), [])
+        feature = server.restricted_area_features([house, open_fence], [18.099, 59.199, 18.102, 59.202])[0]
+        self.assertEqual(feature['properties']['restrictedKind'], 'residential-estimate')
+        self.assertEqual(feature['properties']['boundary'], 'unclear')
 
     def test_closed_industrial_fence_generates_clear_520_boundary(self):
         industrial = self.osm_way(5, {'landuse': 'industrial'}, [
