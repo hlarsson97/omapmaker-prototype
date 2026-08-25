@@ -1,0 +1,35 @@
+/* Mobile field view: keep the map primary and make generation discoverable. */
+#layersButton{display:flex;align-items:center;gap:8px;width:auto!important;height:auto!important;min-height:48px!important;padding:7px 11px!important;border-radius:13px!important;background:var(--mode-color)!important;color:#fff!important;text-align:left;line-height:1!important}
+#layersButton i{display:grid;place-items:center;width:24px;height:24px;font:900 20px/1 system-ui,sans-serif}
+#layersButton span{display:grid!important;gap:2px;margin:0!important}
+#layersButton b{font-size:12px;line-height:1}
+#layersButton small{color:#dcebe2;font-size:7px;font-weight:750;line-height:1;letter-spacing:.02em}
+#toolbar.collapsed{padding:3px!important;border-radius:12px;background:transparent}
+#toolbar.collapsed .utility-row{min-height:40px;padding:0!important}
+#toolbar.collapsed #objectCount{display:none}
+#toolbar.collapsed #collapseToolbar{min-height:40px!important;padding:8px 13px!important;background:var(--mode-color)!important;color:#fff!important;font-size:11px!important}
+#toolbar:not(.collapsed) .utility-row{padding-top:2px}
+
+@media(max-width:520px){
+  header{gap:6px;padding-left:8px;padding-right:8px}
+  header>div{flex:1 1 auto!important;min-width:0}
+  header #export{min-width:84px;padding:0 9px;font-size:11px}
+  #gpsQuality{top:calc(72px + env(safe-area-inset-top));left:8px;max-width:calc(100vw - 174px);min-height:42px;padding:8px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #modeSwitch{top:calc(72px + env(safe-area-inset-top));right:8px}
+  #modeSwitch button{min-width:68px;padding:0 8px}
+  #modeHint,#draftHint{display:none!important}
+  #layersButton{top:calc(122px + env(safe-area-inset-top))!important;right:8px!important}
+  #toolbar{left:8px!important;bottom:calc(22px + env(safe-area-inset-bottom))!important;width:min(264px,calc(100vw - 82px))!important}
+  #toolbar:not(.collapsed){padding:5px!important;border-radius:14px;background:#fffdf3db;box-shadow:0 3px 15px #17241c25;backdrop-filter:blur(8px)}
+  #toolbar .tool-row{grid-template-columns:minmax(0,1fr) 42px!important;gap:3px!important}
+  #toolbar .tool-main,#toolbar .tool-menu{min-height:46px!important}
+  #toolbar .tool-main{padding:6px 10px}
+  #toolbar .tool-main span{font-size:7px}
+  #toolbar .tool-main b{font-size:14px}
+  #mapNavControls{right:8px;bottom:calc(92px + env(safe-area-inset-bottom))}
+  #editBar{width:min(300px,calc(100vw - 16px))!important;bottom:calc(22px + env(safe-area-inset-bottom))!important}
+}
+
+@media(min-width:521px){#layersButton{min-width:126px}}
+
+@media print{#layersButton{display:none!important}}

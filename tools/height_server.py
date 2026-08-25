@@ -433,13 +433,11 @@ def relation_polygons(element):
     outer_rings=join_segments_to_rings(segments['outer']);inner_rings=join_segments_to_rings(segments['inner'])
     return [[outer]+[inner for inner in inner_rings if point_in_polygon(inner[0],outer)] for outer in outer_rings]
 
-RESIDENTIAL_BUILDINGS={
-    'house','detached','semidetached_house','terrace','bungalow','cabin','farm'
-}
-HOME_ZONE_BUFFERS={
-    'house':20.0,'detached':20.0,'bungalow':20.0,'cabin':18.0,'farm':25.0,
-    'semidetached_house':8.0,'terrace':6.0,
-}
+SINGLE_HOUSE_BUILDINGS={'house','detached','bungalow','cabin','farm'}
+RESIDENTIAL_BUILDINGS=SINGLE_HOUSE_BUILDINGS|{'semidetached_house','terrace'}
+OCCUPIED_RESIDENTIAL_BUILDINGS=RESIDENTIAL_BUILDINGS|{'apartments','residential','dormitory'}
+MAX_HOME_BOUNDARY_AREA=10000.0
+MIN_HOME_BOUNDARY_AREA=100.0
 RESTRICTED_BARRIERS={'fence','wall','hedge'}
 PUBLIC_PATH_HIGHWAYS=ROAD_HIGHWAYS|PATH_HIGHWAYS|{'track'}
 PRIVATE_ACCESS={'private','no'}
@@ -467,8 +465,7 @@ def element_polygon(element):
         return polygonal_geometry(unary_union(parts)) if parts else None
     geometry=element.get('geometry') or []
     coordinates=[(point['lon'],point['lat']) for point in geometry if 'lon' in point and 'lat' in point]
-    if len(coordinates)<4:return None
-    if coordinates[0]!=coordinates[-1]:coordinates.append(coordinates[0])
+    if len(coordinates)<4 or coordinates[0]!=coordinates[-1]:return None
     try:return polygonal_geometry(Polygon(coordinates))
     except (TypeError,ValueError):return None
 
@@ -494,13 +491,6 @@ def path_corridor_radius(tags,overlap_metres=1.5):
         else:width=1.5
     return max(.75,width/2)+overlap_metres
 
-def home_zone_profile(tags):
-    building=str(tags.get('building','')).lower()
-    if building not in RESIDENTIAL_BUILDINGS:return None
-    confidence='medium' if building not in {'semidetached_house','terrace'} else 'low'
-    if str(tags.get('access','')).lower() in PRIVATE_ACCESS:confidence='high'
-    return HOME_ZONE_BUFFERS[building],confidence,f"residential-building-{building}"
-
 def projected_polygon_metrics(value):
     polygon=polygonal_geometry(value)
     if polygon is None:return 0.0,0.0
@@ -510,16 +500,17 @@ def projected_polygon_metrics(value):
 def restricted_area_features(elements,bbox,print_scale=10000):
     """Generate conservative ISOM 520 candidates from OSM evidence.
 
-    Residential land-use polygons are only clipping evidence. They are never
-    emitted directly as forbidden areas. Industrial areas require either a
-    closed physical barrier or an explicit private/no access tag.
+    A residential area is only emitted when OSM supplies a bounded, small
+    single-home enclosure. We deliberately do not infer circular home zones
+    around buildings. Industrial areas require either a closed physical
+    barrier or an explicit private/no access tag.
     """
     to_local=Transformer.from_crs('EPSG:4326','EPSG:3006',always_xy=True)
     to_wgs84=Transformer.from_crs('EPSG:3006','EPSG:4326',always_xy=True)
     project=lambda geometry:transform_geometry(to_local.transform,geometry)
     unproject=lambda geometry:transform_geometry(to_wgs84.transform,geometry)
     clip=project(geometry_box(*bbox));overlap_metres=.00015*float(print_scale)
-    residential_boundaries=[];industrial_areas=[];buildings=[];barriers=[];path_corridors=[]
+    residential_boundaries=[];industrial_areas=[];residential_buildings=[];barriers=[];path_corridors=[]
     for element in elements:
         if element.get('type') not in {'way','relation'}:continue
         tags=element.get('tags') or {};landuse=tags.get('landuse','')
@@ -528,10 +519,10 @@ def restricted_area_features(elements,bbox,print_scale=10000):
             if polygon is not None:
                 record=(element,project(polygon))
                 (residential_boundaries if landuse=='residential' else industrial_areas).append(record)
-        profile=home_zone_profile(tags)
-        if profile:
+        building_type=str(tags.get('building','')).lower()
+        if building_type in OCCUPIED_RESIDENTIAL_BUILDINGS:
             polygon=element_polygon(element)
-            if polygon is not None:buildings.append((element,project(polygon),profile))
+            if polygon is not None:residential_buildings.append((element,project(polygon),building_type))
         if tags.get('barrier') in RESTRICTED_BARRIERS:
             polygon=element_polygon(element)
             if polygon is not None:barriers.append((element,project(polygon)))
@@ -549,22 +540,43 @@ def restricted_area_features(elements,bbox,print_scale=10000):
         area,min_dimension=projected_polygon_metrics(zone)
         minimum_area=(float(print_scale)/1000.0)**2
         if area<minimum_area:return None
-        properties={'source':'OpenStreetMap','sourceId':source_id,'status':'automatic-unverified','license':'ODbL','isomSymbol':'520','automaticIsomSymbol':'520','mapClass':'restricted_area','automaticMapClass':'restricted_area','restrictedKind':kind,'classificationConfidence':confidence,'classificationReason':reason,'reviewRequired':confidence!='high','areaSquareMetres':round(area),'minimumDimensionMetres':round(min_dimension,1),'boundary':boundary,'generatorVersion':2,'printScale':int(print_scale),'pathOverlapMetres':round(overlap_metres,2)}
+        properties={'source':'OpenStreetMap','sourceId':source_id,'status':'automatic-unverified','license':'ODbL','isomSymbol':'520','automaticIsomSymbol':'520','mapClass':'restricted_area','automaticMapClass':'restricted_area','restrictedKind':kind,'classificationConfidence':confidence,'classificationReason':reason,'reviewRequired':confidence!='high','areaSquareMetres':round(area),'minimumDimensionMetres':round(min_dimension,1),'boundary':boundary,'generatorVersion':3,'printScale':int(print_scale),'pathOverlapMetres':round(overlap_metres,2)}
         if extra:properties.update(extra)
         return {'type':'Feature','id':f"osm-520-{hashlib.sha256(source_id.encode()).hexdigest()[:16]}",'properties':properties,'geometry':geometry_mapping(unproject(zone))}
 
-    features=[]
-    for element,building,profile in buildings:
-        buffer_distance,confidence,reason=profile;zone=building.buffer(buffer_distance,join_style=1);clipped=False
-        centre=building.representative_point()
-        small_boundaries=[]
+    features=[];used_home_boundaries=set()
+    occupied_centres=[(element,building.representative_point(),building_type) for element,building,building_type in residential_buildings]
+
+    def single_home_in(boundary):
+        occupants=[item for item in occupied_centres if boundary.covers(item[1])]
+        return occupants[0] if len(occupants)==1 else None
+
+    for element,building,building_type in residential_buildings:
+        if building_type not in SINGLE_HOUSE_BUILDINGS:continue
+        centre=building.representative_point();building_source=f"{element.get('type')}/{element.get('id')}"
+
+        enclosed=[]
+        for boundary_element,boundary in barriers:
+            if MIN_HOME_BOUNDARY_AREA<=boundary.area<=MAX_HOME_BOUNDARY_AREA and boundary.covers(centre) and single_home_in(boundary):
+                enclosed.append((boundary_element,boundary))
+        if enclosed:
+            boundary_element,boundary=min(enclosed,key=lambda item:item[1].area);source_id=f"{boundary_element.get('type')}/{boundary_element.get('id')}"
+            if source_id not in used_home_boundaries:
+                used_home_boundaries.add(source_id);boundary_tags=boundary_element.get('tags') or {}
+                confidence='high' if str(boundary_tags.get('access','')).lower() in PRIVATE_ACCESS else 'medium'
+                feature=finish_area(boundary,source_id,'residential-enclosure',confidence,'single-home-closed-barrier','clear',{'building':building_type,'buildingSourceId':building_source,'boundaryEvidence':boundary_tags.get('barrier'),'parcelAreaSquareMetres':round(boundary.area)})
+                if feature:features.append(feature)
+            continue
+
+        parcel_candidates=[]
         for boundary_element,boundary in residential_boundaries:
-            if boundary.area<=3000 and boundary.contains(centre):small_boundaries.append((boundary_element,boundary))
-        if small_boundaries:
-            boundary_element,boundary=min(small_boundaries,key=lambda item:item[1].area);zone=zone.intersection(boundary);clipped=True
-            reason+='-clipped-small-residential-area'
-        tags=element.get('tags') or {};source_id=f"way/{element.get('id')}"
-        feature=finish_area(zone,source_id,'home-zone',confidence,reason,'unclear',{'building':tags.get('building'),'bufferMetres':buffer_distance,'clippedToSmallResidentialArea':clipped})
+            if MIN_HOME_BOUNDARY_AREA<=boundary.area<=MAX_HOME_BOUNDARY_AREA and boundary.covers(centre) and single_home_in(boundary):
+                parcel_candidates.append((boundary_element,boundary))
+        if not parcel_candidates:continue
+        boundary_element,boundary=min(parcel_candidates,key=lambda item:item[1].area);source_id=f"{boundary_element.get('type')}/{boundary_element.get('id')}"
+        if source_id in used_home_boundaries:continue
+        used_home_boundaries.add(source_id)
+        feature=finish_area(boundary,source_id,'residential-boundary','medium','single-home-small-residential-boundary','unclear',{'building':building_type,'buildingSourceId':building_source,'boundaryEvidence':'landuse=residential','parcelAreaSquareMetres':round(boundary.area)})
         if feature:features.append(feature)
 
     for barrier_element,barrier in barriers:
@@ -574,7 +586,7 @@ def restricted_area_features(elements,bbox,print_scale=10000):
             if overlap>0 and overlap/max(1.0,barrier.area)>=.25:matching.append((industrial_element,industrial,overlap))
         if not matching:continue
         industrial_element,_,_=max(matching,key=lambda item:item[2]);barrier_tags=barrier_element.get('tags') or {};industrial_tags=industrial_element.get('tags') or {}
-        source_id=f"way/{barrier_element.get('id')}"
+        source_id=f"{barrier_element.get('type')}/{barrier_element.get('id')}"
         confidence='high' if str(barrier_tags.get('access') or industrial_tags.get('access') or '').lower() in PRIVATE_ACCESS else 'medium'
         feature=finish_area(barrier,source_id,'industrial-enclosure',confidence,'closed-industrial-barrier','clear',{'barrier':barrier_tags.get('barrier'),'landuse':'industrial','industrialSourceId':f"{industrial_element.get('type')}/{industrial_element.get('id')}"})
         if feature:features.append(feature)
@@ -588,18 +600,20 @@ def restricted_area_features(elements,bbox,print_scale=10000):
     return features
 
 def osm_restricted_areas(bbox,print_scale=10000):
-    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-restricted-v2',bbox,int(print_scale)],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-restricted.geojson')
+    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-restricted-v3',bbox,int(print_scale)],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-restricted.geojson')
     if target.exists() and time.time()-target.stat().st_mtime<86400:return json.loads(target.read_text(encoding='utf-8'))
     west,south,east,north=bbox
     query=f'''[out:json][timeout:60];(
-way["building"~"^(house|detached|semidetached_house|terrace|bungalow|cabin|farm)$"]({south},{west},{north},{east});
+way["building"~"^(house|detached|semidetached_house|terrace|bungalow|cabin|farm|apartments|residential|dormitory)$"]({south},{west},{north},{east});
+relation["building"~"^(house|detached|semidetached_house|terrace|bungalow|cabin|farm|apartments|residential|dormitory)$"]({south},{west},{north},{east});
 way["landuse"~"^(residential|industrial)$"]({south},{west},{north},{east});
 relation["landuse"~"^(residential|industrial)$"]({south},{west},{north},{east});
 way["barrier"~"^(fence|wall|hedge)$"]({south},{west},{north},{east});
+relation["barrier"~"^(fence|wall|hedge)$"]({south},{west},{north},{east});
 way["highway"]({south},{west},{north},{east});
 );out tags geom;'''
     raw,endpoint=overpass_json(query);features=restricted_area_features(raw.get('elements',[]),bbox,print_scale)
-    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'restricted-areas','importVersion':2,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'strategy':'Conservative ISOM 520 candidates from explicit small residential buildings, closed industrial barriers and explicit access restrictions. Apartment buildings, unspecified residential buildings and residential land-use polygons are never emitted directly.','printScale':int(print_scale)},'features':features}
+    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'restricted-areas','importVersion':3,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'strategy':'Conservative ISOM 520 candidates from bounded single-home residential areas, closed industrial barriers and explicit access restrictions. Unbounded building buffers, multi-home residential areas and apartment areas are omitted.','printScale':int(print_scale)},'features':features}
     target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
 def osm_land_cover_legacy(bbox):
@@ -644,7 +658,7 @@ relation["landuse"~"^(reservoir|basin|farmland|meadow|grass|recreation_ground|vi
     result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark och vatten © OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'land-cover','importVersion':2,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'residentialWarning':'Only small OSM residential polygons (maximum 6000 m²) are shown as preliminary ISOM 520.'},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
 def osm_land_cover(bbox,print_scale=10000):
-    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-land-cover-v6',bbox,int(print_scale)],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-land-cover.geojson')
+    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-land-cover-v7',bbox,int(print_scale)],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-land-cover.geojson')
     if target.exists() and time.time()-target.stat().st_mtime<86400:return json.loads(target.read_text(encoding='utf-8'))
     west,south,east,north=bbox;water_west,water_south,water_east,water_north=expand_bbox(bbox)
     query=f'''[out:json][timeout:60];(
@@ -696,7 +710,7 @@ node["waterway"="waterfall"]({water_south},{water_west},{water_north},{water_eas
         properties={'source':'OpenStreetMap','sourceId':f"{element_type}/{element['id']}",'status':'automatic-unverified','license':'ODbL','isomSymbol':symbol,'automaticIsomSymbol':symbol,'mapClass':map_class,'automaticMapClass':map_class,'classificationConfidence':confidence,'classificationReason':reason,'reviewRequired':confidence!='high','areaSquareMetres':round(area) if area is not None else None,'minimumDimensionMetres':round(min_dimension,1) if min_dimension is not None else None,'natural':tags.get('natural'),'landuse':tags.get('landuse'),'waterway':tags.get('waterway'),'wetland':tags.get('wetland'),'water':tags.get('water'),'depth':tags.get('depth'),'width':tags.get('width'),'intermittent':tags.get('intermittent'),'seasonal':tags.get('seasonal'),'manMade':tags.get('man_made'),'amenity':tags.get('amenity'),'access':tags.get('access'),'name':tags.get('name')}
         features.append({'type':'Feature','id':f"osm-land-{element_type}-{element['id']}",'properties':properties,'geometry':geojson_geometry})
     restricted=osm_restricted_areas(bbox,print_scale);features.extend(restricted.get('features') or [])
-    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'waterSearchBboxWgs84':[water_west,water_south,water_east,water_north],'objectType':'land-cover','importVersion':6,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'waterStrategy':'ISOM 301-313 candidates; uncertain classifications require review.','restrictedAreaStrategy':'ISOM 520 candidates are generated around explicit small residential buildings and for restricted industrial areas. Apartment buildings, unspecified residential buildings and residential land-use polygons are never emitted directly.','restrictedAreaCount':len(restricted.get('features') or []),'printScale':int(print_scale)},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
+    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'waterSearchBboxWgs84':[water_west,water_south,water_east,water_north],'objectType':'land-cover','importVersion':7,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'waterStrategy':'ISOM 301-313 candidates; uncertain classifications require review.','restrictedAreaStrategy':'ISOM 520 is generated only where OSM supplies a bounded single-home area or reliable industrial access boundary. Unbounded villa buffers and multi-home areas are omitted.','restrictedAreaCount':len(restricted.get('features') or []),'printScale':int(print_scale)},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
 def covers(path,bbox):
     try:
@@ -1159,7 +1173,7 @@ class Handler(SimpleHTTPRequestHandler):
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)
                 if print_scale not in {7500,10000,15000}:raise ValueError('Ogiltig utskriftsskala')
-                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':6,'printScale':print_scale}))
+                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':7,'printScale':print_scale}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})
