@@ -12,6 +12,7 @@ from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polyg
 from shapely.ops import transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from map_store import MapStore
+from isom_registry import REGISTRY_VERSION
 
 ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE)
 LEVELS={'detailed':2,'normal':5,'soft':10}
@@ -1099,7 +1100,7 @@ def contour_result(request,progress=None,cancel_check=None):
             finally:temporary.unlink(missing_ok=True)
     cancel_check()
     result=json.loads(output.read_text(encoding='utf-8'));result.setdefault('properties',{})['generalization']=level;result['properties']['generalizationMetres']=LEVELS[level];result['properties']['baseElevation']=base_elevation;result['properties']['verticalDatum']=vertical_datum;result['properties']['heightData']=height_data
-    result=centralize_layer('contours',bbox,result,{'interval':interval,'generalization':level,'baseElevation':base_elevation,'verticalDatum':vertical_datum})
+    result=centralize_layer('contours',bbox,result,{'interval':interval,'generalization':level,'baseElevation':base_elevation,'verticalDatum':vertical_datum,'symbolRegistryVersion':REGISTRY_VERSION})
     progress('complete','Höjdkurvorna är klara.',progressPercent=100,progressIndeterminate=False)
     return result
 
@@ -1248,14 +1249,14 @@ class Handler(SimpleHTTPRequestHandler):
                 parameters=request.get('parameters') or {}
                 if not isinstance(parameters,dict):raise ValueError('Lagrets parametrar är ogiltiga')
                 return self.send_json(200,MAP_STORE.mosaic_layer(layer_type,bbox,parameters))
-            if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3}))
-            if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':3}))
-            if path=='/api/infrastructure':return self.send_json(200,centralize_layer('infrastructure',bbox,osm_infrastructure(bbox),{'importVersion':1}))
-            if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1}))
+            if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':3,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/infrastructure':return self.send_json(200,centralize_layer('infrastructure',bbox,osm_infrastructure(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)
                 if print_scale not in {7500,10000,15000}:raise ValueError('Ogiltig utskriftsskala')
-                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':8,'printScale':print_scale}))
+                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':8,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})

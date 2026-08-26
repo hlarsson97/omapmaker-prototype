@@ -22,6 +22,33 @@ class CentralMapStoreTests(unittest.TestCase):
             self.assertTrue(feature['properties']['shortId'].startswith('OM-'))
             self.assertGreater(feature['properties']['qualityScore'],0)
 
+    def test_submission_is_normalized_to_canonical_symbol(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=MapStore(Path(temporary)/'map.sqlite3')
+            store.submit(str(uuid.uuid4()),str(uuid.uuid4()),[self.feature(symbol='206')])
+            feature=store.global_objects([17.9,58.9,18.1,59.1])['features'][0]
+            self.assertEqual(feature['properties']['objectType'],'boulder')
+            self.assertEqual(feature['properties']['symbol'],'204')
+            self.assertEqual(feature['properties']['symbolRegistryVersion'],1)
+
+    def test_unmapped_manual_type_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=MapStore(Path(temporary)/'map.sqlite3')
+            feature=self.feature(object_type='rootstock',symbol='115')
+            with self.assertRaisesRegex(ValueError,'klassificeras om'):
+                store.submit(str(uuid.uuid4()),str(uuid.uuid4()),[feature])
+
+    def test_existing_ambiguous_global_object_loses_false_isom_claim(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'map.sqlite3';store=MapStore(path)
+            with store.connection() as connection:
+                connection.execute("DELETE FROM app_metadata WHERE key='symbol_registry_version'")
+                connection.execute('''INSERT INTO global_objects(id,status,category,object_type,symbol,geometry_json,evidence_count,west,south,east,north,created_at,updated_at) VALUES('legacy','preliminary','point','rootstock','115','{\"type\":\"Point\",\"coordinates\":[18,59]}',1,18,59,18,59,'2026-01-01','2026-01-01')''')
+            MapStore(path)
+            with store.connection() as connection:
+                row=connection.execute("SELECT object_type,symbol FROM global_objects WHERE id='legacy'").fetchone()
+            self.assertEqual((row['object_type'],row['symbol']),('rootstock',''))
+
     def test_independent_nearby_observations_merge_and_raise_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
             store=MapStore(Path(temporary)/'map.sqlite3')

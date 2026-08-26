@@ -17,6 +17,8 @@ import zlib
 from contextlib import contextmanager
 from pathlib import Path
 
+from isom_registry import REGISTRY_VERSION, normalize_manual_classification, normalize_stored_classification
+
 
 ALLOWED_CATEGORIES = {'point', 'line', 'area'}
 GEOMETRY_FOR_CATEGORY = {'point': 'Point', 'line': 'LineString', 'area': 'Polygon'}
@@ -79,9 +81,9 @@ def validate_observation_feature(feature):
     if not isinstance(version, int) or isinstance(version, bool) or not (1 <= version <= 1_000_000):
         raise ValueError('Observationens version är ogiltig')
     object_type = str(properties.get('objectType', ''))
-    symbol = str(properties.get('symbol', ''))
-    if not object_type or len(object_type) > 80 or len(symbol) > 40:
+    if not object_type or len(object_type) > 80:
         raise ValueError('Observationens objekttyp eller symbol är ogiltig')
+    object_type, symbol = normalize_manual_classification(category, object_type)
     source = str(properties.get('source', 'unknown'))[:40]
     quality = str(properties.get('quality', 'unverified'))[:40]
     accuracy = properties.get('accuracy')
@@ -95,6 +97,7 @@ def validate_observation_feature(feature):
         'category': category,
         'objectType': object_type,
         'symbol': symbol,
+        'symbolRegistryVersion': REGISTRY_VERSION,
         'source': source,
         'quality': quality,
         'accuracy': accuracy,
@@ -238,6 +241,10 @@ class MapStore:
                     contradicted_count INTEGER NOT NULL DEFAULT 0,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS app_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
             ''')
             # Keep installations made before the central layer catalogue gained
             # revisions readable without a manual database migration.
@@ -271,6 +278,26 @@ class MapStore:
                 if column not in global_columns:
                     connection.execute(statement)
             connection.execute('CREATE UNIQUE INDEX IF NOT EXISTS global_objects_short_id ON global_objects(short_id)')
+            self._migrate_symbol_registry(connection)
+
+    @staticmethod
+    def _migrate_symbol_registry(connection):
+        current = connection.execute("SELECT value FROM app_metadata WHERE key='symbol_registry_version'").fetchone()
+        if current and int(current['value']) >= REGISTRY_VERSION:
+            return
+        for row in connection.execute('SELECT id,category,object_type,symbol,properties_json FROM observations').fetchall():
+            object_type, symbol = normalize_stored_classification(row['category'], row['object_type'], row['symbol'])
+            try:
+                properties = json.loads(row['properties_json'] or '{}')
+            except json.JSONDecodeError:
+                properties = {}
+            properties.update({'objectType': object_type, 'symbol': symbol, 'symbolRegistryVersion': REGISTRY_VERSION})
+            connection.execute('UPDATE observations SET object_type=?,symbol=?,properties_json=? WHERE id=?', (
+                object_type, symbol, json.dumps(properties, ensure_ascii=False, separators=(',', ':')), row['id']))
+        for row in connection.execute('SELECT id,category,object_type,symbol FROM global_objects').fetchall():
+            object_type, symbol = normalize_stored_classification(row['category'], row['object_type'], row['symbol'])
+            connection.execute('UPDATE global_objects SET object_type=?,symbol=?,revision=revision+1 WHERE id=?', (object_type, symbol, row['id']))
+        connection.execute("INSERT INTO app_metadata(key,value) VALUES('symbol_registry_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(REGISTRY_VERSION),))
 
     @staticmethod
     def _normalized_bbox(bbox):
@@ -728,11 +755,12 @@ class MapStore:
         for row in rows:
             features.append({'type':'Feature','id':row['id'],'properties':{
                 'shortId':row['short_id'] or self._short_candidate_id(row['id']),'category':row['category'],'objectType':row['object_type'],'symbol':row['symbol'],
+                'symbolRegistryVersion':REGISTRY_VERSION,
                 'observationCount':row['evidence_count'],'independentContributors':row['independent_contributors'],'agreementCount':row['agreement_count'],'conflictCount':row['conflict_count'],
                 'existenceScore':round(row['existence_score'] or 0),'classificationScore':round(row['classification_score'] or 0),'positionScore':round(row['position_score'] or 0),'qualityScore':round(row['quality_score'] or 0),
                 'status':row['status'],'revision':row['revision'],'lastObservedAt':row['last_observed_at']
             },'geometry':json.loads(row['geometry_json'])})
-        return {'type':'FeatureCollection','properties':{'source':'OMapMaker global map','model':'point-evidence-v1','bboxWgs84':bbox},'features':features}
+        return {'type':'FeatureCollection','properties':{'source':'OMapMaker global map','model':'point-evidence-v1','symbolRegistryVersion':REGISTRY_VERSION,'bboxWgs84':bbox},'features':features}
 
     def global_object_detail(self, object_id):
         with self.connection() as connection:
@@ -747,7 +775,7 @@ class MapStore:
         explanation=json.loads(row['explanation_json'] or '{}')
         reliabilities=[float(item['reliability']) for item in profile_rows]
         detail={
-            'id':row['id'],'shortId':row['short_id'] or self._short_candidate_id(row['id']),'status':row['status'],'category':row['category'],'objectType':row['object_type'],'symbol':row['symbol'],'revision':row['revision'],
+            'id':row['id'],'shortId':row['short_id'] or self._short_candidate_id(row['id']),'status':row['status'],'category':row['category'],'objectType':row['object_type'],'symbol':row['symbol'],'symbolRegistryVersion':REGISTRY_VERSION,'revision':row['revision'],
             'scores':{'existence':round(row['existence_score'] or 0),'classification':round(row['classification_score'] or 0),'position':round(row['position_score'] or 0),'quality':round(row['quality_score'] or 0)},
             'evidence':{'observations':row['evidence_count'],'independentContributors':row['independent_contributors'],'agreeing':row['agreement_count'],'conflicting':row['conflict_count'],'medianAccuracyMetres':row['median_accuracy'],'positionSpreadMetres':row['position_spread'],'averageContributorReliability':round(100*sum(reliabilities)/max(1,len(reliabilities))) if reliabilities else 50},
             'firstObservedAt':row['first_observed_at'],'lastObservedAt':row['last_observed_at'],'explanation':explanation,'geometry':json.loads(row['geometry_json'])
