@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=6"><link rel="stylesheet" href="v6.css?v=7"><link rel="stylesheet" href="v7.css?v=7"><link rel="stylesheet" href="v8.css?v=8"><link rel="stylesheet" href="v9.css?v=28"><link rel="stylesheet" href="v10.css?v=1"><link rel="stylesheet" href="v11.css?v=3"><link rel="stylesheet" href="v12.css?v=1"><link rel="stylesheet" href="v13.css?v=1"><link rel="stylesheet" href="v14.css?v=1"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="field.css?v=4"><link rel="stylesheet" href="overlay.css?v=6"><link rel="stylesheet" href="v6.css?v=7"><link rel="stylesheet" href="v7.css?v=7"><link rel="stylesheet" href="v8.css?v=8"><link rel="stylesheet" href="v9.css?v=28"><link rel="stylesheet" href="v10.css?v=1"><link rel="stylesheet" href="v11.css?v=3"><link rel="stylesheet" href="v12.css?v=1"><link rel="stylesheet" href="v13.css?v=1"><link rel="stylesheet" href="v14.css?v=2"></head>
 <body class="gps-mode">
 <header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><button id="export">Exportera</button></header>
 <main id="map"></main>
@@ -25,16 +25,27 @@
     <div class="layer-card local-card"><label id="localDraftsLabel"><input id="objectsVisible" type="checkbox" checked><span>Lokala utkast<small id="localDraftsMeta">0 · endast på denna enhet</small></span></label><button id="reviewSubmissionButton" type="button">Granska och skicka observationer</button><label class="range-label">Egna objekts opacitet <output id="foregroundOpacityValue">100 %</output><input id="foregroundOpacity" type="range" min="20" max="100" value="100"></label></div>
   </fieldset>
   <fieldset class="layer-section generated-section"><legend>Genererade kartlager</legend>
-    <div class="generation-launchers workspace-action">
-      <button id="generateContoursButton" type="button"><span><b>Generera höjdkurvor</b><small>Detaljerad · arbetsområdets ekvidistans</small></span><i>›</i></button>
-      <button id="generateSurfacesButton" type="button"><span><b>Generera ytor</b><small id="surfaceGenerationSummary">Standard</small></span><i>›</i></button>
-      <button id="generateLinesButton" type="button"><span><b>Generera linjeobjekt</b><small id="lineGenerationSummary">Standard</small></span><i>›</i></button>
+    <div class="layer-card generation-card">
+      <label id="projectContoursLabel"><input id="projectContoursVisible" type="checkbox" checked><span>Genererade höjdkurvor<small id="projectContoursMeta">Inte genererade</small></span></label>
+      <button id="generateContoursButton" class="generation-launcher workspace-action" type="button"><span><b>Generera höjdkurvor</b><small>Detaljerad · arbetsområdets ekvidistans</small></span><i>›</i></button>
     </div>
-    <div class="layer-card"><label id="projectContoursLabel"><input id="projectContoursVisible" type="checkbox" checked><span>Genererade höjdkurvor<small id="projectContoursMeta">Inte genererade</small></span></label></div>
-    <div class="layer-card"><label id="osmLandCoverLabel"><input id="osmLandCoverVisible" type="checkbox" checked><span>Mark, vatten och ISOM 520<small id="osmLandCoverMeta">Inte hämtat</small></span></label></div>
-    <div class="layer-card"><label id="osmBuildingsLabel"><input id="osmBuildingsVisible" type="checkbox" checked><span>Byggnader<small id="osmBuildingsMeta">Inte hämtade</small></span></label></div>
-    <div class="layer-card"><label id="osmPavedAreasLabel"><input id="osmPavedAreasVisible" type="checkbox" checked><span>Hårdgjorda ytor · ISOM 501<small id="osmPavedAreasMeta">Inte hämtade</small></span></label></div>
-    <div class="layer-card"><label id="osmRoadsLabel"><input id="osmRoadsVisible" type="checkbox" checked><span>Vägar och stigar<small id="osmRoadsMeta">Inte hämtade</small></span></label></div>
+    <div class="layer-card generation-card">
+      <label><input id="generatedSurfacesVisible" type="checkbox" checked><span>Genererade ytor<small id="surfaceGenerationSummary">Standard</small></span></label>
+      <button id="generateSurfacesButton" class="generation-launcher workspace-action" type="button"><span><b>Generera ytor</b><small>Välj yttyper och detaljnivå</small></span><i>›</i></button>
+    </div>
+    <div class="layer-card generation-card">
+      <label><input id="generatedLinesVisible" type="checkbox" checked><span>Genererade linjeobjekt<small id="lineGenerationSummary">Standard</small></span></label>
+      <button id="generateLinesButton" class="generation-launcher workspace-action" type="button"><span><b>Generera linjeobjekt</b><small>Välj linjetyper och detaljnivå</small></span><i>›</i></button>
+    </div>
+    <details class="generated-layer-details">
+      <summary>Finjustera enskilda lager</summary>
+      <div class="generated-layer-detail-list">
+        <div class="layer-card"><label id="osmLandCoverLabel"><input id="osmLandCoverVisible" type="checkbox" checked><span>Mark, vatten och ISOM 520<small id="osmLandCoverMeta">Inte hämtat</small></span></label></div>
+        <div class="layer-card"><label id="osmBuildingsLabel"><input id="osmBuildingsVisible" type="checkbox" checked><span>Byggnader<small id="osmBuildingsMeta">Inte hämtade</small></span></label></div>
+        <div class="layer-card"><label id="osmPavedAreasLabel"><input id="osmPavedAreasVisible" type="checkbox" checked><span>Hårdgjorda ytor · ISOM 501<small id="osmPavedAreasMeta">Inte hämtade</small></span></label></div>
+        <div class="layer-card"><label id="osmRoadsLabel"><input id="osmRoadsVisible" type="checkbox" checked><span>Vägar och stigar<small id="osmRoadsMeta">Inte hämtade</small></span></label></div>
+      </div>
+    </details>
   </fieldset>
   <fieldset class="layer-section reference-section"><legend>Referenslager</legend><div class="layer-card"><label><input id="contoursVisible" type="checkbox"><span>Referenskurvor från OpenTopoMap<small>Visas endast som jämförelseunderlag</small></span></label></div></fieldset>
   <div class="workspace-panel"><button id="workspaceSettingsButton" type="button" class="settings-button">Arbetsområdets inställningar</button><p id="layerNote">Generering och hämtning gäller hela arbetsområdet, oberoende av vilken del som syns på skärmen.</p></div>
@@ -117,4 +128,4 @@
 <div id="printScaleCheck"><span>50 mm kontrollmått · skriv ut i 100 %</span></div>
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=43"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="v6.js?v=44"></script></body></html>

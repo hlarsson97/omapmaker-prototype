@@ -1,12 +1,16 @@
-/* Generation recipes: one clear launcher per geometry family. */
-#layersSheet .generation-launchers{display:grid;grid-template-columns:1fr;gap:7px;margin-bottom:2px}
-#layersSheet .generation-launchers[hidden]{display:none!important}
-#layersSheet .generation-launchers>button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:48px;padding:9px 12px;border:1px solid #cfdad2;border-radius:11px;background:#edf4ef;color:#0b603c;text-align:left}
-#layersSheet .generation-launchers>button:hover{background:#e4efe8}
-#layersSheet .generation-launchers span{display:grid;gap:2px}
-#layersSheet .generation-launchers b{font:800 12px/1.2 system-ui,sans-serif}
-#layersSheet .generation-launchers small{color:#64766b;font:650 8.5px/1.25 system-ui,sans-serif;letter-spacing:0}
-#layersSheet .generation-launchers i{font:500 25px/1 Georgia,serif}
+/* Visibility and generation stay together for each geometry family. */
+#layersSheet .generation-card>.generation-launcher{display:flex;align-items:center;justify-content:space-between;width:calc(100% - 16px)!important;min-height:46px!important;padding:8px 11px;border:0;border-radius:9px!important;background:#e8f2eb;color:#0b603c;text-align:left}
+#layersSheet .generation-card>.generation-launcher:hover{background:#deece3}
+#layersSheet .generation-card>.generation-launcher[hidden]{display:none!important}
+#layersSheet .generation-launcher span{display:grid;gap:2px}
+#layersSheet .generation-launcher b{font:800 12px/1.2 system-ui,sans-serif}
+#layersSheet .generation-launcher small{color:#64766b;font:650 8.5px/1.25 system-ui,sans-serif;letter-spacing:0}
+#layersSheet .generation-launcher i{font:500 25px/1 Georgia,serif}
+#layersSheet .generated-layer-details{margin-top:1px;border:1px solid #dce3dc;border-radius:12px;background:#f4f7f2}
+#layersSheet .generated-layer-details>summary{padding:11px 12px;color:#52645a;font-size:10px;font-weight:800;cursor:pointer;list-style-position:inside}
+#layersSheet .generated-layer-details[open]>summary{border-bottom:1px solid #dce3dc}
+#layersSheet .generated-layer-detail-list{display:grid;gap:7px;padding:8px}
+#layersSheet .generated-layer-detail-list .layer-card{background:#fff}
 
 .generation-sheet form{width:min(520px,calc(100vw - 28px));max-height:min(90dvh,780px);overflow:auto}
 .generation-intro{margin:0 0 14px;color:#53665a;font-size:12px;line-height:1.45}
