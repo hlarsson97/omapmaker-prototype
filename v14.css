@@ -13,8 +13,8 @@
 #layersSheet .generated-layer-detail-list .layer-card{background:#fff}
 
 .infrastructure-support-icon{border:0;background:transparent}
-.infrastructure-support-icon span{position:absolute;left:14%;top:calc(50% - 1px);display:block;width:72%;height:2px;background:#111;transform-origin:center;border-radius:1px}
-.infrastructure-support-icon span.major{top:calc(50% - 1.5px);height:3px}
+.infrastructure-support-icon span{position:absolute;left:calc(50% - var(--support-width)/2);top:calc(50% - var(--support-stroke)/2);display:block;width:var(--support-width);height:var(--support-stroke);background:#111;transform-origin:center;border-radius:1px}
+.infrastructure-support-icon span.major{border:var(--support-stroke) solid #111;background:transparent;height:var(--support-width);top:calc(50% - var(--support-width)/2)}
 
 .generation-sheet form{width:min(520px,calc(100vw - 28px));max-height:min(90dvh,780px);overflow:auto}
 .generation-intro{margin:0 0 14px;color:#53665a;font-size:12px;line-height:1.45}

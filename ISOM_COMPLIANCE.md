@@ -201,7 +201,7 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 
 | Symbol | Krav i korthet | OMapMaker | Status |
 |---:|---|---|---|
-| 601 Magnetisk nordlinje | Parallell med magnetisk nord och papperskant; 20 mm mellanrum vid 1:15 000 och 30 mm vid 1:10 000, med tillåtna avbrott. | Saknas. | **Saknas och huvudblockerande för tryck.** Beräkna deklination och generera i papperskoordinater. |
+| 601 Magnetisk nordlinje | Parallell med magnetisk nord och papperskant; 20 mm mellanrum vid 1:15 000 och 30 mm vid 1:10 000, med tillåtna avbrott. | Registerversion 2 ritar 300 m markavstånd, alltså 20/30/40 mm vid 1:15 000/1:10 000/1:7 500. Arbetsområdet lagrar manuell deklination och vektorutskriften roteras till magnetisk nord. | **Genomfört med begränsning.** Deklinationen måste ännu hämtas och kontrolleras av användaren; automatiska avbrott kring små detaljer återstår. |
 | 602 Passmärken | Minst tre passmärken får användas för färgregistrering. | Saknas. | **Saknas/extern för tryckproduktion.** |
 | 603 Höjdsiffra | Höjd till närmaste meter; vattennivå utan punkt; norrätt sans-seriftext. | Höjd finns i konturdata och tooltip, inte som karttext. | **Saknas som tryckt symbol.** |
 
@@ -228,15 +228,15 @@ OMapMaker har ingen banläggningsmodul. Samtliga krav nedan saknas och ska håll
 
 ## Kapitel 3.8 – exakta symboldefinitioner
 
-Kapitel 3.8 samlar symbolernas exakta grafik: linjebredder, diametrar, strecklängder, mellanrum, rasterprocent, rastervinklar, typsnitt och färger. OMapMaker använder CSS-, SVG- och Leaflet-stilar som visuellt efterliknar ett urval. Det finns inget gemensamt, versionsmärkt ISOM-register som bevisar att varje värde motsvarar 3.8.
+Kapitel 3.8 samlar symbolernas exakta grafik: linjebredder, diametrar, strecklängder, mellanrum, rasterprocent, rastervinklar, typsnitt och färger. Registerversion 2 innehåller pappersmått i millimeter för prototypens stödda symboler och används av både Leaflet-vyn och den SVG-baserade vektorutskriften. Måtten förstoras proportionellt från normens basskala 1:15 000.
 
-Status är därför **saknas som verifierad implementation** även för symboler som ovan är Delvis. Det krävs:
+Status är **delvis genomförd och maskinellt kontrollerbar**:
 
-- en enda datakälla per symbol med geometri, färg, tryckmått och skalregler;
-- renderer för skärm och vektor-PDF från samma definition;
-- automatiska referensbilder och mätning i pappersmillimeter;
-- regler för linjeändar, hörn, korsningar, rasterorientering och färgordning;
-- preflight för minsta mått, avstånd och öppningar.
+- en gemensam datakälla innehåller geometri, färg, pappersmått, skalfaktor och minimikrav;
+- skärm och vektor-PDF läser samma symboldefinitioner;
+- preflight kontrollerar geometri, minsta linjelängd, streckantal, ytmått, bredd och öppningar mellan ej passerbara objekt;
+- raster orienteras mot magnetisk nord och vektorutskriften följer registerstyrd färgordning;
+- komplicerade linjestilar, automatiska avbrott, full kollisionshantering och referenstryck behöver fortfarande verifieras och förbättras i P2/P4.
 
 Revisions- och erratasidorna i slutet av Revision 6 är redan införlivade i den normativa utgåvan. De kräver ingen appfunktion, men symbolregistret ska versionsmärkas så framtida revisioner kan migreras kontrollerat.
 
@@ -256,7 +256,7 @@ Revisions- och erratasidorna i slutet av Revision 6 är redan införlivade i den
 | Skallåst/digital symbolvisning | Skallåst läge efterliknar papper; digitalt prioriterar skärm. | Bara verifierad skallåst utskrift kan bedömas mot ISOM-millimeter. |
 | Lagerdialog/genereringsprofiler | Snabb eller detaljerad karta. | Bra arbetsflöde; slutprodukt får inte hoppa över relevanta objekt för snabbhet. |
 | GeoJSON-export | Redigerbar geometri för egna objekt. | Bevarar inte full ISOM-symbolik, layout eller tryckegenskaper. |
-| Webbläsarutskrift/PDF | A5–A3, orientering, marginal, centrum och perifer information. | Användbar prototyp, men inte färghanterad eller fullständigt vektor-/måttverifierad. |
+| Webbläsarutskrift/PDF | A5–A3, orientering, marginal, centrum och perifer information. | Kartinnehållet byggs nu som skalenlig SVG-vektor i pappersmillimeter och kan sparas som vektor-PDF. IOF:s CMYK-värden finns i registret, men webbläsarens PDF är fortfarande en RGB-förhandsversion som måste skrivarkalibreras. |
 | Mobil webbapp och PC/Mac | Plattformen påverkar inte kartnormen. | Responsivitet och touchsäkerhet är produktkrav, inte ISOM-efterlevnad. |
 
 ## Prioriterad väg till verklig ISOM-efterlevnad
@@ -269,10 +269,10 @@ Revisions- och erratasidorna i slutet av Revision 6 är redan införlivade i den
 
 ### P1 – normstyrd renderer
 
-1. Implementera symboler i pappersmillimeter från samma register för skärm och vektor-PDF.
-2. Lägg till deklination, kartrotation, 601-nordlinjer och norrätt text.
-3. Bygg preflight för minsta mått, avstånd, öppningar, streck och areor.
-4. Lägg till normens färger, rasterkombinationer och lager-/övertrycksordning.
+1. **Genomfört i registerversion 2 för prototypens stödda symboler:** pappersmillimeter och proportionell förstoring används av skärm och SVG-baserad vektor-PDF.
+2. **Genomfört med manuell deklination:** arbetsområdet lagrar deklination, utskriften roteras till magnetisk nord, 601-linjer får 300 m markavstånd och norriktade raster hålls rätt mot papperet. Automatisk deklinationskälla och avancerad textplacering återstår.
+3. **Genomfört som preflight v1:** minsta mått, linjelängd, streckantal, area/bredd och öppningar kontrolleras och grupperas i exportdialogen. Kontrollen varnar men generaliserar inte geometrin automatiskt.
+4. **Genomfört för vektorförhandsvisning:** IOF:s CMYK-definitioner, RGB-förhandsfärger, raster, färglager och simulerad övertrycksordning finns i registret. En färghanterad produktions-PDF och skrivarkalibrering ligger kvar i P4.
 
 ### P2 – kartografisk bearbetning
 
@@ -296,6 +296,6 @@ Revisions- och erratasidorna i slutet av Revision 6 är redan införlivade i den
 
 ## Exportens nuvarande säkerhetsgräns
 
-Webbläsarens utskriftsdialog kan spara det valda, skalkalibrerade kartutsnittet som PDF. Användaren måste välja **100 %** eller **verklig storlek** och mäta den utskrivna 50 mm-linjen. Resultatet är fortfarande en förhandsversion och ska fortsätta märkas **EJ KARTKONTROLLERAD**.
+Webbläsarens utskriftsdialog kan spara det valda, roterade och skalkalibrerade SVG-kartutsknittet som vektor-PDF. Användaren måste ange och kontrollera magnetisk deklination, välja **100 %** eller **verklig storlek** och mäta den utskrivna 50 mm-linjen. Preflightens blockerande fel och kartografiska varningar visas före utskrift. Resultatet är fortfarande en förhandsversion och ska fortsätta märkas **EJ KARTKONTROLLERAD**.
 
-Resultatet får inte beskrivas som en färdig ISOM-karta förrän symbolkopplingar, magnetisk nord, exakta symbolmått, minimidimensioner, generalisering, färghantering och provtryck har verifierats, och innehållet har kontrollerats i relevant terräng.
+Resultatet får inte beskrivas som en färdig ISOM-karta förrän kvarvarande symbolgrafik, automatiska avbrott, generalisering, kollisionshantering, färghanterad PDF, provtryck och innehållet i relevant terräng har verifierats.

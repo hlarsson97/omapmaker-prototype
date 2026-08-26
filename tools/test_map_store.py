@@ -29,7 +29,7 @@ class CentralMapStoreTests(unittest.TestCase):
             feature=store.global_objects([17.9,58.9,18.1,59.1])['features'][0]
             self.assertEqual(feature['properties']['objectType'],'boulder')
             self.assertEqual(feature['properties']['symbol'],'204')
-            self.assertEqual(feature['properties']['symbolRegistryVersion'],1)
+            self.assertEqual(feature['properties']['symbolRegistryVersion'],2)
 
     def test_unmapped_manual_type_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -48,6 +48,17 @@ class CentralMapStoreTests(unittest.TestCase):
             with store.connection() as connection:
                 row=connection.execute("SELECT object_type,symbol FROM global_objects WHERE id='legacy'").fetchone()
             self.assertEqual((row['object_type'],row['symbol']),('rootstock',''))
+
+    def test_renderer_only_registry_upgrade_keeps_object_revision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'map.sqlite3';store=MapStore(path)
+            store.submit(str(uuid.uuid4()),str(uuid.uuid4()),[self.feature(symbol='204')])
+            before=store.global_objects([17.9,58.9,18.1,59.1])['features'][0]['properties']['revision']
+            with store.connection() as connection:
+                connection.execute("UPDATE app_metadata SET value='1' WHERE key='symbol_registry_version'")
+            MapStore(path)
+            after=store.global_objects([17.9,58.9,18.1,59.1])['features'][0]['properties']['revision']
+            self.assertEqual(after,before)
 
     def test_independent_nearby_observations_merge_and_raise_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:

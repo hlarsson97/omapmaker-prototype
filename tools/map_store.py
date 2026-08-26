@@ -296,7 +296,8 @@ class MapStore:
                 object_type, symbol, json.dumps(properties, ensure_ascii=False, separators=(',', ':')), row['id']))
         for row in connection.execute('SELECT id,category,object_type,symbol FROM global_objects').fetchall():
             object_type, symbol = normalize_stored_classification(row['category'], row['object_type'], row['symbol'])
-            connection.execute('UPDATE global_objects SET object_type=?,symbol=?,revision=revision+1 WHERE id=?', (object_type, symbol, row['id']))
+            changed = object_type != row['object_type'] or symbol != str(row['symbol'] or '')
+            connection.execute('UPDATE global_objects SET object_type=?,symbol=?,revision=revision+? WHERE id=?', (object_type, symbol, 1 if changed else 0, row['id']))
         connection.execute("INSERT INTO app_metadata(key,value) VALUES('symbol_registry_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(REGISTRY_VERSION),))
 
     @staticmethod
