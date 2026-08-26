@@ -12,6 +12,8 @@
 #modeHint{font-size:7px}
 .omap-symbol{background:transparent!important;border:0!important}
 .symbol-svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px #fff)}
+.manual-mode .omap-symbol:not(.feature-selected){filter:none}
+.omap-symbol.feature-selected,.local-map-object.feature-selected{filter:drop-shadow(0 0 4px #286fc0)}
 #sheetOptions .symbol{width:25px;height:25px;vertical-align:middle}
 .building-popup,.road-popup,.paved-area-popup{display:grid;gap:6px;min-width:220px}
 .building-popup small,.road-popup small,.paved-area-popup small{display:block;color:#59645d;line-height:1.35}

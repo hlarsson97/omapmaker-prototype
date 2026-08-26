@@ -30,7 +30,7 @@
       const unit=pixelsPerPaperMm(context.map,context.scale,context.mode);
       return{outer:{...base,color:colour(d.outline),weight:(innerMm+2*outlineMm)*unit},inner:{...base,color:colour(d.fill),weight:innerMm*unit}};
     }
-    if(d.kind==='railway')return{outer:{...base,weight:px(d.widthMm,context)},inner:{...base,color:colour(d.innerColour),weight:px(d.innerWidthMm,context),dashArray:dashPixels(d.dashMm,context)}};
+    if(d.kind==='railway')return{outer:{...base,weight:px(d.widthMm,context),dashArray:null},inner:{...base,color:colour(d.innerColour),weight:px(d.innerWidthMm,context),dashArray:dashPixels(d.dashMm,context),lineCap:'butt'}};
     if(d.kind==='double-line-with-supports'){
       const total=d.lineCentreGapMm+d.lineWidthMm,inner=Math.max(.01,d.lineCentreGapMm-d.lineWidthMm);
       return{outer:{...base,weight:px(total,context)},inner:{...base,color:colour('white'),weight:px(inner,context)}};

@@ -1,5 +1,6 @@
 window.OMAPMAKER_ISOM_REGISTRY = {
   "registryVersion": 2,
+  "renderingRevision": 2,
   "standard": "ISOM 2017-2 Revision 6",
   "measurementBasis": {"unit":"mm","baseScale":15000,"enlargeProportionally":true},
   "colours": {
@@ -24,7 +25,7 @@ window.OMAPMAKER_ISOM_REGISTRY = {
   "colourOrder": ["white","yellow","yellow75","yellow50","green30","green60","green","yellowGreen50","blue50","blue70","brown50","black50","purple","blue","brown","darkGreen","black"],
   "overprint": {"previewBlendMode":"multiply","upperColours":["black","brown","blue"],"courseColour":"purple"},
   "textRules": {"orientation":"magnetic-north","fontFamily":"Arial, Helvetica, sans-serif","minimumSansHeightMm":1.5},
-  "technical": {"601":{"lineWidthBlackMm":0.1,"lineWidthBlueMm":0.12,"spacingGroundMetres":300,"preferredColour":"blue","breakForLegibility":true}},
+  "technical": {"601":{"lineWidthBlackMm":0.1,"lineWidthBlueMm":0.12,"spacingGroundMetres":300,"preferredColour":"black","breakForLegibility":true}},
   "preflight": {"generalGapMm":0.15,"impassableGapMm":0.4,"generalOpeningMm":0.25,"impassableOpeningMm":0.4,"generalLineLengthMm":0.6,"screenAreaMinimumWidthMm":0.4,"fullGreenMinimumWidthMm":0.25,"fullYellowMinimumWidthMm":0.3},
   "renderers": {
     "101":{"kind":"line","colour":"brown","widthMm":0.14,"minimumLengthMm":0.6,"minimumBendMm":0.25},
@@ -63,7 +64,7 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "505":{"kind":"dashed-line","colour":"black","widthMm":0.25,"dashMm":[2,0.25],"minimumLengthMm":4.25,"minimumDashes":2},
     "506":{"kind":"dashed-line","colour":"black","widthMm":0.18,"dashMm":[1,0.25],"minimumLengthMm":2.25,"minimumDashes":2},
     "507":{"kind":"dashed-line","colour":"black","widthMm":0.18,"dashMm":[1,0.25,1,0.8],"minimumLengthMm":5.3,"minimumDashes":4},
-    "509":{"kind":"railway","colour":"black","innerColour":"white","widthMm":0.35,"innerWidthMm":0.1,"dashMm":[1,1],"minimumLengthMm":4,"minimumDashes":2},
+    "509":{"kind":"railway","colour":"black","innerColour":"white","widthMm":0.35,"innerWidthMm":0.1,"dashMm":[1,0.5],"minimumLengthMm":4,"minimumDashes":2},
     "510":{"kind":"line-with-supports","colour":"black","widthMm":0.14,"supportWidthMm":0.3,"supportStrokeMm":0.14,"minimumLengthMm":5},
     "511":{"kind":"double-line-with-supports","colour":"black","lineWidthMm":0.14,"lineCentreGapMm":0.4,"supportWidthMm":0.8,"supportStrokeMm":0.2,"minimumLengthMm":0.6},
     "513.1":{"kind":"styled-line","style":"dots","colour":"black","widthMm":0.14,"styleDiameterMm":0.4,"styleSpacingMm":2,"minimumLengthMm":1.4},
@@ -71,7 +72,7 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "520":{"kind":"area","fill":"yellowGreen50","outline":"black","outlineWidthMm":0.18,"outlineConditional":"clear","minimumBoxMm":[1,1],"impassable":true,"pathWhiteOverlapMm":0.15},
     "521":{"kind":"area","fill":"black","largeFill":"black50","largeThresholdMetres":75,"minimumBoxMm":[0.5,0.5],"minimumPassageMm":0.4,"impassable":true},
     "524":{"kind":"high-tower","colour":"black","diameterMm":0.8,"strokeWidthMm":0.16,"northOriented":true},
-    "601":{"kind":"north-line","colour":"blue","widthMm":0.12,"spacingGroundMetres":300,"northOriented":true}
+    "601":{"kind":"north-line","colour":"black","widthMm":0.1,"spacingGroundMetres":300,"northOriented":true}
   },
   "symbols": {
     "101": {"nameSv":"Höjdkurva","nameEn":"Contour","geometry":["LineString"],"bindingRules":["5 m eller 2,5 m i genomgående flack terräng"],"supportStatus":"partial","rendererStatus":"semantic-match"},

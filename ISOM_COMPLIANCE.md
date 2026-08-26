@@ -23,7 +23,7 @@ De största hindren är:
 1. flera manuella objekt är kopplade till fel symbolnummer;
 2. merparten av symbolbiblioteket i kapitel 3 saknas;
 3. exakta mått, raster, streckmönster, minsta avstånd och ritningsordning kontrolleras inte helt i tryckt skala;
-4. magnetisk nord, nordlinjer och norriktad text saknas;
+4. automatisk deklination, textplacering och avbrott i nordlinjer återstår;
 5. automatisk generalisering, kollisionshantering och kartografiskt urval är begränsade;
 6. färghanterad PDF, övertryck och verifierad tryckfärgsordning saknas;
 7. banläggningssymbolerna i avsnitt 3.7 saknas.
@@ -58,13 +58,13 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 | Avsnitt | Kravbild | Nuläge i prototypen | Status och nästa steg |
 |---|---|---|---|
 | 2.1 Orientering och kartan | Kartan ska vara läsbar, korrekt, aktuell och rättvis. | Källor, tidsstämplar, observationer och kvalitetsstatus finns. Automatgenererade objekt är normalt synliga men inte kartkontrollerade. | **Delvis.** Kartversion, karteringsdatum, historik och aktualitetsvarningar per objekt/område. |
-| 2.2 Innehåll | Relevant terräng, framkomlighet och navigationsobjekt ska väljas. Normens färgspråk ska användas. Nordlinjer ska vara magnetiska; text normalt norriktad. | Vanliga objekt och ungefärliga skärmfärger finns. Fullt urval, norriktning och nordlinjer saknas. | **Delvis.** Kanoniskt symbolregister, urval, textmotor, deklination och nordlinjer. |
+| 2.2 Innehåll | Relevant terräng, framkomlighet och navigationsobjekt ska väljas. Normens färgspråk ska användas. Nordlinjer ska vara magnetiska; text normalt norriktad. | Kanoniskt symbolregister, normfärger och registerstyrda magnetiska nordlinjer finns. Fullt symbolurval och en komplett textmotor saknas. | **Delvis.** Automatisk deklination, textplacering och kartografiskt urval återstår. |
 | 2.3 Framkomlighet | Löpbarhet ska beskrivas i fem klasser och väga samman vegetation, underlag och lutning. | 401, 403, 408 och 410 kan förekomma, men ingen sammanhängande femklassmodell finns. | **Saknas som modell.** Implementera vit skog och alla gröna löpbarhetsklasser med konsekvent raster. |
 | 2.4 Barriärer | Barriärer/faror ska vara tydliga. Ej passerbar betyder inte i sig förbjuden; förbud anges särskilt. | 201, 301, 509, 515, 518 och 520 hanteras delvis. | **Delvis.** Egenskaper för `crossability`, `danger` och `access` samt banöverlägg 708–711. |
 | 2.5 Kartläsning | Läsbarhet och grafiska minimimått går före verklighetstrogen detalj. | Kartan kan bli mycket detaljrik. Heltäckande läsbarhetskontroll saknas. | **Saknas som kontroll.** Preflight för täthet, kollisioner och minimimått. |
 | 2.6 Generalisering | Urval, förenkling, förstoring och förskjutning ska vara konsekventa. | Kurvutjämning, viss linjeförenkling och OSM-heuristik finns. | **Delvis.** Regelbaserad generalisering per symbol/skala och kontrollerad förskjutning. |
 | 2.7 Noggrannhet | Position, höjd och form ska vara tillräckligt korrekta; relativ noggrannhet är särskilt viktig. | GPS-noggrannhet visas/lagras, observationer kvalitetspoängsätts och DTM/OSM är georefererade. | **Delvis.** Topologikontroll, relativ felanalys, proveniens och markering av förskjutna objekt. |
-| 2.8 Georeferering | Georeferering rekommenderas. Före tryck ska kartan roteras så magnetiska nordlinjer är parallella med sidkanterna. | WGS 84 används. Utskriftsramen roteras inte till magnetisk nord. | **Delvis.** Lagra projektion/deklination och rotera karta och ram tillsammans. |
+| 2.8 Georeferering | Georeferering rekommenderas. Före tryck ska kartan roteras så magnetiska nordlinjer är parallella med sidkanterna. | WGS 84 används, arbetsområdet lagrar deklination och vektorutskriften roterar karta och ram tillsammans. | **Delvis.** Automatisk deklinationskälla och verifierad projektionshantering återstår. |
 | 2.9 Skala | Grundskala 1:15 000. Förstorade kartor ska förstora alla symboler proportionellt. A5–A3 rekommenderas. | 1:7 500, 1:10 000 och 1:15 000, låst/digital symbolvisning och A5–A3 finns. | **Delvis.** 1:7 500 är inte generell ISOM-grundskala. Verifiera mått och proportionell förstoring. |
 | 2.10 Ekvidistans | 5 m; 2,5 m får användas i genomgående flack terräng. Intervall får inte blandas. | Arbetsområdet har 5 eller 2,5 m. Kurvor genereras med fast nollnivå och RH 2000. | **Delvis.** Varning för olämplig 2,5 m och kontroll av importerade lager. |
 | 2.11.1 Grafiska minimimått | Symbolmått, linjebredder och typografi anges i tryckt millimeter. | Skallåst visning och utskriftskalibrering finns, men CSS/Leaflet är inte verifierat symbol för symbol. | **Delvis.** mm-baserat vektorbibliotek och toleranstest. |
@@ -171,7 +171,7 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 | 506 Liten stig | Mindre men tydlig stig med streckad linje. | Manuellt ”Stig” och OSM-stigar. | **Delvis.** Streckplacering/korsningar ej normverifierade. |
 | 507 Otydlig liten stig | Svårföljd stig med glesare streckning. | Manuellt ”Svag stig” och OSM-kandidater. | **Delvis.** OSM saknar ofta säker synlighetsklass. |
 | 508 Smal gata/linjärt spår | Smal öppning eller tydligt linjärt spår genom terrängen. | Saknas. | **Saknas.** |
-| 509 Järnväg | Normerad svart/vit linje; förbjuden passage/rörelse kräver 520 eller 709/711. | Aktiv/nedlagd OSM-järnväg genereras; svart/vit rendering finns. | **Delvis.** Tillträde, minsta längd och korsningslogik saknas. |
+| 509 Järnväg | Normerad svart/vit linje; förbjuden passage/rörelse kräver 520 eller 709/711. | Aktiv/nedlagd OSM-järnväg genereras. Renderingen har en heldragen svart grundlinje med ett streckat vitt inlägg enligt registrets pappersmått. | **Delvis.** Tillträde, minsta längd och korsningslogik saknas. |
 | 510 Kraftledning/kabelbana/skidlift | Enkel linje; tvärstreck visar exakta stöd. Kan utelämnas längs väg/stig utan navigationsvärde. | Kraftledning, mindre ledning, kabelbana och OSM-stöd genereras. | **Delvis.** Utelämningsregel, minsta längd och full geometri behöver verifieras. |
 | 511 Större kraftledning | Dubbel linje, exakta mastlägen; mycket stora master ritas skalenligt eller som torn. | Major power line får dubbel linje och stödmarkeringar. | **Delvis.** Korridor, maststorlek och övergång till 521/524 saknas. |
 | 512 Bro/tunnel | Ska visa passage och rätt relation över/under andra objekt. | OSM-taggar påverkar vägformen men egen ISOM-symbol/redigeringsmodell saknas. | **Saknas som symbol.** |
@@ -201,7 +201,7 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 
 | Symbol | Krav i korthet | OMapMaker | Status |
 |---:|---|---|---|
-| 601 Magnetisk nordlinje | Parallell med magnetisk nord och papperskant; 20 mm mellanrum vid 1:15 000 och 30 mm vid 1:10 000, med tillåtna avbrott. | Registerversion 2 ritar 300 m markavstånd, alltså 20/30/40 mm vid 1:15 000/1:10 000/1:7 500. Arbetsområdet lagrar manuell deklination och vektorutskriften roteras till magnetisk nord. | **Genomfört med begränsning.** Deklinationen måste ännu hämtas och kontrolleras av användaren; automatiska avbrott kring små detaljer återstår. |
+| 601 Magnetisk nordlinje | Parallell med magnetisk nord och papperskant; 20 mm mellanrum vid 1:15 000 och 30 mm vid 1:10 000, med tillåtna avbrott. | Registerversion 2 ritar svarta nordlinjer med 300 m markavstånd, alltså 20/30/40 mm vid 1:15 000/1:10 000/1:7 500. De ligger över ytor och höjdkurvor men under viktiga svarta kartdetaljer. Arbetsområdet lagrar manuell deklination och vektorutskriften roteras till magnetisk nord. | **Genomfört med begränsning.** Deklinationen måste ännu hämtas och kontrolleras av användaren; automatiska avbrott kring små detaljer återstår. |
 | 602 Passmärken | Minst tre passmärken får användas för färgregistrering. | Saknas. | **Saknas/extern för tryckproduktion.** |
 | 603 Höjdsiffra | Höjd till närmaste meter; vattennivå utan punkt; norrätt sans-seriftext. | Höjd finns i konturdata och tooltip, inte som karttext. | **Saknas som tryckt symbol.** |
 
