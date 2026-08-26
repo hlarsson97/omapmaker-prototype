@@ -23,7 +23,7 @@ JOBS_LOCK=threading.Lock();JOBS={};JOB_CANCEL_EVENTS={};JOB_EXECUTOR=ThreadPoolE
 
 OAUTH_CLIENT_ID_CREDENTIAL='lantmateriet_oauth_client_id'
 OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
-CENTRAL_LAYER_TYPES={'contours','buildings','roads','paved-areas','land-cover'}
+CENTRAL_LAYER_TYPES={'contours','buildings','roads','infrastructure','paved-areas','land-cover'}
 
 class LantmaterietCredentialsRequired(RuntimeError):pass
 class ContourJobCancelled(RuntimeError):pass
@@ -293,6 +293,63 @@ def osm_roads(bbox):
     apply_paired_oneway_rules(features)
     apply_roundabout_rules(features);apply_short_continuity_rules(features);apply_sidepath_rules(features);apply_paved_area_rules(features,osm_paved_areas(bbox))
     result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'© OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'roads','importVersion':3,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
+
+ACTIVE_RAILWAYS={'rail','light_rail','narrow_gauge','tram'}
+AERIALWAYS={'cable_car','gondola','chair_lift','mixed_lift','drag_lift','t-bar','j-bar','platter','rope_tow','magic_carpet'}
+
+def classify_osm_infrastructure(tags):
+    railway=tags.get('railway')
+    if railway in ACTIVE_RAILWAYS:return '509','railway','high','active-railway'
+    if railway=='disused':return '509','railway','medium','disused-rails'
+    power=tags.get('power')
+    if power=='line':return '511','major_power_line','high','osm-major-power-line'
+    if power=='minor_line':return '510','power_line','high','osm-minor-power-line'
+    if power=='cable' and tags.get('location')=='overhead':return '510','power_line','medium','overhead-power-cable'
+    if tags.get('aerialway') in AERIALWAYS:return '510','aerialway','high','osm-aerialway'
+    return None
+
+def infrastructure_line_angle(coordinates,index):
+    if len(coordinates)<2:return 0.0
+    if index<=0:start,end=coordinates[0],coordinates[1]
+    elif index>=len(coordinates)-1:start,end=coordinates[-2],coordinates[-1]
+    else:start,end=coordinates[index-1],coordinates[index+1]
+    latitude=(start[1]+end[1])/2
+    dx=(end[0]-start[0])*math.cos(math.radians(latitude));dy=end[1]-start[1]
+    return math.degrees(math.atan2(dy,dx))
+
+def osm_infrastructure(bbox):
+    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-infrastructure-v1',bbox],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-infrastructure.geojson')
+    if target.exists() and time.time()-target.stat().st_mtime<86400:return json.loads(target.read_text(encoding='utf-8'))
+    west,south,east,north=bbox
+    query=f'''[out:json][timeout:25];(
+way["railway"~"^(rail|light_rail|narrow_gauge|tram|disused)$"]({south},{west},{north},{east});
+way["power"~"^(line|minor_line|cable)$"]({south},{west},{north},{east});
+way["aerialway"]({south},{west},{north},{east});
+node["power"~"^(tower|pole)$"]({south},{west},{north},{east});
+);out tags geom;'''
+    raw,endpoint=overpass_json(query);features=[];support_candidates={}
+    for element in raw.get('elements',[]):
+        if element.get('type')!='way':continue
+        tags=element.get('tags',{});classification=classify_osm_infrastructure(tags)
+        if not classification:continue
+        if tags.get('railway') and (yes(tags.get('tunnel')) or tags.get('location') in {'underground','underwater'}):continue
+        coordinates=[[point['lon'],point['lat']] for point in element.get('geometry') or []]
+        if len(coordinates)<2:continue
+        symbol,omap_type,confidence,reason=classification;source_id=f"way/{element['id']}"
+        properties={'source':'OpenStreetMap','sourceId':source_id,'status':'automatic-unverified','license':'ODbL','featureKind':'line','isomSymbol':symbol,'omapType':omap_type,'automaticIsomSymbol':symbol,'automaticOmapType':omap_type,'classificationConfidence':confidence,'classificationReason':reason,'railway':tags.get('railway'),'power':tags.get('power'),'aerialway':tags.get('aerialway'),'service':tags.get('service'),'tunnel':tags.get('tunnel'),'bridge':tags.get('bridge'),'location':tags.get('location'),'voltage':tags.get('voltage'),'circuits':tags.get('circuits'),'cables':tags.get('cables'),'name':tags.get('name'),'ref':tags.get('ref')}
+        features.append({'type':'Feature','id':f"osm-infrastructure-way-{element['id']}",'properties':properties,'geometry':{'type':'LineString','coordinates':coordinates}})
+        if symbol in {'510','511'}:
+            for index,coordinate in enumerate(coordinates):support_candidates.setdefault((round(coordinate[0],7),round(coordinate[1],7)),[]).append((symbol,source_id,infrastructure_line_angle(coordinates,index)))
+    for element in raw.get('elements',[]):
+        if element.get('type')!='node':continue
+        coordinate=[element.get('lon'),element.get('lat')]
+        if coordinate[0] is None or coordinate[1] is None:continue
+        candidates=support_candidates.get((round(coordinate[0],7),round(coordinate[1],7))) or []
+        if not candidates:continue
+        symbol,parent,angle=next((candidate for candidate in candidates if candidate[0]=='511'),candidates[0]);tags=element.get('tags',{});source_id=f"node/{element['id']}"
+        properties={'source':'OpenStreetMap','sourceId':source_id,'status':'automatic-unverified','license':'ODbL','featureKind':'support','isomSymbol':symbol,'omapType':'major_power_support' if symbol=='511' else 'power_support','automaticIsomSymbol':symbol,'automaticOmapType':'major_power_support' if symbol=='511' else 'power_support','classificationConfidence':'high','classificationReason':'mapped-support','supportType':tags.get('power'),'parentSourceId':parent,'angleDegrees':round(angle,2),'name':tags.get('name'),'ref':tags.get('ref')}
+        features.append({'type':'Feature','id':f"osm-infrastructure-node-{element['id']}",'properties':properties,'geometry':{'type':'Point','coordinates':coordinate}})
+    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'© OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'infrastructure','importVersion':1,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
 def polygon_metrics(coordinates):
     latitude=sum(point[1] for point in coordinates)/len(coordinates)
@@ -1170,7 +1227,7 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(404,{'error':'Okänd API-adress'})
     def do_POST(self):
         path=urllib.parse.urlparse(self.path).path
-        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=self.read_json()
             if path=='/api/submissions':return self.send_json(201,MAP_STORE.submit(self.device_id(),request.get('clientSubmissionId'),request.get('features')))
@@ -1193,6 +1250,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(200,MAP_STORE.mosaic_layer(layer_type,bbox,parameters))
             if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3}))
             if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':3}))
+            if path=='/api/infrastructure':return self.send_json(200,centralize_layer('infrastructure',bbox,osm_infrastructure(bbox),{'importVersion':1}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1}))
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)

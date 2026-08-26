@@ -12,6 +12,10 @@
 #layersSheet .generated-layer-detail-list{display:grid;gap:7px;padding:8px}
 #layersSheet .generated-layer-detail-list .layer-card{background:#fff}
 
+.infrastructure-support-icon{border:0;background:transparent}
+.infrastructure-support-icon span{position:absolute;left:14%;top:calc(50% - 1px);display:block;width:72%;height:2px;background:#111;transform-origin:center;border-radius:1px}
+.infrastructure-support-icon span.major{top:calc(50% - 1.5px);height:3px}
+
 .generation-sheet form{width:min(520px,calc(100vw - 28px));max-height:min(90dvh,780px);overflow:auto}
 .generation-intro{margin:0 0 14px;color:#53665a;font-size:12px;line-height:1.45}
 .generation-sheet fieldset{min-width:0;margin:0 0 14px;padding:0;border:0}

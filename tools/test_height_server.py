@@ -127,6 +127,34 @@ class RoadClassificationTests(unittest.TestCase):
         self.assertEqual(features[1]['properties']['suppressionReason'], 'adjacent-sidepath')
 
 
+class InfrastructureTests(unittest.TestCase):
+    def test_osm_tags_map_to_isom_infrastructure_symbols(self):
+        self.assertEqual(server.classify_osm_infrastructure({'railway':'rail'})[:2],('509','railway'))
+        self.assertEqual(server.classify_osm_infrastructure({'railway':'disused'})[2],'medium')
+        self.assertEqual(server.classify_osm_infrastructure({'power':'minor_line'})[:2],('510','power_line'))
+        self.assertEqual(server.classify_osm_infrastructure({'power':'line'})[:2],('511','major_power_line'))
+        self.assertIsNone(server.classify_osm_infrastructure({'power':'cable','location':'underground'}))
+        self.assertEqual(server.classify_osm_infrastructure({'aerialway':'chair_lift'})[0],'510')
+
+    def test_mapped_power_support_gets_exact_bar_position_and_direction(self):
+        raw={'elements':[
+            {'type':'way','id':10,'tags':{'power':'line','voltage':'220000'},'geometry':[{'lon':18.0,'lat':59.0},{'lon':18.001,'lat':59.0},{'lon':18.002,'lat':59.0}]},
+            {'type':'node','id':20,'lon':18.001,'lat':59.0,'tags':{'power':'tower','ref':'42'}},
+        ]}
+        with tempfile.TemporaryDirectory() as directory:
+            previous_cache=server.CACHE;server.CACHE=Path(directory)
+            try:
+                with patch.object(server,'overpass_json',return_value=(raw,'test-overpass')):result=server.osm_infrastructure([17.99,58.99,18.01,59.01])
+            finally:server.CACHE=previous_cache
+        line=next(feature for feature in result['features'] if feature['properties']['featureKind']=='line')
+        support=next(feature for feature in result['features'] if feature['properties']['featureKind']=='support')
+        self.assertEqual(line['properties']['isomSymbol'],'511')
+        self.assertEqual(support['properties']['isomSymbol'],'511')
+        self.assertEqual(support['geometry']['coordinates'],[18.001,59.0])
+        self.assertAlmostEqual(support['properties']['angleDegrees'],0.0)
+        self.assertEqual(support['properties']['parentSourceId'],'way/10')
+
+
 class PavedAreaTests(unittest.TestCase):
     def test_large_public_asphalt_parking_is_included(self):
         result = server.paved_area_classification({'amenity': 'parking', 'surface': 'asphalt'}, 700, 20)
