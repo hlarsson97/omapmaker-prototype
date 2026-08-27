@@ -328,7 +328,12 @@ body.generated-geometry-editing #editBar{border:2px solid #286fc0}
 
 .infrastructure-support-icon{border:0;background:transparent}
 .infrastructure-support-icon span{position:absolute;left:calc(50% - var(--support-width)/2);top:calc(50% - var(--support-stroke)/2);display:block;width:var(--support-width);height:var(--support-stroke);background:#111;transform-origin:center;border-radius:1px}
-.infrastructure-support-icon span.major{border:var(--support-stroke) solid #111;background:transparent;height:var(--support-width);top:calc(50% - var(--support-width)/2)}
+.infrastructure-support-icon span.large{border:var(--support-stroke) solid #111;background:transparent;height:var(--support-width);top:calc(50% - var(--support-width)/2)}
+.symbol-object-settings{display:grid;gap:5px;margin-top:9px;padding-top:8px;border-top:1px solid #dce3dd}
+.symbol-object-settings>small{margin:0;color:#526159}
+.symbol-setting-options{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.symbol-object-settings button{min-height:34px;border:0;border-radius:8px;padding:7px 6px;background:#e7efe9;color:#114a31;font-size:10px;font-weight:850}
+.symbol-object-settings button.selected{outline:2px solid #286fc0;background:#e6f0fc;color:#174f8d}
 
 .generation-sheet form{width:min(520px,calc(100vw - 28px));max-height:min(90dvh,780px);overflow:auto}
 .generation-intro{margin:0 0 14px;color:#53665a;font-size:12px;line-height:1.45}

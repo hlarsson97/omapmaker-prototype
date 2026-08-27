@@ -44,8 +44,8 @@
     const fill=large&&d.largeFill?d.largeFill:d.fill;
     return{color:clear?colour(d.outline):'transparent',weight:clear?px(d.outlineWidthMm||.1,context):0,fillColor:colour(fill||'white'),fillOpacity:1,opacity:1,lineCap:'round',lineJoin:'round'};
   }
-  function pointMarkup(symbol,context){
-    const d=definition(symbol),stroke=colour(d?.colour||'black'),sw=paperMm(d?.supportStrokeMm||d?.strokeWidthMm||.14,context.scale),w=paperMm(d?.supportWidthMm||d?.widthMm||d?.diameterMm||.8,context.scale),h=paperMm(d?.supportWidthMm||d?.heightMm||d?.diameterMm||.8,context.scale),pad=Math.max(sw,.08),view=`${-w/2-pad} ${-h/2-pad} ${w+2*pad} ${h+2*pad}`;let body='';
+  function pointMarkup(symbol,context,properties={}){
+    const d=definition(symbol),largeSupport=d?.kind==='double-line-with-supports'&&Boolean(properties.largeMast),supportSize=largeSupport?d.largeSupportSizeMm:d?.supportWidthMm,stroke=colour(d?.colour||'black'),sw=paperMm(d?.supportStrokeMm||d?.strokeWidthMm||.14,context.scale),w=paperMm(supportSize||d?.widthMm||d?.diameterMm||.8,context.scale),h=paperMm(supportSize||d?.heightMm||d?.diameterMm||.8,context.scale),pad=Math.max(sw,.08),view=`${-w/2-pad} ${-h/2-pad} ${w+2*pad} ${h+2*pad}`;let body='';
     if(d?.kind==='point-circle')body=`<circle cx="0" cy="0" r="${w/2}" fill="${stroke}"/>`;
     else if(d?.kind==='point-ring')body=`<circle cx="0" cy="0" r="${Math.max(.01,w/2-sw/2)}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`;
     else if(d?.kind==='pit'||d?.kind==='waterhole')body=`<path d="M${-w/2},${-h/2} V${h*.12} L0,${h/2} L${w/2},${h*.12} V${-h/2}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round"/>`;
@@ -53,8 +53,9 @@
     else if(d?.kind==='point-cross')body=`<path d="M${-w/2},${-h/2} L${w/2},${h/2} M${w/2},${-h/2} L${-w/2},${h/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
     else if(d?.kind==='high-tower')body=`<circle cx="0" cy="0" r="${w/2}" fill="none" stroke="${stroke}" stroke-width="${sw}"/><path d="M${-w*.3},${-h*.3} L${w*.3},${h*.3} M${w*.3},${-h*.3} L${-w*.3},${h*.3}" stroke="${stroke}" stroke-width="${sw}"/>`;
     else if(d?.kind==='line-with-supports')body=`<path d="M${-w/2},0H${w/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
-    else if(d?.kind==='double-line-with-supports')body=`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`;
+    else if(d?.kind==='double-line-with-supports')body=largeSupport?`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`:`<path d="M${-w/2},0H${w/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
     else body=`<circle cx="0" cy="0" r="${Math.max(.1,w/3)}" fill="${stroke}"/>`;
+    if((d?.kind==='line-with-supports'||d?.kind==='double-line-with-supports')&&!largeSupport&&Number.isFinite(Number(properties.angleDegrees)))body=`<g transform="rotate(${90-number(properties.angleDegrees)-number(context.declination)})">${body}</g>`;
     const unit=pixelsPerPaperMm(context.map,context.scale,context.mode),size=Math.max(8,Math.max(w,h)*unit+4);
     return{html:`<svg class="symbol-svg" xmlns="${NS}" viewBox="${view}">${body}</svg>`,sizePx:size,widthMm:w,heightMm:h};
   }
@@ -109,6 +110,7 @@
       if(d.minimumDashes&&length!=null){const pattern=(d.dashMm||[]).reduce((a,b)=>a+b,0)*factor(scale),count=pattern?Math.floor(length/pattern):0;if(count<d.minimumDashes)issues.push({severity:'warning',code:'minimum-dashes',symbol,featureId:feature.id||null,message:`${label}: för få hela streck för att symbolen ska kännas igen.`})}
       if(d.minimumDots&&length!=null){const repeat=paperMm(d.repeatMm||d.dotDiameterMm,scale),count=repeat?Math.floor(length/repeat):0;if(count<d.minimumDots)issues.push({severity:'warning',code:'minimum-dots',symbol,featureId:feature.id||null,message:`${label}: för få punkter för att symbolen ska kännas igen.`})}
       if(d.requiresDirection&&!feature.properties?.downhillSide)issues.push({severity:'warning',code:'direction-missing',symbol,featureId:feature.id||null,message:`${label}: fallriktning saknas, så taggar kan inte riktas säkert.`});
+      if(d.settings?.supports&&['manual','gps'].includes(feature.properties?.source)&&Number(feature.properties?.supportCount)===0)issues.push({severity:'warning',code:'support-missing',symbol,featureId:feature.id||null,message:`${label}: inga exakta stolp- eller mastlägen har placerats.`});
       if(bounds)checked.push({feature,index,symbol,d,bounds,label});
     });
     const maxPairs=120000;let pairs=0;
@@ -138,8 +140,8 @@
   function vectorElements(feature,context){
     const symbol=symbolForFeature(feature),d=definition(symbol);if(!d)return[];const path=geometryPath(feature.geometry,context),f=factor(context.scale),elements=[],layer=name=>registry.colourOrder.indexOf(name);
     if(feature.geometry.type==='Point'){
-      const p=paperProject(feature.geometry.coordinates,context),markup=pointMarkup(symbol,{...context,map:{getCenter:()=>context.center,getZoom:()=>0},mode:'digital'}).html.replace(/^<svg[^>]*>|<\/svg>$/g,'');
-      const w=paperMm(d.widthMm||d.diameterMm||.8,context.scale),h=paperMm(d.heightMm||d.diameterMm||.8,context.scale),pad=Math.max(paperMm(d.strokeWidthMm||.14,context.scale),.08);
+      const p=paperProject(feature.geometry.coordinates,context),point=pointMarkup(symbol,{...context,map:{getCenter:()=>context.center,getZoom:()=>0},mode:'digital'},feature.properties||{}),markup=point.html.replace(/^<svg[^>]*>|<\/svg>$/g,'');
+      const w=point.widthMm,h=point.heightMm,pad=Math.max(paperMm(d.supportStrokeMm||d.strokeWidthMm||.14,context.scale),.08);
       elements.push({layer:layer(d.colour||'black'),markup:`<svg x="${p.x-w/2-pad}" y="${p.y-h/2-pad}" width="${w+2*pad}" height="${h+2*pad}" viewBox="${-w/2-pad} ${-h/2-pad} ${w+2*pad} ${h+2*pad}" overflow="visible">${markup}</svg>`});return elements;
     }
     if(d.kind==='area'||d.kind==='pattern-area'){

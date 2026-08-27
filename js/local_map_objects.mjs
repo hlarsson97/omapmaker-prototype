@@ -1,4 +1,5 @@
 import {localMapObject, mapObjectActionHtml, mapObjectPopup, mapObjectSource} from './map_objects.mjs';
+import {symbolObjectControlsHtml} from './symbol_object_settings.mjs';
 
 export function localObjectSourceLabel(source) {
   return mapObjectSource(source).label;
@@ -12,5 +13,6 @@ export function localObjectPopup(cat, object, {name, isomClaim, escapeHtml}) {
   if (cat === 'point' && Number(object.accuracy) > 0) details.push(`Noggrannhet ±${Math.round(Number(object.accuracy))} m`);
   if (mapObject.modifiedBy === 'manual') details.push('Geometrin är manuellt justerad');
   const actionsHtml = mapObjectActionHtml(mapObject, {kind: 'local', escapeHtml});
-  return mapObjectPopup(mapObject, {title: name(cat, object.objectType), isomClaim, escapeHtml, secondaryDetails: details, actionsHtml, className: 'local-object-popup'});
+  const controlsHtml = symbolObjectControlsHtml(object, escapeHtml);
+  return mapObjectPopup(mapObject, {title: name(cat, object.objectType), isomClaim, escapeHtml, secondaryDetails: details, controlsHtml, actionsHtml, className: 'local-object-popup'});
 }

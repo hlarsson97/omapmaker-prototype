@@ -30,7 +30,7 @@ export function localObjectLifecycle(object) {
 
 export function localOriginalSnapshot(object) {
   const snapshot = {};
-  for (const key of ['objectType', 'symbol', 'coordinates', 'source', 'accuracy', 'quality', 'createdAt', 'boundary']) {
+  for (const key of ['objectType', 'symbol', 'coordinates', 'source', 'accuracy', 'quality', 'createdAt', 'boundary', 'downhillSide', 'supports']) {
     if (object[key] !== undefined) snapshot[key] = cloneJson(object[key]);
   }
   return snapshot;
@@ -43,6 +43,7 @@ export function ensureLocalOriginal(object) {
 
 export function restoreLocalOriginal(object) {
   const original = cloneJson(ensureLocalOriginal(object));
+  for (const key of ['downhillSide', 'supports']) if (!(key in original)) delete object[key];
   for (const [key, value] of Object.entries(original)) object[key] = value;
   for (const key of ['status', 'modifiedBy', 'modifiedAt', 'excludedAt', 'deletedAt']) delete object[key];
   return object;

@@ -40,15 +40,15 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, renderer, getD
   function supportIcon(feature) {
     const properties = feature.properties || {};
     const symbol = String(properties.isomSymbol || '510');
-    const major = symbol === '511';
+    const large = symbol === '511' && Boolean(properties.largeMast);
     const definition = renderer.definition(symbol);
     const context = normContext();
     const unit = renderer.pixelsPerPaperMm(map, context.scale, context.mode);
-    const width = renderer.paperMm(definition.supportWidthMm, context.scale) * unit;
+    const width = renderer.paperMm(large ? definition.largeSupportSizeMm : definition.supportWidthMm, context.scale) * unit;
     const stroke = renderer.paperMm(definition.supportStrokeMm, context.scale) * unit;
     const size = Math.max(18, width + 8);
     const angle = 90 - Number(properties.angleDegrees || 0);
-    return Leaflet.divIcon({className: `infrastructure-support-icon generated-object ${generatedStatus(feature)}`, html: `<span class="${major ? 'major' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;transform:rotate(${angle}deg)"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
+    return Leaflet.divIcon({className: `infrastructure-support-icon generated-object ${generatedStatus(feature)}`, html: `<span class="${large ? 'large' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;transform:rotate(${angle}deg)"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
   }
 
   function popup(feature) {

@@ -11,8 +11,8 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 2);
-assert.strictEqual(registry.renderingRevision, 2);
+assert.strictEqual(registry.registryVersion, 3);
+assert.strictEqual(registry.renderingRevision, 3);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -21,6 +21,10 @@ assert(Math.abs(renderer.paperMm(0.14, 10000) - 0.21) < 1e-9);
 assert.strictEqual(registry.technical['601'].spacingGroundMetres * 1000 / 10000, 30);
 assert.strictEqual(registry.technical['601'].preferredColour, 'black');
 assert.deepStrictEqual(registry.renderers['509'].dashMm, [1, 0.5]);
+assert.strictEqual(registry.renderers['511'].supportWidthMm, 0.3);
+assert.strictEqual(registry.renderers['511'].largeSupportSizeMm, 0.8);
+assert.strictEqual(registry.renderers['511'].minimumLengthMm, undefined);
+assert.deepStrictEqual(registry.renderers['201'].settings.downhillSide.values, ['left', 'right']);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
 const railwayStyle = renderer.lineStyles('509', {}, screenContext);
@@ -55,8 +59,10 @@ const road = {...shortPath, id: 'road', properties: {isomSymbol: '502', widthMet
 const railway = {...shortPath, id: 'railway', properties: {isomSymbol: '509'}};
 const gully = {...shortPath, id: 'gully', properties: {isomSymbol: '108'}};
 const cliff = {...shortPath, id: 'cliff', properties: {isomSymbol: '201', downhillSide: 'right'}, geometry: {type: 'LineString', coordinates: [[18.0999, 59.2], [18.1001, 59.2]]}};
+const powerLine = {...shortPath, id: 'power', properties: {isomSymbol: '511', source: 'manual', supportCount: 1}, geometry: {type: 'LineString', coordinates: [[18.0999, 59.2], [18.1001, 59.2]]}};
+const powerSupport = {type: 'Feature', id: 'power:support:1', properties: {isomSymbol: '511', featureKind: 'support', angleDegrees: 0, largeMast: false}, geometry: {type: 'Point', coordinates: [18.1, 59.2]}};
 const label = {...shortPath, id: 'label', properties: {isomSymbol: '101', mapText: '42,5', labelCoordinate: [center.lng, center.lat], textHeightMm: 1.5}};
-const svg = renderer.buildVectorSvg([building, road, railway, gully, cliff, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+const svg = renderer.buildVectorSvg([building, road, railway, gully, cliff, powerLine, powerSupport, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(svg.startsWith('<svg'));
 assert(svg.includes('symbolRegistryVersion'));
 assert(svg.includes('data-colour="black"'));
@@ -68,5 +74,8 @@ assert(svg.includes('stroke-dasharray="1.5 0.75"'));
 assert(svg.includes('stroke-dasharray="0 '));
 assert(svg.includes('data-orientation="magnetic-north"'));
 assert((svg.match(/stroke-linecap="round"/g) || []).length >= 2, 'Branttaggar eller punktlinje saknas');
+assert(svg.includes('rotate(81.5)'), 'Stödmarkeringen ska roteras vinkelrätt mot ledningen och kartrotationen');
+check = renderer.preflight([{...powerLine, properties: {...powerLine.properties, supportCount: 0}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+assert(check.issues.some(issue => issue.code === 'support-missing'));
 
 console.log('ISOM renderer: alla kontroller godkända');

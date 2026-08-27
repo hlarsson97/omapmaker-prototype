@@ -15,6 +15,7 @@ import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer,
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
+import {applyDefaultSymbolSettings, cliffTagSegments, nearestPointOnLine, powerSupportFeatures, snapPowerSupports, symbolObjectControlsHtml} from '../js/symbol_object_settings.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -31,6 +32,24 @@ assert.match(localPopup, /Noggrannhet ±4 m/);
 assert.match(localPopup, /data-object-kind="local"/);
 assert.match(localPopup, /data-object-id="local-1"/);
 for (const action of ['edit', 'exclude', 'delete', 'reset']) assert.match(localPopup, new RegExp(`data-object-action="${action}"`));
+const cliffObject = applyDefaultSymbolSettings({id: 'cliff-1', symbol: '201', coordinates: [[18, 59], [18.001, 59]]}, '201');
+assert.equal(cliffObject.downhillSide, 'right');
+assert.match(symbolObjectControlsHtml(cliffObject, escapeHtml), /data-symbol-object-action="cliff-side"/);
+const rightSideTags = cliffTagSegments(cliffObject.coordinates, {tagSpacingMm: 0.5, tagLengthMm: 0.4}, 'right');
+assert(rightSideTags.length > 1);
+assert(rightSideTags[0][1][1] < rightSideTags[0][0][1], 'Höger sida om en östgående linje ska ligga söderut');
+const snapped = nearestPointOnLine([[18, 59], [18.001, 59]], [18.0004, 59.0002]);
+assert(Math.abs(snapped.coordinate[1] - 59) < 1e-10);
+assert(Math.abs(snapped.angleDegrees) < 1e-8);
+const powerObject = applyDefaultSymbolSettings({id: 'power-1', symbol: '511', source: 'manual', coordinates: [[18, 59], [18.001, 59]]}, '511');
+powerObject.supports.push({id: 'mast-1', coordinates: [18.0004, 59.0002], supportType: 'tower', largeMast: true});
+snapPowerSupports(powerObject);
+const supportFeatures = powerSupportFeatures(powerObject, '511');
+assert.equal(supportFeatures.length, 1);
+assert.equal(supportFeatures[0].properties.parentObjectId, 'power-1');
+assert.equal(supportFeatures[0].properties.largeMast, true);
+assert(Math.abs(supportFeatures[0].geometry.coordinates[1] - 59) < 1e-10);
+assert.match(symbolObjectControlsHtml(powerObject, escapeHtml), /Placera stor mast/);
 assert.deepEqual(mapObjectSource('osm', 'way/42'), {type: 'osm', label: 'OpenStreetMap', id: 'way/42'});
 const adaptedLocal = localMapObject('point', {id: 'local-2', objectType: 'boulder', source: 'gps', syncStatus: 'local', modifiedBy: 'manual'}, '204');
 assert.equal(adaptedLocal.geometryType, 'Point');
@@ -50,6 +69,10 @@ assert.deepEqual(restorableLocal.coordinates, [18.1, 59.2]);
 assert.equal(restorableLocal.source, 'gps');
 assert.equal(restorableLocal.status, undefined);
 assert.equal(restorableLocal.modifiedBy, undefined);
+const legacyRestorable = {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]], originalObject: {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]]}, downhillSide: 'right', supports: []};
+restoreLocalOriginal(legacyRestorable);
+assert.equal(legacyRestorable.downhillSide, undefined);
+assert.equal(legacyRestorable.supports, undefined);
 const adaptedGenerated = generatedMapObject('buildings', {id: 'building/2', properties: {sourceId: 'way/2'}, geometry: {type: 'Polygon'}}, {symbol: '521', statusLabel: 'Automatiskt kartunderlag'});
 assert.equal(adaptedGenerated.source.type, 'osm');
 assert.deepEqual(adaptedGenerated.capabilities, MAP_OBJECT_CAPABILITIES);
@@ -346,8 +369,10 @@ assert.equal(panes.get('gpsPane').style.zIndex, 650);
 assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=1'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=1"'));
+assert(fieldHtml.includes('styles.css?v=2'));
+assert(fieldHtml.includes('isom_symbols.js?v=5'));
+assert(fieldHtml.includes('isom_renderer.js?v=5'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=2"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

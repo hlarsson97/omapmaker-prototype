@@ -18,3 +18,7 @@ data/contour-cache/
 data/omapmaker.sqlite3*
 data/backups/
 
+# Local copies of published map specifications. Keep official source links in
+# SOURCES.md instead of redistributing the PDF files through this repository.
+references/specifications/*.pdf
+
