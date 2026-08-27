@@ -3,6 +3,7 @@ import {applyGenerationProfile, generationSummary, readGenerationSettings} from 
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 import {createFieldMap} from './js/map_setup.mjs';
 import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs';
+import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs';
 
 const symbolRegistry=window.OMAPMAKER_ISOM_REGISTRY;
 if(!symbolRegistry?.registryVersion)throw new Error('OMapMakers symbolregister kunde inte läsas');
@@ -71,7 +72,7 @@ const mapDataStore=createIndexedDbStore({databaseName:'omapmaker-mapdata',versio
 async function storeContourData(data){await mapDataStore.put(contourStorageKey,data);localStorage.removeItem(contourStorageKey)}
 async function loadStoredContours(){return await mapDataStore.get(contourStorageKey)}
 async function deleteStoredContours(){await mapDataStore.delete(contourStorageKey);localStorage.removeItem(contourStorageKey)}
-const buildingStorageKey=`omapmaker.buildings.${workspace?.id||'global'}`;const osmBuildingAttribution='Byggnader © OpenStreetMap contributors';let osmBuildingData=null,osmBuildingLayer=null,osmBuildingAttributionVisible=false;
+const buildingStorageKey=`omapmaker.buildings.${workspace?.id||'global'}`;let osmBuildingData=null;
 async function storeBuildings(data){await mapDataStore.put(buildingStorageKey,data)}
 async function loadBuildings(){return await mapDataStore.get(buildingStorageKey)}
 function normContext(){return{map,scale:Number(workspace?.scale)||10000,mode:workspace?.symbolDisplayMode||'digital'}}
@@ -84,12 +85,10 @@ function applyGeneratedOverrides(next,previous,propertyNames=[]){const overrides
 function resetGeneratedFeature(feature){const p=feature.properties||{};if(p.originalGeometry)feature.geometry=cloneJson(p.originalGeometry);p.status='automatic-unverified';p.isomSymbol=p.automaticIsomSymbol||p.isomSymbol;p.mapClass=p.automaticMapClass||p.mapClass;p.omapType=p.automaticOmapType||p.omapType;delete p.originalGeometry;delete p.editedAt;delete p.reviewedAt}
 function excludedStyle(scale=1){return{color:'#a13d38',weight:1.5*scale,fillColor:'#fff',fillOpacity:.04,opacity:.45,dashArray:`${5*scale} ${4*scale}`,className:'generated-object excluded'}}
 function isomAreaStyle(symbol,properties={}){return normRenderer.areaStyle(String(symbol||''),properties,normContext())}
-function buildingStatus(feature){return feature.properties?.status||'automatic-unverified'}
-function buildingStyle(feature){if(generatedStatus(feature)==='excluded')return excludedStyle(Math.max(1,symbolScale()));return{...isomAreaStyle('521',feature.properties),className:generatedClass(feature,'osm-building')}}
-function buildingPopup(feature){const p=feature.properties||{};return `<div class="building-popup generated-object-popup"><b>${escapeHtml(p.name||'Byggnad')}</b><small>${isomClaim('521',feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))}</small><small>OpenStreetMap · ${escapeHtml(p.sourceId||'')}</small>${generatedActionHtml('buildings',feature)}</div>`}
-function renderBuildings(){if(osmBuildingLayer)map.removeLayer(osmBuildingLayer);osmBuildingLayer=null;if(osmBuildingAttributionVisible){map.attributionControl.removeAttribution(osmBuildingAttribution);osmBuildingAttributionVisible=false}if(!osmBuildingData||!layerPrefs.generatedSurfaces||!layerPrefs.buildings||!generationSettings.surface.buildings)return;osmBuildingLayer=L.geoJSON(osmBuildingData,{pane:'buildingPane',style:buildingStyle,onEachFeature:(feature,layer)=>layer.bindPopup(buildingPopup(feature),{maxWidth:280})}).addTo(map);map.attributionControl.addAttribution(osmBuildingAttribution);osmBuildingAttributionVisible=true}
 function centralLayerLabel(data){const revision=data?.properties?.centralLayerRevision;return data?.properties?.centralStorage?` · server${revision?` v${revision}`:''}`:''}
-function refreshBuildingMeta(){if(!osmBuildingData)return void ($('#osmBuildingsMeta').textContent='Inte hämtade');const edited=osmBuildingData.features.filter(feature=>generatedStatus(feature)==='edited').length,excluded=osmBuildingData.features.filter(feature=>generatedStatus(feature)==='excluded').length;$('#osmBuildingsMeta').textContent=`${osmBuildingData.features.length} automatiska${edited?` · ${edited} ändrade`:''}${excluded?` · ${excluded} uteslutna`:''}${centralLayerLabel(osmBuildingData)}`}
+const buildingLayer=createGeneratedBuildingLayer({Leaflet:L,map,getData:()=>osmBuildingData,isVisible:()=>layerPrefs.generatedSurfaces&&layerPrefs.buildings&&generationSettings.surface.buildings,generatedStatus,generatedStatusLabel,generatedClass,generatedActionHtml,excludedStyle,symbolScale,isomAreaStyle,isomClaim,escapeHtml,centralLayerLabel,metaElement:()=>$('#osmBuildingsMeta')});
+function renderBuildings(){buildingLayer.render()}
+function refreshBuildingMeta(){buildingLayer.refreshMeta()}
 function mergeBuildingReviews(next,previous){return applyGeneratedOverrides(next,previous)}
 const landCoverStorageKey=`omapmaker.land-cover.v2.${workspace?.id||'global'}`;const osmLandCoverAttribution='Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors';let osmLandCoverData=null,osmLandCoverLayer=null,osmLandCoverAttributionVisible=false;
 async function storeLandCover(data){await mapDataStore.put(landCoverStorageKey,data)}

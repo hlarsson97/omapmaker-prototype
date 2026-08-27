@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from '../js/generation_settings.mjs';
 import {createIndexedDbStore} from '../js/indexeddb_store.mjs';
 import {createFieldMap} from '../js/map_setup.mjs';
+import {BUILDING_ATTRIBUTION, buildingMetaText, createGeneratedBuildingLayer} from '../js/generated_buildings.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 
@@ -16,6 +17,42 @@ assert.deepEqual(cloneJson({coordinates: [18.1, 59.2]}), {coordinates: [18.1, 59
 assert.equal(formatBytes(205 * 1024 * 1024), '205 MB');
 assert(uuidPattern.test('5eda656c-ddba-43d3-b124-72184e7f91fc'));
 assert.equal(typeof createIndexedDbStore, 'function');
+assert.equal(buildingMetaText({features: [{properties: {}}, {properties: {status: 'locally-edited'}}, {properties: {status: 'locally-excluded'}}]}, feature => feature.properties.status === 'locally-edited' ? 'edited' : feature.properties.status === 'locally-excluded' ? 'excluded' : 'source', () => ' · server v2'), '3 automatiska · 1 ändrade · 1 uteslutna · server v2');
+
+const buildingData = {features: [{id: 'building/1', properties: {name: 'Klubbhus', sourceId: 'way/1'}, geometry: {type: 'Polygon'}}]};
+const buildingEvents = [];
+let buildingsVisible = true;
+let buildingOptions;
+const buildingMap = {
+  removeLayer: layer => buildingEvents.push(['remove', layer]),
+  attributionControl: {
+    addAttribution: text => buildingEvents.push(['addAttribution', text]),
+    removeAttribution: text => buildingEvents.push(['removeAttribution', text])
+  }
+};
+const buildingView = createGeneratedBuildingLayer({
+  Leaflet: {geoJSON: (data, options) => { buildingOptions = options; return {addTo: target => { buildingEvents.push(['addLayer', target]); return 'building-layer'; }}; }},
+  map: buildingMap,
+  getData: () => buildingData,
+  isVisible: () => buildingsVisible,
+  generatedStatus: () => 'source',
+  generatedStatusLabel: () => 'Automatiskt kartunderlag',
+  generatedClass: (_feature, base) => `${base} generated-object source`,
+  generatedActionHtml: () => '<div class="generated-actions"></div>',
+  excludedStyle: () => ({}),
+  symbolScale: () => 1,
+  isomAreaStyle: () => ({fillColor: '#000'}),
+  isomClaim: () => 'ISOM 521',
+  escapeHtml,
+  centralLayerLabel: () => '',
+  metaElement: () => ({textContent: ''})
+});
+buildingView.render();
+assert.equal(buildingOptions.pane, 'buildingPane');
+assert.deepEqual(buildingEvents.at(-1), ['addAttribution', BUILDING_ATTRIBUTION]);
+buildingsVisible = false;
+buildingView.render();
+assert.deepEqual(buildingEvents.slice(-2), [['remove', 'building-layer'], ['removeAttribution', BUILDING_ATTRIBUTION]]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 8, printScale: 15000, symbolRegistryVersion: 6});
 
 const apiCalls = [];
