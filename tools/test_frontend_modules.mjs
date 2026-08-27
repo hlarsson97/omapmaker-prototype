@@ -10,6 +10,7 @@ import {BUILDING_ATTRIBUTION, buildingMetaText, createGeneratedBuildingLayer} fr
 import {PAVED_AREA_ATTRIBUTION, createGeneratedPavedAreaLayer, pavedAreaMetaText} from '../js/generated_paved_areas.mjs';
 import {ROAD_ATTRIBUTION, ROAD_TYPES, createGeneratedRoadLayer, roadMetaText} from '../js/generated_roads.mjs';
 import {INFRASTRUCTURE_ATTRIBUTION, INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer, infrastructureMetaText} from '../js/generated_infrastructure.mjs';
+import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature, landCoverMetaText} from '../js/generated_land_cover.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 
@@ -183,6 +184,62 @@ const supportMarker = infrastructureOptions[2].pointToLayer({properties: {featur
 assert.equal(supportMarker.options.pane, 'infrastructurePane');
 assert(supportMarker.options.icon.html.includes('rotate(60deg)'));
 assert.deepEqual(infrastructureEvents.at(-1), ['addAttribution', INFRASTRUCTURE_ATTRIBUTION]);
+assert.equal(WATER_SYMBOL_CLASSES['308'], 'marsh_308');
+assert.equal(isWaterFeature({properties: {isomSymbol: '301'}}), true);
+assert.equal(isWaterFeature({properties: {isomSymbol: '401'}}), false);
+assert.equal(isCurrentLandCoverData({properties: {importVersion: 8}}), true);
+assert.equal(landCoverMetaText({properties: {importVersion: 8}, features: [{properties: {isomSymbol: '301'}}, {properties: {isomSymbol: '520'}}]}, () => 'source', () => ''), '1 vatten · 1 st 520');
+
+const landCoverEvents = [];
+const landCoverOptions = [];
+let scheduledPatternInstall;
+const landCoverData = {properties: {importVersion: 8}, features: []};
+const landCoverMap = {
+  removeLayer: layer => landCoverEvents.push(['remove', layer]),
+  attributionControl: {
+    addAttribution: text => landCoverEvents.push(['addAttribution', text]),
+    removeAttribution: text => landCoverEvents.push(['removeAttribution', text])
+  }
+};
+const landCoverView = createGeneratedLandCoverLayer({
+  Leaflet: {
+    geoJSON: (_data, options) => { landCoverOptions.push(options); return {options}; },
+    layerGroup: layers => ({addTo: target => { landCoverEvents.push(['addLayerGroup', layers.length, target]); return 'land-cover-layer'; }}),
+    divIcon: options => options,
+    marker: (latlng, options) => ({latlng, options})
+  },
+  map: landCoverMap,
+  renderer: {pointMarkup: () => ({sizePx: 12, html: '<svg></svg>'}), pixelsPerPaperMm: () => 4},
+  getData: () => landCoverData,
+  isVisible: () => true,
+  featureIsSelected: () => true,
+  generatedStatus: () => 'source',
+  generatedStatusLabel: () => 'Automatiskt kartunderlag',
+  generatedClass: (_feature, base) => `${base} generated-object source`,
+  generatedActionHtml: () => '<div class="generated-actions"></div>',
+  excludedStyle: () => ({}),
+  symbolScale: () => 1,
+  isomLineStyle: () => ({color: '#00f'}),
+  isomAreaStyle: () => ({fillColor: '#00f'}),
+  normContext: () => ({scale: 10000, mode: 'print'}),
+  isomClaim: () => 'ISOM 301',
+  escapeHtml,
+  centralLayerLabel: () => '',
+  metaElement: () => ({textContent: ''}),
+  getDeclination: () => 4,
+  documentObject: {querySelectorAll: () => []},
+  schedule: callback => { scheduledPatternInstall = callback; }
+});
+landCoverView.render();
+assert.equal(landCoverOptions.length, 2);
+assert.equal(landCoverOptions[0].pane, 'landCoverPane');
+assert.equal(landCoverOptions[1].pane, 'restrictedAreaPane');
+assert.equal(landCoverOptions[0].filter({properties: {isomSymbol: '301'}}), true);
+assert.equal(landCoverOptions[1].filter({properties: {isomSymbol: '520'}}), true);
+const waterMarker = landCoverOptions[0].pointToLayer({properties: {isomSymbol: '303'}}, [59, 18]);
+assert.equal(waterMarker.options.pane, 'landCoverPane');
+assert.equal(typeof scheduledPatternInstall, 'function');
+assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTION]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 8, printScale: 15000, symbolRegistryVersion: 6});
 
 const apiCalls = [];
