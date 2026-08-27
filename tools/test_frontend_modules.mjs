@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from '../js/generation_settings.mjs';
 import {createIndexedDbStore} from '../js/indexeddb_store.mjs';
 import {createFieldMap} from '../js/map_setup.mjs';
+import {centralLayerParameters, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,6 +16,24 @@ assert.deepEqual(cloneJson({coordinates: [18.1, 59.2]}), {coordinates: [18.1, 59
 assert.equal(formatBytes(205 * 1024 * 1024), '205 MB');
 assert(uuidPattern.test('5eda656c-ddba-43d3-b124-72184e7f91fc'));
 assert.equal(typeof createIndexedDbStore, 'function');
+assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 8, printScale: 15000, symbolRegistryVersion: 6});
+
+const apiCalls = [];
+const mapLayerApi = createMapLayerApi({
+  hostname: 'labserver1.tailnet.test',
+  fetchImpl: async (endpoint, options) => {
+    apiCalls.push({endpoint, options});
+    return {ok: true, json: async () => endpoint.includes('resolve') ? {found: false} : {type: 'FeatureCollection', features: []}};
+  },
+  jsonResponse: async response => response.json()
+});
+const sourceLayer = await mapLayerApi.centralOrSource('land-cover', '/api/land-cover', {bbox: [18, 59, 19, 60], workspace: {id: 'test', scale: 15000}, symbolRegistryVersion: 6});
+assert.equal(sourceLayer.reused, false);
+assert.equal(apiCalls[0].endpoint, '/api/map-layers/resolve');
+assert.equal(JSON.parse(apiCalls[0].options.body).maxAgeSeconds, 86400);
+assert.deepEqual(JSON.parse(apiCalls[1].options.body), {bbox: [18, 59, 19, 60], printScale: 15000});
+const staticApi = createMapLayerApi({hostname: 'hlarsson97.github.io', fetchImpl: () => { throw new Error('fetch ska inte anropas'); }, jsonResponse: async response => response.json()});
+assert.equal(await staticApi.resolveCentralLayer('roads', {bbox: [18, 59, 19, 60], symbolRegistryVersion: 6}), null);
 
 const memoryStorage = {
   getItem: key => key === 'settings' ? JSON.stringify({surface: {profile: 'quick'}}) : null

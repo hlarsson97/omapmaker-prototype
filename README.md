@@ -13,7 +13,8 @@ Ubuntu finns i `SERVER_SETUP_UBUNTU.md`.
   av arbetsområden.
 - `field.html`, `app.mjs` och `styles.css` innehåller kart- och fältvyn.
 - `js/` innehåller återanvändbara frontendmoduler för kartstart, lokal
-  kartlagring, genereringsprofiler och gemensamma hjälpfunktioner.
+  kartlagring, centrala kartlagers API-anrop, genereringsprofiler och gemensamma
+  hjälpfunktioner.
 - `isom_symbols.js` är det versionsmärkta kanoniska symbolregistret och
   `isom_renderer.js` ritar samma definitioner på skärm och i vektorutskrift.
 - `tools/height_server.py` är serverns HTTP- och API-ingång. Övriga filer i
