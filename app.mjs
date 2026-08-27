@@ -2,7 +2,7 @@ import {$, cloneJson, escapeHtml, formatBytes, jsonResponse, uuidPattern, wait} 
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from './js/generation_settings.mjs';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 import {createFieldMap} from './js/map_setup.mjs';
-import {createMapLayerApi} from './js/map_layer_api.mjs';
+import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs';
 
 const symbolRegistry=window.OMAPMAKER_ISOM_REGISTRY;
 if(!symbolRegistry?.registryVersion)throw new Error('OMapMakers symbolregister kunde inte läsas');
@@ -162,8 +162,7 @@ const localMapDataReady=Promise.all([
   loadInfrastructure().then(data=>{if(data){osmInfrastructureData=data;renderInfrastructure();refreshInfrastructureMeta()}}).catch(()=>{})
 ]);
 function clearCentralLayer(layerType){if(layerType==='contours'){projectContourData=null;renderProjectContours();refreshContourMeta()}else if(layerType==='buildings'){osmBuildingData=null;renderBuildings();refreshBuildingMeta()}else if(layerType==='land-cover'){osmLandCoverData=null;renderLandCover();refreshLandCoverMeta()}else if(layerType==='paved-areas'){osmPavedAreaData=null;renderPavedAreas();refreshPavedAreaMeta()}else if(layerType==='roads'){osmRoadData=null;renderRoads();refreshRoadMeta()}else if(layerType==='infrastructure'){osmInfrastructureData=null;renderInfrastructure();refreshInfrastructureMeta()}}
-let centralRestoreSequence=0;
-async function restoreCentralLayers(){if(location.hostname.includes('github.io'))return;const sequence=++centralRestoreSequence,types=['contours','buildings','roads','infrastructure','paved-areas','land-cover'],results=await Promise.allSettled(types.map(async layerType=>[layerType,await resolveCentralLayer(layerType)]));if(sequence!==centralRestoreSequence)return;for(const result of results){if(result.status!=='fulfilled')continue;const [layerType,data]=result.value;if(data)await applyCentralLayer(layerType,data);else if(!workspace)clearCentralLayer(layerType)}if(results.some(result=>result.status==='rejected'))console.info('Ett eller flera centrala kartlager kunde inte återställas just nu.')}
+const restoreCentralLayers=createCentralLayerRestorer({resolveCentralLayer,applyCentralLayer,clearCentralLayer,hasWorkspace:()=>Boolean(workspace)});
 localMapDataReady.then(restoreCentralLayers);
 const globalStatusLabels={uncertain:'Osäker',preliminary:'Preliminär',reliable:'Tillförlitlig',confirmed:'Bekräftad',conflicted:'Motstridig',approved:'Bekräftad'};
 let globalObjectData=null,globalObjectLayer=null,evidenceData=null,evidenceLayer=null,globalObjectRequestSequence=0,evidenceRequestSequence=0;

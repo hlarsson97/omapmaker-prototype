@@ -10,6 +10,8 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
   return parameters[layerType]();
 }
 
+export const CENTRAL_LAYER_TYPES = Object.freeze(['contours', 'buildings', 'roads', 'infrastructure', 'paved-areas', 'land-cover']);
+
 export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = location.hostname}) {
   const postJson = async (endpoint, payload) => jsonResponse(await fetchImpl(endpoint, {
     method: 'POST',
@@ -40,4 +42,22 @@ export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = l
   }
 
   return {resolveCentralLayer, centralOrSource};
+}
+
+export function createCentralLayerRestorer({resolveCentralLayer, applyCentralLayer, clearCentralLayer, hasWorkspace, hostname = location.hostname, log = console.info}) {
+  let restoreSequence = 0;
+
+  return async function restoreCentralLayers() {
+    if (hostname.includes('github.io')) return;
+    const sequence = ++restoreSequence;
+    const results = await Promise.allSettled(CENTRAL_LAYER_TYPES.map(async layerType => [layerType, await resolveCentralLayer(layerType)]));
+    if (sequence !== restoreSequence) return;
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      const [layerType, data] = result.value;
+      if (data) await applyCentralLayer(layerType, data);
+      else if (!hasWorkspace()) clearCentralLayer(layerType);
+    }
+    if (results.some(result => result.status === 'rejected')) log('Ett eller flera centrala kartlager kunde inte återställas just nu.');
+  };
 }

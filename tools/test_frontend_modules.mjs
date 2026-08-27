@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from '../js/generation_settings.mjs';
 import {createIndexedDbStore} from '../js/indexeddb_store.mjs';
 import {createFieldMap} from '../js/map_setup.mjs';
-import {centralLayerParameters, createMapLayerApi} from '../js/map_layer_api.mjs';
+import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,6 +34,22 @@ assert.equal(JSON.parse(apiCalls[0].options.body).maxAgeSeconds, 86400);
 assert.deepEqual(JSON.parse(apiCalls[1].options.body), {bbox: [18, 59, 19, 60], printScale: 15000});
 const staticApi = createMapLayerApi({hostname: 'hlarsson97.github.io', fetchImpl: () => { throw new Error('fetch ska inte anropas'); }, jsonResponse: async response => response.json()});
 assert.equal(await staticApi.resolveCentralLayer('roads', {bbox: [18, 59, 19, 60], symbolRegistryVersion: 6}), null);
+
+const restoredLayers = [];
+const clearedLayers = [];
+const restoreMessages = [];
+const restoreCentralLayers = createCentralLayerRestorer({
+  hostname: 'labserver1.tailnet.test',
+  hasWorkspace: () => false,
+  resolveCentralLayer: async layerType => layerType === 'roads' ? {layer: {type: 'FeatureCollection'}} : null,
+  applyCentralLayer: async (layerType, data) => restoredLayers.push([layerType, data.layer.type]),
+  clearCentralLayer: layerType => clearedLayers.push(layerType),
+  log: message => restoreMessages.push(message)
+});
+await restoreCentralLayers();
+assert.deepEqual(restoredLayers, [['roads', 'FeatureCollection']]);
+assert.deepEqual(clearedLayers, CENTRAL_LAYER_TYPES.filter(layerType => layerType !== 'roads'));
+assert.deepEqual(restoreMessages, []);
 
 const memoryStorage = {
   getItem: key => key === 'settings' ? JSON.stringify({surface: {profile: 'quick'}}) : null
