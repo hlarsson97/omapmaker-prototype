@@ -1,0 +1,86 @@
+export const INFRASTRUCTURE_TYPES = Object.freeze({
+  '509': ['railway', 'Järnväg'],
+  '510': ['power_line', 'Kraftledning eller linbana'],
+  '511': ['major_power_line', 'Större kraftledning']
+});
+
+export const INFRASTRUCTURE_ATTRIBUTION = 'Järnvägar och kraftledningar © OpenStreetMap contributors';
+
+export function infrastructureMetaText(data, generatedStatus, centralLayerLabel) {
+  if (!data) return 'Inte hämtade';
+  const counts = {rail: 0, power: 0, supports: 0, edited: 0, excluded: 0};
+  data.features.forEach(feature => {
+    const properties = feature.properties || {};
+    if (properties.featureKind === 'support') counts.supports++;
+    else if (String(properties.isomSymbol) === '509') counts.rail++;
+    else counts.power++;
+    if (generatedStatus(feature) === 'edited') counts.edited++;
+    if (generatedStatus(feature) === 'excluded') counts.excluded++;
+  });
+  return `${counts.rail} järnvägar · ${counts.power} ledningar · ${counts.supports} stolpar/master${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
+}
+
+export function createGeneratedInfrastructureLayer({Leaflet, map, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement}) {
+  let layer = null;
+  let attributionVisible = false;
+
+  function outerStyle(feature) {
+    const symbol = String(feature.properties?.isomSymbol || '510');
+    if (generatedStatus(feature) === 'excluded') return excludedStyle(symbolScale());
+    return {...renderer.lineStyles(symbol, feature.properties || {}, normContext()).outer, className: generatedClass(feature, `osm-infrastructure infrastructure-${symbol}`)};
+  }
+
+  function innerStyle(feature) {
+    const symbol = String(feature.properties?.isomSymbol);
+    return {...renderer.lineStyles(symbol, feature.properties || {}, normContext()).inner, className: `infrastructure-${symbol}-inner`};
+  }
+
+  function supportIcon(feature) {
+    const properties = feature.properties || {};
+    const symbol = String(properties.isomSymbol || '510');
+    const major = symbol === '511';
+    const definition = renderer.definition(symbol);
+    const context = normContext();
+    const unit = renderer.pixelsPerPaperMm(map, context.scale, context.mode);
+    const width = renderer.paperMm(definition.supportWidthMm, context.scale) * unit;
+    const stroke = renderer.paperMm(definition.supportStrokeMm, context.scale) * unit;
+    const size = Math.max(18, width + 8);
+    const angle = 90 - Number(properties.angleDegrees || 0);
+    return Leaflet.divIcon({className: 'infrastructure-support-icon', html: `<span class="${major ? 'major' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;transform:rotate(${angle}deg)"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
+  }
+
+  function popup(feature) {
+    const properties = feature.properties || {};
+    const symbol = String(properties.isomSymbol || '510');
+    const support = properties.featureKind === 'support';
+    const confidence = {high: 'hög', medium: 'medel', low: 'låg'};
+    const id = escapeHtml(feature.id);
+    const options = Object.entries(INFRASTRUCTURE_TYPES).map(([value, data]) => `<option value="${value}" ${symbol === value ? 'selected' : ''}>${value} ${data[1]}</option>`).join('');
+    const title = properties.name || INFRASTRUCTURE_TYPES[symbol]?.[1] || 'Tekniskt linjeobjekt';
+    return `<div class="generated-object-popup"><b>${escapeHtml(support ? (properties.supportType === 'tower' ? 'Kraftledningsmast' : 'Kraftledningsstolpe') : title)}</b><small>${isomClaim(symbol, feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))}</small><small>${support ? 'Exakt OSM-position' : `Klassificeringssäkerhet ${escapeHtml(confidence[properties.classificationConfidence] || 'okänd')}`} · ${escapeHtml(properties.sourceId || '')}</small>${support ? '' : `<select class="infrastructure-type-select" data-infrastructure-id="${id}">${options}</select><button type="button" data-infrastructure-review="change" data-infrastructure-id="${id}">Ändra typ</button>`}${generatedActionHtml('infrastructure', feature, {editable: !support})}</div>`;
+  }
+
+  function render() {
+    if (layer) map.removeLayer(layer);
+    layer = null;
+    if (attributionVisible) {
+      map.attributionControl.removeAttribution(INFRASTRUCTURE_ATTRIBUTION);
+      attributionVisible = false;
+    }
+    const data = getData();
+    if (!data || !isVisible()) return;
+    const lineFilter = feature => feature.properties?.featureKind === 'line' && featureIsSelected(feature);
+    const outer = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: lineFilter, style: outerStyle, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
+    const inner = Leaflet.geoJSON(data, {pane: 'infrastructurePane', interactive: false, filter: feature => lineFilter(feature) && ['509', '511'].includes(String(feature.properties?.isomSymbol)) && generatedStatus(feature) !== 'excluded', style: innerStyle});
+    const supports = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => feature.properties?.featureKind === 'support' && featureIsSelected(feature) && generatedStatus(feature) !== 'excluded', pointToLayer: (feature, latlng) => Leaflet.marker(latlng, {pane: 'infrastructurePane', icon: supportIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 300})});
+    layer = Leaflet.layerGroup([outer, inner, supports]).addTo(map);
+    map.attributionControl.addAttribution(INFRASTRUCTURE_ATTRIBUTION);
+    attributionVisible = true;
+  }
+
+  function refreshMeta() {
+    metaElement().textContent = infrastructureMetaText(getData(), generatedStatus, centralLayerLabel);
+  }
+
+  return {render, refreshMeta};
+}

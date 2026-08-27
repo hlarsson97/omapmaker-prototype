@@ -9,6 +9,7 @@ import {createFieldMap} from '../js/map_setup.mjs';
 import {BUILDING_ATTRIBUTION, buildingMetaText, createGeneratedBuildingLayer} from '../js/generated_buildings.mjs';
 import {PAVED_AREA_ATTRIBUTION, createGeneratedPavedAreaLayer, pavedAreaMetaText} from '../js/generated_paved_areas.mjs';
 import {ROAD_ATTRIBUTION, ROAD_TYPES, createGeneratedRoadLayer, roadMetaText} from '../js/generated_roads.mjs';
+import {INFRASTRUCTURE_ATTRIBUTION, INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer, infrastructureMetaText} from '../js/generated_infrastructure.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 
@@ -132,6 +133,56 @@ assert.equal(roadGeoJsonOptions[1].pane, 'foundationPane');
 assert.equal(roadGeoJsonOptions[1].interactive, false);
 assert.equal(roadGeoJsonOptions[1].filter({properties: {isomSymbol: '502'}}), true);
 assert.deepEqual(roadEvents.at(-1), ['addAttribution', ROAD_ATTRIBUTION]);
+assert.equal(INFRASTRUCTURE_TYPES['509'][1], 'Järnväg');
+assert.equal(infrastructureMetaText({features: [{properties: {featureKind: 'line', isomSymbol: '509'}}, {properties: {featureKind: 'line', isomSymbol: '510'}}, {properties: {featureKind: 'support'}}]}, () => 'source', () => ''), '1 järnvägar · 1 ledningar · 1 stolpar/master');
+
+const infrastructureEvents = [];
+const infrastructureOptions = [];
+const infrastructureMap = {
+  removeLayer: layer => infrastructureEvents.push(['remove', layer]),
+  attributionControl: {
+    addAttribution: text => infrastructureEvents.push(['addAttribution', text]),
+    removeAttribution: text => infrastructureEvents.push(['removeAttribution', text])
+  }
+};
+const infrastructureView = createGeneratedInfrastructureLayer({
+  Leaflet: {
+    geoJSON: (_data, options) => { infrastructureOptions.push(options); return {options}; },
+    layerGroup: layers => ({addTo: target => { infrastructureEvents.push(['addLayerGroup', layers.length, target]); return 'infrastructure-layer'; }}),
+    divIcon: options => options,
+    marker: (latlng, options) => ({latlng, options})
+  },
+  map: infrastructureMap,
+  renderer: {
+    lineStyles: () => ({outer: {color: '#000'}, inner: {color: '#fff'}}),
+    definition: () => ({supportWidthMm: 1, supportStrokeMm: 0.2}),
+    pixelsPerPaperMm: () => 4,
+    paperMm: value => value
+  },
+  getData: () => ({features: []}),
+  isVisible: () => true,
+  featureIsSelected: () => true,
+  generatedStatus: () => 'source',
+  generatedStatusLabel: () => 'Automatiskt kartunderlag',
+  generatedClass: (_feature, base) => `${base} generated-object source`,
+  generatedActionHtml: () => '<div class="generated-actions"></div>',
+  excludedStyle: () => ({}),
+  symbolScale: () => 1,
+  normContext: () => ({scale: 10000, mode: 'print'}),
+  isomClaim: () => 'ISOM 509',
+  escapeHtml,
+  centralLayerLabel: () => '',
+  metaElement: () => ({textContent: ''})
+});
+infrastructureView.render();
+assert.equal(infrastructureOptions.length, 3);
+assert(infrastructureOptions.every(options => options.pane === 'infrastructurePane'));
+assert.equal(infrastructureOptions[1].interactive, false);
+assert.equal(infrastructureOptions[1].filter({properties: {featureKind: 'line', isomSymbol: '509'}}), true);
+const supportMarker = infrastructureOptions[2].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
+assert.equal(supportMarker.options.pane, 'infrastructurePane');
+assert(supportMarker.options.icon.html.includes('rotate(60deg)'));
+assert.deepEqual(infrastructureEvents.at(-1), ['addAttribution', INFRASTRUCTURE_ATTRIBUTION]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 8, printScale: 15000, symbolRegistryVersion: 6});
 
 const apiCalls = [];
