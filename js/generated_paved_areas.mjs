@@ -1,3 +1,5 @@
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+
 export const PAVED_AREA_ATTRIBUTION = 'Hårdgjorda ytor © OpenStreetMap contributors';
 
 export function pavedAreaMetaText(data, generatedStatus, centralLayerLabel) {
@@ -18,7 +20,9 @@ export function createGeneratedPavedAreaLayer({Leaflet, map, getData, isVisible,
 
   function popup(feature) {
     const properties = feature.properties || {};
-    return `<div class="paved-area-popup generated-object-popup"><b>${escapeHtml(properties.name || 'Hårdgjord yta')}</b><small>${isomClaim('501', feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))}</small><small>${Math.round(properties.areaSquareMetres || 0)} m²${properties.surface ? ` · ${escapeHtml(properties.surface)}` : ''} · ${escapeHtml(properties.sourceId || '')}</small>${generatedActionHtml('paved-areas', feature)}</div>`;
+    const object = generatedMapObject('paved-areas', feature, {symbol: '501', statusLabel: generatedStatusLabel(feature)});
+    const details = [`${Math.round(properties.areaSquareMetres || 0)} m²`, properties.surface];
+    return mapObjectPopup(object, {title: properties.name || 'Hårdgjord yta', isomClaim, escapeHtml, secondaryDetails: [details.filter(Boolean).join(' · ')], actionsHtml: generatedActionHtml('paved-areas', feature), className: 'paved-area-popup'});
   }
 
   function render() {

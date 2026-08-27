@@ -1,3 +1,5 @@
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+
 export const LAND_COVER_ATTRIBUTION = 'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors';
 
 export const WATER_SYMBOL_CLASSES = Object.freeze({'301': 'water_301', '302': 'water_302', '303': 'water_303', '304': 'watercourse_304', '305': 'watercourse_305', '306': 'watercourse_306', '307': 'marsh_307', '308': 'marsh_308', '309': 'marsh_309', '310': 'marsh_310', '311': 'water_311', '312': 'water_312', '313': 'water_313'});
@@ -62,7 +64,9 @@ export function createGeneratedLandCoverLayer({Leaflet, map, renderer, getData, 
     const title = properties.name || (water ? WATER_SYMBOL_NAMES[String(properties.isomSymbol)] : names[properties.mapClass]) || 'Markyta';
     const id = escapeHtml(feature.id);
     const select = water ? `<select class="land-cover-type-select" data-land-cover-id="${id}">${symbolOptions(feature).map(symbol => `<option value="${symbol}" ${String(properties.isomSymbol) === symbol ? 'selected' : ''}>${symbol} ${WATER_SYMBOL_NAMES[symbol]}</option>`).join('')}</select><button type="button" data-land-cover-review="change" data-land-cover-id="${id}">Ändra typ</button>` : '';
-    return `<div class="land-cover-popup generated-object-popup"><b>${escapeHtml(title)}</b><small>${isomClaim(properties.isomSymbol, feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))}${properties.reviewRequired ? ` · säkerhet ${escapeHtml(confidence[properties.classificationConfidence] || 'okänd')}` : ''}</small><small>OSM: ${escapeHtml(properties.boundaryEvidence || properties.building || properties.barrier || properties.natural || properties.wetland || properties.water || properties.waterway || properties.landuse || 'okänd typ')} · ${escapeHtml(properties.sourceId || '')}</small>${select}${generatedActionHtml('land-cover', feature)}</div>`;
+    const object = generatedMapObject('land-cover', feature, {statusLabel: generatedStatusLabel(feature)});
+    const osmType = properties.boundaryEvidence || properties.building || properties.barrier || properties.natural || properties.wetland || properties.water || properties.waterway || properties.landuse || 'okänd typ';
+    return mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDetails: properties.reviewRequired ? [`säkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`] : [], secondaryDetails: [`OSM-typ: ${osmType}`], controlsHtml: select, actionsHtml: generatedActionHtml('land-cover', feature), className: 'land-cover-popup'});
   }
 
   function installPatterns() {

@@ -1,3 +1,5 @@
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+
 export const ROAD_TYPES = Object.freeze({
   '502': ['wide_road', 'Bred väg'],
   '503': ['road', 'Väg'],
@@ -36,7 +38,9 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
     const reasons = {'explicit-width': 'uppmätt bredd', 'estimated-width': 'uppskattad bredd', 'inferred-lanes': 'antal körfält', 'motorway-system': 'motorvägssystem', 'junction-inherited': 'rondellens vägklass', 'dual-carriageway': 'delad körbana', 'paired-oneway': 'parade enkelriktade körbanor', 'road-class': 'OSM-vägklass', 'firm-vehicle-road': 'fast fordonsväg', 'vehicle-track': 'fordonsspår', 'trail-visibility': 'stigens synlighet', 'path-width-or-visibility': 'stigens bredd eller synlighet', 'path-class': 'OSM-stigtyp', 'unknown-highway': 'okänd vägtyp'};
     const id = escapeHtml(feature.id);
     const options = Object.entries(ROAD_TYPES).map(([symbol, data]) => `<option value="${symbol}" ${String(properties.isomSymbol) === symbol ? 'selected' : ''}>${symbol} ${data[1]}</option>`).join('');
-    return `<div class="road-popup generated-object-popup"><b>${escapeHtml(properties.name || ROAD_TYPES[String(properties.isomSymbol)]?.[1] || 'Väg eller stig')}</b><small>${isomClaim(properties.isomSymbol, feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))} · säkerhet ${escapeHtml(confidence[properties.classificationConfidence] || 'okänd')}</small><small>${escapeHtml(reasons[properties.classificationReason] || properties.classificationReason || 'okänd regel')} · ${escapeHtml(properties.sourceId)}</small><select class="road-type-select" data-road-id="${id}">${options}</select><button type="button" data-road-review="change" data-road-id="${id}">Ändra typ</button>${generatedActionHtml('roads', feature)}</div>`;
+    const object = generatedMapObject('roads', feature, {statusLabel: generatedStatusLabel(feature)});
+    const controlsHtml = `<select class="road-type-select" data-road-id="${id}">${options}</select><button type="button" data-road-review="change" data-road-id="${id}">Ändra typ</button>`;
+    return mapObjectPopup(object, {title: properties.name || ROAD_TYPES[String(properties.isomSymbol)]?.[1] || 'Väg eller stig', isomClaim, escapeHtml, primaryDetails: [`säkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`], secondaryDetails: [reasons[properties.classificationReason] || properties.classificationReason || 'okänd regel'], controlsHtml, actionsHtml: generatedActionHtml('roads', feature), className: 'road-popup'});
   }
 
   function render() {

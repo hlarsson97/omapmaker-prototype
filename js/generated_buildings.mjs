@@ -1,3 +1,5 @@
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+
 export const BUILDING_ATTRIBUTION = 'Byggnader © OpenStreetMap contributors';
 
 export function buildingMetaText(data, generatedStatus, centralLayerLabel) {
@@ -18,7 +20,8 @@ export function createGeneratedBuildingLayer({Leaflet, map, getData, isVisible, 
 
   function popup(feature) {
     const properties = feature.properties || {};
-    return `<div class="building-popup generated-object-popup"><b>${escapeHtml(properties.name || 'Byggnad')}</b><small>${isomClaim('521', feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))}</small><small>OpenStreetMap · ${escapeHtml(properties.sourceId || '')}</small>${generatedActionHtml('buildings', feature)}</div>`;
+    const object = generatedMapObject('buildings', feature, {symbol: '521', statusLabel: generatedStatusLabel(feature)});
+    return mapObjectPopup(object, {title: properties.name || 'Byggnad', isomClaim, escapeHtml, actionsHtml: generatedActionHtml('buildings', feature), className: 'building-popup'});
   }
 
   function render() {

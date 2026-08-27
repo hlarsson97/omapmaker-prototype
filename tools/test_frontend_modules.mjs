@@ -13,6 +13,8 @@ import {INFRASTRUCTURE_ATTRIBUTION, INFRASTRUCTURE_TYPES, createGeneratedInfrast
 import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature, landCoverMetaText} from '../js/generated_land_cover.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
+import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
+import {generatedMapObject, localMapObject, mapObjectPopup, mapObjectSource} from '../js/map_objects.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -20,6 +22,24 @@ assert.equal(escapeHtml('<sten & "stig">'), '&lt;sten &amp; &quot;stig&quot;&gt;
 assert.deepEqual(cloneJson({coordinates: [18.1, 59.2]}), {coordinates: [18.1, 59.2]});
 assert.equal(formatBytes(205 * 1024 * 1024), '205 MB');
 assert(uuidPattern.test('5eda656c-ddba-43d3-b124-72184e7f91fc'));
+assert.equal(localObjectSourceLabel('gps'), 'GPS-inmätt');
+assert.equal(localObjectSourceLabel('manual'), 'Manuellt skapad');
+const localPopup = localObjectPopup('point', {id: 'local-1', objectType: 'boulder', symbol: '204', source: 'gps', syncStatus: 'local', accuracy: 3.6}, {name: () => 'Sten', isomClaim: () => 'ISOM 204', escapeHtml});
+assert.match(localPopup, /Sten/);
+assert.match(localPopup, /GPS-inmätt/);
+assert.match(localPopup, /Noggrannhet ±4 m/);
+assert.match(localPopup, /data-local-edit="local-1"/);
+assert.deepEqual(mapObjectSource('osm', 'way/42'), {type: 'osm', label: 'OpenStreetMap', id: 'way/42'});
+const adaptedLocal = localMapObject('point', {id: 'local-2', objectType: 'boulder', source: 'gps', syncStatus: 'local', modifiedBy: 'manual'}, '204');
+assert.equal(adaptedLocal.geometryType, 'Point');
+assert.equal(adaptedLocal.source.type, 'gps');
+assert.equal(adaptedLocal.modifiedBy, 'manual');
+const adaptedGenerated = generatedMapObject('buildings', {id: 'building/2', properties: {sourceId: 'way/2'}, geometry: {type: 'Polygon'}}, {symbol: '521', statusLabel: 'Automatiskt kartunderlag'});
+assert.equal(adaptedGenerated.source.type, 'osm');
+assert.equal(adaptedGenerated.editable, true);
+const sharedPopup = mapObjectPopup(adaptedGenerated, {title: '<Byggnad>', isomClaim: () => 'ISOM 521', escapeHtml});
+assert.match(sharedPopup, /&lt;Byggnad&gt;/);
+assert.match(sharedPopup, /OpenStreetMap · way\/2/);
 assert.equal(typeof createIndexedDbStore, 'function');
 assert.equal(buildingMetaText({features: [{properties: {}}, {properties: {status: 'locally-edited'}}, {properties: {status: 'locally-excluded'}}]}, feature => feature.properties.status === 'locally-edited' ? 'edited' : feature.properties.status === 'locally-excluded' ? 'excluded' : 'source', () => ' · server v2'), '3 automatiska · 1 ändrade · 1 uteslutna · server v2');
 

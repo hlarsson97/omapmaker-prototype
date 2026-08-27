@@ -1,3 +1,5 @@
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+
 export const INFRASTRUCTURE_TYPES = Object.freeze({
   '509': ['railway', 'Järnväg'],
   '510': ['power_line', 'Kraftledning eller linbana'],
@@ -57,7 +59,9 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, renderer, getD
     const id = escapeHtml(feature.id);
     const options = Object.entries(INFRASTRUCTURE_TYPES).map(([value, data]) => `<option value="${value}" ${symbol === value ? 'selected' : ''}>${value} ${data[1]}</option>`).join('');
     const title = properties.name || INFRASTRUCTURE_TYPES[symbol]?.[1] || 'Tekniskt linjeobjekt';
-    return `<div class="generated-object-popup"><b>${escapeHtml(support ? (properties.supportType === 'tower' ? 'Kraftledningsmast' : 'Kraftledningsstolpe') : title)}</b><small>${isomClaim(symbol, feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))}</small><small>${support ? 'Exakt OSM-position' : `Klassificeringssäkerhet ${escapeHtml(confidence[properties.classificationConfidence] || 'okänd')}`} · ${escapeHtml(properties.sourceId || '')}</small>${support ? '' : `<select class="infrastructure-type-select" data-infrastructure-id="${id}">${options}</select><button type="button" data-infrastructure-review="change" data-infrastructure-id="${id}">Ändra typ</button>`}${generatedActionHtml('infrastructure', feature, {editable: !support})}</div>`;
+    const object = generatedMapObject('infrastructure', feature, {symbol, statusLabel: generatedStatusLabel(feature), editable: !support});
+    const controlsHtml = support ? '' : `<select class="infrastructure-type-select" data-infrastructure-id="${id}">${options}</select><button type="button" data-infrastructure-review="change" data-infrastructure-id="${id}">Ändra typ</button>`;
+    return mapObjectPopup(object, {title: support ? (properties.supportType === 'tower' ? 'Kraftledningsmast' : 'Kraftledningsstolpe') : title, isomClaim, escapeHtml, secondaryDetails: [support ? 'Exakt OSM-position' : `Klassificeringssäkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`], controlsHtml, actionsHtml: generatedActionHtml('infrastructure', feature, {editable: !support})});
   }
 
   function render() {

@@ -257,6 +257,7 @@ body.print-layout-active #printAttribution{display:block!important;position:abso
 .generated-object-popup button[data-generated-action="exclude"]{background:#f4e7e5;color:#8a302b}
 .generated-object-popup button[data-generated-action="reset"]{background:#edf0ed;color:#526159}
 .generated-object-popup button[data-generated-edit]{grid-column:1/-1;background:#286fc0;color:#fff}
+.local-object-popup button[data-local-edit]{grid-column:1/-1;background:#286fc0;color:#fff}
 .generated-object-popup button:disabled{opacity:.45}
 .generated-object-popup select{width:100%;margin-top:9px;border:1px solid #d5ddd6;border-radius:8px;padding:8px;background:#fff;font-size:11px}
 .generated-object.excluded{stroke:#a13d38!important;fill:#fff!important;stroke-dasharray:5 4;opacity:.42}
