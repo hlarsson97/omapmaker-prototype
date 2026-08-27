@@ -6,7 +6,7 @@ OMapMaker består av en webbaserad prototyp och en Python-backend. Målet är at
 
 Viktiga delar av projektet:
 
-- Frontend: repositoryts rot, främst `field.html`, `v6.js` och CSS-filerna
+- Frontend: repositoryts rot, främst `field.html`, `app.mjs`, `js/` och `styles.css`
 - Backend: `tools/height_server.py`
 - Generering av höjdkurvor:
   - `tools/generate_contours.py`

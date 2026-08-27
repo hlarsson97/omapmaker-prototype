@@ -1,4 +1,8 @@
-const $ = s => document.querySelector(s);
+import {$, cloneJson, escapeHtml, formatBytes, jsonResponse, uuidPattern, wait} from './js/utils.mjs';
+import {applyGenerationProfile, generationSummary, readGenerationSettings} from './js/generation_settings.mjs';
+import {createIndexedDbStore} from './js/indexeddb_store.mjs';
+import {createFieldMap} from './js/map_setup.mjs';
+
 const symbolRegistry=window.OMAPMAKER_ISOM_REGISTRY;
 if(!symbolRegistry?.registryVersion)throw new Error('OMapMakers symbolregister kunde inte läsas');
 const normRenderer=window.OMAPMAKER_ISOM_RENDERER;
@@ -12,7 +16,6 @@ const saved = JSON.parse(localStorage.getItem('omapmaker.global') || JSON.string
 const state = {observations:saved.observations||[],tracks:saved.tracks||[],areas:saved.areas||[],symbolRegistryVersion};
 const prefs = {...defaults,...JSON.parse(localStorage.getItem('omapmaker.prefs')||'{}')};
 const aliases = symbolRegistry.aliases||{};
-const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 for(const cat of ['point','line','area']){
   prefs[cat]=aliases[prefs[cat]]||prefs[cat];
   if(!catalog[cat].some(x=>x[0]===prefs[cat]))prefs[cat]=defaults[cat];
@@ -37,45 +40,13 @@ if(workspace&&workspace.showNorthLines===undefined)workspace.showNorthLines=true
 const queryCenter=urlParams.has('lat')&&urlParams.has('lng')?{lat:Number(urlParams.get('lat')),lng:Number(urlParams.get('lng'))}:null;
 const lastCenterKey=workspace?`omapmaker.lastCenter.workspace.${workspace.id}`:'omapmaker.lastCenter.global';
 const initialCenter=workspace?.center||queryCenter||JSON.parse(localStorage.getItem(lastCenterKey)||localStorage.getItem('omapmaker.lastCenter')||'{"lat":59.3293,"lng":18.0686}');
-const map = L.map('map',{zoomControl:false}).setView([initialCenter.lat,initialCenter.lng],workspace?14:15);
-L.control.zoom({position:'bottomright'}).addTo(map);
-map.createPane('basemapPane');map.getPane('basemapPane').style.zIndex=200;
-map.createPane('landCoverPane');map.getPane('landCoverPane').style.zIndex=300;
-map.createPane('pavedAreaPane');map.getPane('pavedAreaPane').style.zIndex=310;
-map.createPane('restrictedAreaPane');map.getPane('restrictedAreaPane').style.zIndex=320;
-map.createPane('contourPane');map.getPane('contourPane').style.zIndex=340;map.getPane('contourPane').style.pointerEvents='none';
-map.createPane('northLinePane');map.getPane('northLinePane').style.zIndex=360;map.getPane('northLinePane').style.pointerEvents='none';
-map.createPane('foundationPane');map.getPane('foundationPane').style.zIndex=380;
-map.createPane('infrastructurePane');map.getPane('infrastructurePane').style.zIndex=385;
-map.createPane('buildingPane');map.getPane('buildingPane').style.zIndex=390;
-map.createPane('evidencePane');map.getPane('evidencePane').style.zIndex=425;map.getPane('evidencePane').style.pointerEvents='none';
-map.createPane('globalObjectPane');map.getPane('globalObjectPane').style.zIndex=440;
-map.createPane('fieldPane');map.getPane('fieldPane').style.zIndex=450;
-map.createPane('gpsPane');map.getPane('gpsPane').style.zIndex=650;map.getPane('gpsPane').style.pointerEvents='none';
-const baseMaps={osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{pane:'basemapPane',maxZoom:20,attribution:'© OpenStreetMap'}),aerial:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{pane:'basemapPane',maxZoom:19,attribution:'Imagery © Esri'}),terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{pane:'basemapPane',maxZoom:17,attribution:'© OpenStreetMap · SRTM | OpenTopoMap'}),orientation:null};
-const contourReference=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{pane:'contourPane',className:'contour-reference',opacity:.42,maxZoom:17,attribution:'Höjdkurvor © OpenTopoMap · SRTM'});
+const {map,baseMaps,contourReference}=createFieldMap({Leaflet:L,initialCenter,hasWorkspace:Boolean(workspace)});
 let activeBase=null;
 const layerPrefs={basemap:'osm',objects:true,globalObjects:true,evidence:false,contours:false,projectContours:true,generatedSurfaces:true,generatedLines:true,landCover:true,buildings:true,pavedAreas:true,roads:true,infrastructure:true,opacity:100,...JSON.parse(localStorage.getItem('omapmaker.layers')||'{}')};if(layerPrefs.basemap==='none')layerPrefs.basemap='orientation';
 function saveLayerPrefs(){localStorage.setItem('omapmaker.layers',JSON.stringify(layerPrefs))}
 const generationSettingsKey=`omapmaker.generation.${workspace?.id||'global'}`;
-const generationProfileLabels={quick:'Snabbt utkast',standard:'Standard',detailed:'Detaljerad',custom:'Eget urval'};
-const generationPresets={
-  surface:{
-    quick:{buildings:true,water:true,land:true,paved:false,restricted:true,restrictedMode:'cautious'},
-    standard:{buildings:true,water:true,land:true,paved:true,restricted:true,restrictedMode:'balanced'},
-    detailed:{buildings:true,water:true,land:true,paved:true,restricted:true,restrictedMode:'detailed'}
-  },
-  line:{
-    quick:{roads:true,paths:true,faintPaths:false,watercourses:false,railways:false,disusedRailways:false,powerLines:false,aerialways:false},
-    standard:{roads:true,paths:true,faintPaths:false,watercourses:true,railways:true,disusedRailways:false,powerLines:true,aerialways:false},
-    detailed:{roads:true,paths:true,faintPaths:true,watercourses:true,railways:true,disusedRailways:true,powerLines:true,aerialways:true}
-  }
-};
-function readGenerationSettings(){let saved={};try{saved=JSON.parse(localStorage.getItem(generationSettingsKey)||'{}')}catch{}const surfaceProfile=generationPresets.surface[saved.surface?.profile]?saved.surface.profile:'standard',lineProfile=generationPresets.line[saved.line?.profile]?saved.line.profile:'standard';return{surface:{profile:surfaceProfile,...generationPresets.surface[surfaceProfile],...(saved.surface||{})},line:{profile:lineProfile,...generationPresets.line[lineProfile],...(saved.line||{})}}}
-let generationSettings=readGenerationSettings();
+let generationSettings=readGenerationSettings(localStorage,generationSettingsKey);
 function saveGenerationSettings(){localStorage.setItem(generationSettingsKey,JSON.stringify(generationSettings))}
-function applyGenerationProfile(category,profile){generationSettings[category]={profile,...generationPresets[category][profile]}}
-function generationSummary(category){const settings=generationSettings[category],count=category==='surface'?['buildings','water','land','paved','restricted'].filter(key=>settings[key]).length:['roads','paths','faintPaths','watercourses','railways','disusedRailways','powerLines','aerialways'].filter(key=>settings[key]).length;return `${generationProfileLabels[settings.profile]||'Eget urval'} · ${count} kategorier`}
 function setBase(id){const selected=id==='none'?'orientation':id;if(activeBase)map.removeLayer(activeBase);activeBase=baseMaps[selected]||null;if(activeBase)activeBase.addTo(map);layerPrefs.basemap=selected;saveLayerPrefs()}
 setBase(layerPrefs.basemap);
 let workspaceBounds=null,workspaceBoundary=null;
@@ -95,17 +66,15 @@ renderMagneticNorthLines();
 map.on('moveend',()=>{const c=map.getCenter(),value=JSON.stringify({lat:c.lat,lng:c.lng});localStorage.setItem(lastCenterKey,value);if(!workspace)localStorage.setItem('omapmaker.lastCenter',value)});
 const contourStorageKey=`omapmaker.contours.${workspace?.id||'global'}`;
 let projectContourData=JSON.parse(localStorage.getItem(contourStorageKey)||'null'),projectContourLayer=null;
-function contourDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open('omapmaker-mapdata',1);request.onupgradeneeded=()=>request.result.createObjectStore('contours');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-async function storeContourData(data){const db=await contourDb();await new Promise((resolve,reject)=>{const transaction=db.transaction('contours','readwrite');transaction.objectStore('contours').put(data,contourStorageKey);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});db.close();localStorage.removeItem(contourStorageKey)}
-async function loadStoredContours(){const db=await contourDb();const data=await new Promise((resolve,reject)=>{const request=db.transaction('contours').objectStore('contours').get(contourStorageKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();return data}
-async function deleteStoredContours(){const db=await contourDb();await new Promise((resolve,reject)=>{const transaction=db.transaction('contours','readwrite');transaction.objectStore('contours').delete(contourStorageKey);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});db.close();localStorage.removeItem(contourStorageKey)}
+const mapDataStore=createIndexedDbStore({databaseName:'omapmaker-mapdata',version:1,storeName:'contours'});
+async function storeContourData(data){await mapDataStore.put(contourStorageKey,data);localStorage.removeItem(contourStorageKey)}
+async function loadStoredContours(){return await mapDataStore.get(contourStorageKey)}
+async function deleteStoredContours(){await mapDataStore.delete(contourStorageKey);localStorage.removeItem(contourStorageKey)}
 const buildingStorageKey=`omapmaker.buildings.${workspace?.id||'global'}`;const osmBuildingAttribution='Byggnader © OpenStreetMap contributors';let osmBuildingData=null,osmBuildingLayer=null,osmBuildingAttributionVisible=false;
-async function storeBuildings(data){const db=await contourDb();await new Promise((resolve,reject)=>{const transaction=db.transaction('contours','readwrite');transaction.objectStore('contours').put(data,buildingStorageKey);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});db.close()}
-async function loadBuildings(){const db=await contourDb();const data=await new Promise((resolve,reject)=>{const request=db.transaction('contours').objectStore('contours').get(buildingStorageKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();return data}
+async function storeBuildings(data){await mapDataStore.put(buildingStorageKey,data)}
+async function loadBuildings(){return await mapDataStore.get(buildingStorageKey)}
 function normContext(){return{map,scale:Number(workspace?.scale)||10000,mode:workspace?.symbolDisplayMode||'digital'}}
 function symbolScale(){return normRenderer.pixelsPerPaperMm(map,Number(workspace?.scale)||10000,workspace?.symbolDisplayMode||'digital')/(96/25.4)}
-function escapeHtml(value){return String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]))}
-function cloneJson(value){return value==null?value:JSON.parse(JSON.stringify(value))}
 function generatedStatus(feature){const status=feature.properties?.status||'automatic-unverified';if(status==='locally-rejected'||status==='locally-excluded')return'excluded';if(status==='locally-edited')return'edited';return'source'}
 function generatedStatusLabel(feature){return{source:'Automatiskt kartunderlag',edited:'Ändrat lokalt',excluded:'Uteslutet lokalt'}[generatedStatus(feature)]}
 function generatedClass(feature,base){return`${base} generated-object ${generatedStatus(feature)}`}
@@ -122,8 +91,8 @@ function centralLayerLabel(data){const revision=data?.properties?.centralLayerRe
 function refreshBuildingMeta(){if(!osmBuildingData)return void ($('#osmBuildingsMeta').textContent='Inte hämtade');const edited=osmBuildingData.features.filter(feature=>generatedStatus(feature)==='edited').length,excluded=osmBuildingData.features.filter(feature=>generatedStatus(feature)==='excluded').length;$('#osmBuildingsMeta').textContent=`${osmBuildingData.features.length} automatiska${edited?` · ${edited} ändrade`:''}${excluded?` · ${excluded} uteslutna`:''}${centralLayerLabel(osmBuildingData)}`}
 function mergeBuildingReviews(next,previous){return applyGeneratedOverrides(next,previous)}
 const landCoverStorageKey=`omapmaker.land-cover.v2.${workspace?.id||'global'}`;const osmLandCoverAttribution='Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors';let osmLandCoverData=null,osmLandCoverLayer=null,osmLandCoverAttributionVisible=false;
-async function storeLandCover(data){const db=await contourDb();await new Promise((resolve,reject)=>{const transaction=db.transaction('contours','readwrite');transaction.objectStore('contours').put(data,landCoverStorageKey);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});db.close()}
-async function loadLandCover(){const db=await contourDb();const data=await new Promise((resolve,reject)=>{const request=db.transaction('contours').objectStore('contours').get(landCoverStorageKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();return data}
+async function storeLandCover(data){await mapDataStore.put(landCoverStorageKey,data)}
+async function loadLandCover(){return await mapDataStore.get(landCoverStorageKey)}
 const waterSymbolClasses={'301':'water_301','302':'water_302','303':'water_303','304':'watercourse_304','305':'watercourse_305','306':'watercourse_306','307':'marsh_307','308':'marsh_308','309':'marsh_309','310':'marsh_310','311':'water_311','312':'water_312','313':'water_313'};
 const waterSymbolNames={'301':'Ej passerbar vattenyta','302':'Grund vattenyta','303':'Vattenhål','304':'Passerbart vattendrag','305':'Mindre vattendrag','306':'Mindre eller periodiskt vattenflöde','307':'Ej passerbar sankmark','308':'Sankmark','309':'Smal sankmark','310':'Otydlig sankmark','311':'Brunn, fontän eller vattentank','312':'Källa','313':'Framträdande vattenobjekt'};
 function landCoverStatus(feature){return feature.properties?.status||'automatic-unverified'}
@@ -143,8 +112,8 @@ function refreshLandCoverMeta(){if(!osmLandCoverData)return void ($('#osmLandCov
 function mergeLandCoverReviews(next,previous){return applyGeneratedOverrides(next,previous,['isomSymbol','mapClass'])}
 document.addEventListener('click',async event=>{const button=event.target.closest?.('[data-land-cover-review="change"]');if(!button||!osmLandCoverData)return;const feature=osmLandCoverData.features.find(item=>String(item.id)===button.dataset.landCoverId);if(!feature)return;const select=document.querySelector(`.land-cover-type-select[data-land-cover-id="${CSS.escape(String(feature.id))}"]`),symbol=select?.value;if(!waterSymbolClasses[symbol])return;const p=feature.properties;if(!p.originalGeometry)p.originalGeometry=cloneJson(feature.geometry);p.isomSymbol=symbol;p.mapClass=waterSymbolClasses[symbol];p.status='locally-edited';p.editedAt=new Date().toISOString();await storeLandCover(osmLandCoverData);map.closePopup();renderLandCover();refreshLandCoverMeta();toast('Vattentypen ändrad lokalt')});
 const pavedAreaStorageKey=`omapmaker.paved-areas.v1.${workspace?.id||'global'}`;const osmPavedAreaAttribution='Hårdgjorda ytor © OpenStreetMap contributors';let osmPavedAreaData=null,osmPavedAreaLayer=null,osmPavedAreaAttributionVisible=false;
-async function storePavedAreas(data){const db=await contourDb();await new Promise((resolve,reject)=>{const transaction=db.transaction('contours','readwrite');transaction.objectStore('contours').put(data,pavedAreaStorageKey);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});db.close()}
-async function loadPavedAreas(){const db=await contourDb();const data=await new Promise((resolve,reject)=>{const request=db.transaction('contours').objectStore('contours').get(pavedAreaStorageKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();return data}
+async function storePavedAreas(data){await mapDataStore.put(pavedAreaStorageKey,data)}
+async function loadPavedAreas(){return await mapDataStore.get(pavedAreaStorageKey)}
 function pavedAreaStatus(feature){return feature.properties?.status||'automatic-unverified'}
 function pavedAreaStyle(feature){if(generatedStatus(feature)==='excluded')return excludedStyle(Math.max(1,symbolScale()));return{...isomAreaStyle('501',feature.properties),className:generatedClass(feature,'osm-paved-area')}}
 function pavedAreaPopup(feature){const p=feature.properties||{};return `<div class="paved-area-popup generated-object-popup"><b>${escapeHtml(p.name||'Hårdgjord yta')}</b><small>${isomClaim('501',feature.geometry?.type)} · ${escapeHtml(generatedStatusLabel(feature))}</small><small>${Math.round(p.areaSquareMetres||0)} m²${p.surface?` · ${escapeHtml(p.surface)}`:''} · ${escapeHtml(p.sourceId||'')}</small>${generatedActionHtml('paved-areas',feature)}</div>`}
@@ -153,8 +122,8 @@ function refreshPavedAreaMeta(){if(!osmPavedAreaData)return void ($('#osmPavedAr
 function mergePavedAreaReviews(next,previous){return applyGeneratedOverrides(next,previous)}
 const roadTypes={'502':['wide_road','Bred väg'],'503':['road','Väg'],'504':['vehicle_track','Fordonsstig'],'505':['wide_path','Bred stig'],'506':['path','Stig'],'507':['faint_path','Otydlig stig']};
 const roadStorageKey=`omapmaker.roads.v2.${workspace?.id||'global'}`;const osmRoadAttribution='Vägar © OpenStreetMap contributors';let osmRoadData=null,osmRoadLayer=null,osmRoadAttributionVisible=false;
-async function storeRoads(data){const db=await contourDb();await new Promise((resolve,reject)=>{const transaction=db.transaction('contours','readwrite');transaction.objectStore('contours').put(data,roadStorageKey);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});db.close()}
-async function loadRoads(){const db=await contourDb();const data=await new Promise((resolve,reject)=>{const request=db.transaction('contours').objectStore('contours').get(roadStorageKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();return data}
+async function storeRoads(data){await mapDataStore.put(roadStorageKey,data)}
+async function loadRoads(){return await mapDataStore.get(roadStorageKey)}
 function roadStatus(feature){return feature.properties?.status||'automatic-unverified'}
 function roadIsVisible(feature){const p=feature.properties||{},path=['path','footway','cycleway','bridleway','pedestrian'].includes(String(p.highway||'')),selected=path?(String(p.isomSymbol)==='507'?generationSettings.line.faintPaths:generationSettings.line.paths):generationSettings.line.roads;return selected&&(!p.suppressed||generatedStatus(feature)!=='source')}
 function metresPerPixel(){return 156543.03392*Math.cos(map.getCenter().lat*Math.PI/180)/Math.pow(2,map.getZoom())}
@@ -166,8 +135,8 @@ function refreshRoadMeta(){if(!osmRoadData)return void ($('#osmRoadsMeta').textC
 function mergeRoadReviews(next,previous){return applyGeneratedOverrides(next,previous,['isomSymbol','omapType'])}
 const infrastructureTypes={'509':['railway','Järnväg'],'510':['power_line','Kraftledning eller linbana'],'511':['major_power_line','Större kraftledning']};
 const infrastructureStorageKey=`omapmaker.infrastructure.v1.${workspace?.id||'global'}`;const osmInfrastructureAttribution='Järnvägar och kraftledningar © OpenStreetMap contributors';let osmInfrastructureData=null,osmInfrastructureLayer=null,osmInfrastructureAttributionVisible=false;
-async function storeInfrastructure(data){const db=await contourDb();await new Promise((resolve,reject)=>{const transaction=db.transaction('contours','readwrite');transaction.objectStore('contours').put(data,infrastructureStorageKey);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});db.close()}
-async function loadInfrastructure(){const db=await contourDb();const data=await new Promise((resolve,reject)=>{const request=db.transaction('contours').objectStore('contours').get(infrastructureStorageKey);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();return data}
+async function storeInfrastructure(data){await mapDataStore.put(infrastructureStorageKey,data)}
+async function loadInfrastructure(){return await mapDataStore.get(infrastructureStorageKey)}
 function infrastructureFeatureSelected(feature){const p=feature.properties||{};if(p.featureKind==='support'||p.power)return generationSettings.line.powerLines;if(p.railway==='disused')return generationSettings.line.disusedRailways;if(p.railway)return generationSettings.line.railways;if(p.aerialway)return generationSettings.line.aerialways;return false}
 function infrastructureOuterStyle(feature){const symbol=String(feature.properties?.isomSymbol||'510'),scale=symbolScale();if(generatedStatus(feature)==='excluded')return excludedStyle(scale);return{...normRenderer.lineStyles(symbol,feature.properties||{},normContext()).outer,className:generatedClass(feature,`osm-infrastructure infrastructure-${symbol}`)}}
 function infrastructureInnerStyle(feature){const symbol=String(feature.properties?.isomSymbol),style=normRenderer.lineStyles(symbol,feature.properties||{},normContext()).inner;return{...style,className:`infrastructure-${symbol}-inner`}}
@@ -382,14 +351,14 @@ async function fetchGeneratedPavedAreas(){const bbox=workspaceBbox(),result=awai
 async function fetchGeneratedRoads(){const bbox=workspaceBbox(),result=await centralOrSource('roads','/api/roads',bbox),data=result.data;osmRoadData=mergeRoadReviews(data,osmRoadData);await storeRoads(osmRoadData);layerPrefs.roads=true;$('#osmRoadsVisible').checked=true;saveLayerPrefs();renderRoads();refreshRoadMeta();return`${data.features.length} vägar och stigar${result.reused?' återanvända':' hämtade'}`}
 async function fetchGeneratedInfrastructure(){const bbox=workspaceBbox(),result=await centralOrSource('infrastructure','/api/infrastructure',bbox),data=result.data;osmInfrastructureData=mergeInfrastructureReviews(data,osmInfrastructureData);await storeInfrastructure(osmInfrastructureData);layerPrefs.infrastructure=true;$('#osmInfrastructureVisible').checked=true;saveLayerPrefs();renderInfrastructure();refreshInfrastructureMeta();return`${data.features.length} järnvägs- och kraftledningsobjekt${result.reused?' återanvända':' hämtade'}`}
 function renderGenerationRecipe(){renderLandCover();renderBuildings();renderPavedAreas();renderRoads();renderInfrastructure()}
-function updateGenerationSummaries(){$('#surfaceGenerationSummary').textContent=generationSummary('surface');$('#lineGenerationSummary').textContent=generationSummary('line')}
+function updateGenerationSummaries(){$('#surfaceGenerationSummary').textContent=generationSummary(generationSettings,'surface');$('#lineGenerationSummary').textContent=generationSummary(generationSettings,'line')}
 const surfaceFields={buildings:'#surfaceBuildings',water:'#surfaceWater',land:'#surfaceLand',paved:'#surfacePaved',restricted:'#surfaceRestricted'},lineFields={roads:'#lineRoads',paths:'#linePaths',faintPaths:'#lineFaintPaths',watercourses:'#lineWatercourses',railways:'#lineRailways',disusedRailways:'#lineDisusedRailways',powerLines:'#linePowerLines',aerialways:'#lineAerialways'};
 function setProfileRadio(category,profile){document.querySelectorAll(`input[name=${category}Profile]`).forEach(input=>input.checked=input.value===profile)}
 function populateSurfaceGeneration(){const settings=generationSettings.surface;setProfileRadio('surface',settings.profile);Object.entries(surfaceFields).forEach(([key,id])=>$(id).checked=Boolean(settings[key]));$('#surfaceRestrictedMode').value=settings.restrictedMode||'balanced';$('#surfaceRestrictedMode').disabled=!settings.restricted;$('#surfaceGenerationStatus').textContent=''}
 function populateLineGeneration(){const settings=generationSettings.line;setProfileRadio('line',settings.profile);Object.entries(lineFields).forEach(([key,id])=>$(id).checked=Boolean(settings[key]));$('#lineGenerationStatus').textContent=''}
 function markGenerationCustom(category){generationSettings[category].profile='custom';setProfileRadio(category,'custom')}
-document.querySelectorAll('input[name=surfaceProfile]').forEach(input=>input.onchange=()=>{if(!input.checked)return;applyGenerationProfile('surface',input.value);populateSurfaceGeneration()});
-document.querySelectorAll('input[name=lineProfile]').forEach(input=>input.onchange=()=>{if(!input.checked)return;applyGenerationProfile('line',input.value);populateLineGeneration()});
+document.querySelectorAll('input[name=surfaceProfile]').forEach(input=>input.onchange=()=>{if(!input.checked)return;applyGenerationProfile(generationSettings,'surface',input.value);populateSurfaceGeneration()});
+document.querySelectorAll('input[name=lineProfile]').forEach(input=>input.onchange=()=>{if(!input.checked)return;applyGenerationProfile(generationSettings,'line',input.value);populateLineGeneration()});
 Object.entries(surfaceFields).forEach(([key,id])=>$(id).onchange=()=>{generationSettings.surface[key]=$(id).checked;markGenerationCustom('surface');$('#surfaceRestrictedMode').disabled=!$('#surfaceRestricted').checked});
 Object.entries(lineFields).forEach(([key,id])=>$(id).onchange=()=>{generationSettings.line[key]=$(id).checked;markGenerationCustom('line')});
 $('#surfaceRestrictedMode').onchange=()=>{generationSettings.surface.restrictedMode=$('#surfaceRestrictedMode').value;markGenerationCustom('surface')};
@@ -442,7 +411,6 @@ function finishPrinting(){if(!printRestore)return;document.body.classList.remove
 function preparePrinting(settings){if(!workspace)return toast('Skapa eller öppna ett arbetsområde först');const paper=paperDimensions(settings),options=exportRenderOptions(settings),check=renderExportPreflight(settings);buildPrintInformation(settings);$('#printPrototypeMark').textContent=check.errors?`OMAPMAKER PROTOTYP · NORMKONTROLL: ${check.errors} FEL`:'OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD';document.querySelector('#printPageStyle')?.remove();const pageStyle=document.createElement('style');pageStyle.id='printPageStyle';pageStyle.textContent=`@page{size:${paper.paperWidth}mm ${paper.paperHeight}mm;margin:${paper.margin}mm}`;document.head.append(pageStyle);$('#vectorPrintMap').innerHTML=normRenderer.buildVectorSvg(currentMapFeatures(),options);document.body.style.setProperty('--print-width',`${paper.widthMm}mm`);document.body.style.setProperty('--print-height',`${paper.heightMm}mm`);document.body.classList.add('print-layout-active');printRestore={};window.addEventListener('afterprint',finishPrinting,{once:true});window.addEventListener('focus',()=>setTimeout(finishPrinting,400),{once:true});$('#exportSheet').close();requestAnimationFrame(()=>setTimeout(()=>{try{window.print()}finally{setTimeout(finishPrinting,500)}},250))}
 $('#export').onclick=openExportSheet;$('#closeExportSheet').onclick=()=>$('#exportSheet').close();$('#exportGeojson').onclick=exportGeojson;$('#choosePrintArea').onclick=startPrintAreaSelection;$('#cancelPrintArea').onclick=()=>stopPrintAreaSelection(false);$('#confirmPrintArea').onclick=()=>stopPrintAreaSelection(true);$('#centerPrintOnWorkspace').onclick=()=>map.setView(workspace.center,map.getZoom(),{animate:true});document.querySelectorAll('#exportSheet .optional-information input[type=checkbox]').forEach(input=>input.onchange=syncOptionalExportFields);for(const id of ['exportPaper','exportOrientation','exportMargin','exportExtent'])$(`#${id}`).onchange=()=>{updateExportAreaSummary();renderExportPreflight()};$('#exportForm').onsubmit=event=>{event.preventDefault();const settings=writeExportSettings();preparePrinting(settings)};
 let activeContourJobId=null;
-const formatBytes=value=>{const bytes=Number(value||0);if(!bytes)return '';if(bytes>=1024*1024*1024)return `${(bytes/(1024*1024*1024)).toFixed(1).replace('.',',')} GB`;if(bytes>=1024*1024)return `${Math.round(bytes/(1024*1024))} MB`;return `${Math.max(1,Math.round(bytes/1024))} kB`};
 function setContourControlsRunning(running){
   $('#runContourGeneration').disabled=running;$('#runContourGeneration').textContent=running?'Arbetar…':'Generera höjdkurvor';$('#cancelContourGeneration').hidden=!running;$('#cancelContourGeneration').disabled=false;$('#cancelContourGeneration').textContent='Avbryt';
 }
@@ -463,8 +431,6 @@ async function refreshContourCacheInfo(){
   catch(error){info.className='contour-cache-info';info.textContent=`Cache kunde inte kontrolleras: ${error.message}`}
 }
 $('#generateContoursButton').onclick=()=>{$('#layersSheet').close();refreshContourSettingsSummary();if(!activeContourJobId){$('#contourStatus').textContent='';$('#contourProgressPanel').hidden=true;refreshContourCacheInfo()}$('#contourSheet').showModal()};
-const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
-async function jsonResponse(response){let data;try{data=await response.json()}catch{throw new Error(`Servern svarade inte korrekt (HTTP ${response.status})`)}if(!response.ok)throw new Error(data.error||data.message||`Serverfel ${response.status}`);return data}
 async function runContourJob(payload,status){
   status.textContent='Söker efter färdiga höjdkurvor på servern…';
   const central=await resolveCentralLayer('contours');
