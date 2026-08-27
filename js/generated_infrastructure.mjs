@@ -28,7 +28,7 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, renderer, getD
 
   function outerStyle(feature) {
     const symbol = String(feature.properties?.isomSymbol || '510');
-    if (generatedStatus(feature) === 'excluded') return excludedStyle(symbolScale());
+    if (['excluded', 'deleted'].includes(generatedStatus(feature))) return excludedStyle(symbolScale());
     return {...renderer.lineStyles(symbol, feature.properties || {}, normContext()).outer, className: generatedClass(feature, `osm-infrastructure infrastructure-${symbol}`)};
   }
 
@@ -48,7 +48,7 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, renderer, getD
     const stroke = renderer.paperMm(definition.supportStrokeMm, context.scale) * unit;
     const size = Math.max(18, width + 8);
     const angle = 90 - Number(properties.angleDegrees || 0);
-    return Leaflet.divIcon({className: 'infrastructure-support-icon', html: `<span class="${major ? 'major' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;transform:rotate(${angle}deg)"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
+    return Leaflet.divIcon({className: `infrastructure-support-icon generated-object ${generatedStatus(feature)}`, html: `<span class="${major ? 'major' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;transform:rotate(${angle}deg)"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
   }
 
   function popup(feature) {
@@ -75,8 +75,8 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, renderer, getD
     if (!data || !isVisible()) return;
     const lineFilter = feature => feature.properties?.featureKind === 'line' && featureIsSelected(feature);
     const outer = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: lineFilter, style: outerStyle, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
-    const inner = Leaflet.geoJSON(data, {pane: 'infrastructurePane', interactive: false, filter: feature => lineFilter(feature) && ['509', '511'].includes(String(feature.properties?.isomSymbol)) && generatedStatus(feature) !== 'excluded', style: innerStyle});
-    const supports = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => feature.properties?.featureKind === 'support' && featureIsSelected(feature) && generatedStatus(feature) !== 'excluded', pointToLayer: (feature, latlng) => Leaflet.marker(latlng, {pane: 'infrastructurePane', icon: supportIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 300})});
+    const inner = Leaflet.geoJSON(data, {pane: 'infrastructurePane', interactive: false, filter: feature => lineFilter(feature) && ['509', '511'].includes(String(feature.properties?.isomSymbol)) && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: innerStyle});
+    const supports = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => feature.properties?.featureKind === 'support' && featureIsSelected(feature), pointToLayer: (feature, latlng) => Leaflet.marker(latlng, {pane: 'infrastructurePane', icon: supportIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 300})});
     layer = Leaflet.layerGroup([outer, inner, supports]).addTo(map);
     map.attributionControl.addAttribution(INFRASTRUCTURE_ATTRIBUTION);
     attributionVisible = true;

@@ -28,7 +28,7 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
 
   function style(feature) {
     const symbol = String(feature.properties?.isomSymbol || '506');
-    if (generatedStatus(feature) === 'excluded') return excludedStyle(symbolScale());
+    if (['excluded', 'deleted'].includes(generatedStatus(feature))) return excludedStyle(symbolScale());
     return {...isomLineStyle(symbol, feature), opacity: 1, className: generatedClass(feature, `osm-road road-${symbol}`)};
   }
 
@@ -53,7 +53,7 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
     const data = getData();
     if (!data || !isVisible()) return;
     const outer = Leaflet.geoJSON(data, {pane: 'foundationPane', filter: featureIsVisible, style, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
-    const inner = Leaflet.geoJSON(data, {pane: 'foundationPane', interactive: false, filter: feature => featureIsVisible(feature) && String(feature.properties?.isomSymbol) === '502' && generatedStatus(feature) !== 'excluded', style: feature => ({...lineStyles('502', feature.properties || {}, normContext()).inner, className: 'osm-road-fill'})});
+    const inner = Leaflet.geoJSON(data, {pane: 'foundationPane', interactive: false, filter: feature => featureIsVisible(feature) && String(feature.properties?.isomSymbol) === '502' && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: feature => ({...lineStyles('502', feature.properties || {}, normContext()).inner, className: 'osm-road-fill'})});
     layer = Leaflet.layerGroup([outer, inner]).addTo(map);
     map.attributionControl.addAttribution(ROAD_ATTRIBUTION);
     attributionVisible = true;

@@ -14,7 +14,7 @@ import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, createGeneratedLandCoverLa
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
-import {generatedMapObject, localMapObject, mapObjectPopup, mapObjectSource} from '../js/map_objects.mjs';
+import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -28,15 +28,37 @@ const localPopup = localObjectPopup('point', {id: 'local-1', objectType: 'boulde
 assert.match(localPopup, /Sten/);
 assert.match(localPopup, /GPS-inmätt/);
 assert.match(localPopup, /Noggrannhet ±4 m/);
-assert.match(localPopup, /data-local-edit="local-1"/);
+assert.match(localPopup, /data-object-kind="local"/);
+assert.match(localPopup, /data-object-id="local-1"/);
+for (const action of ['edit', 'exclude', 'delete', 'reset']) assert.match(localPopup, new RegExp(`data-object-action="${action}"`));
 assert.deepEqual(mapObjectSource('osm', 'way/42'), {type: 'osm', label: 'OpenStreetMap', id: 'way/42'});
 const adaptedLocal = localMapObject('point', {id: 'local-2', objectType: 'boulder', source: 'gps', syncStatus: 'local', modifiedBy: 'manual'}, '204');
 assert.equal(adaptedLocal.geometryType, 'Point');
 assert.equal(adaptedLocal.source.type, 'gps');
 assert.equal(adaptedLocal.modifiedBy, 'manual');
+assert.deepEqual(adaptedLocal.capabilities, MAP_OBJECT_CAPABILITIES);
+assert.equal(adaptedLocal.status.type, 'edited');
+assert.equal(localObjectLifecycle({status: 'locally-excluded'}), 'excluded');
+assert.equal(localObjectLifecycle({status: 'locally-deleted'}), 'deleted');
+const restorableLocal = {objectType: 'boulder', symbol: '204', coordinates: [18.1, 59.2], source: 'gps'};
+ensureLocalOriginal(restorableLocal);
+restorableLocal.coordinates = [19, 60];
+restorableLocal.status = 'locally-deleted';
+restorableLocal.modifiedBy = 'manual';
+restoreLocalOriginal(restorableLocal);
+assert.deepEqual(restorableLocal.coordinates, [18.1, 59.2]);
+assert.equal(restorableLocal.source, 'gps');
+assert.equal(restorableLocal.status, undefined);
+assert.equal(restorableLocal.modifiedBy, undefined);
 const adaptedGenerated = generatedMapObject('buildings', {id: 'building/2', properties: {sourceId: 'way/2'}, geometry: {type: 'Polygon'}}, {symbol: '521', statusLabel: 'Automatiskt kartunderlag'});
 assert.equal(adaptedGenerated.source.type, 'osm');
-assert.equal(adaptedGenerated.editable, true);
+assert.deepEqual(adaptedGenerated.capabilities, MAP_OBJECT_CAPABILITIES);
+const adaptedGlobal = generatedMapObject('global-objects', {id: 'global/1', properties: {}, geometry: {type: 'Point'}}, {symbol: '204', source: 'omapmaker', statusLabel: 'Bekräftad'});
+assert.equal(adaptedGlobal.source.label, 'OMapMaker-observationer');
+assert.deepEqual(adaptedGlobal.capabilities, MAP_OBJECT_CAPABILITIES);
+const generatedActions = mapObjectActionHtml(adaptedGenerated, {kind: 'generated', layerType: 'buildings', escapeHtml});
+for (const action of ['edit', 'exclude', 'delete', 'reset']) assert.match(generatedActions, new RegExp(`data-object-action="${action}"`));
+assert.match(generatedActions, /data-object-layer="buildings"/);
 const sharedPopup = mapObjectPopup(adaptedGenerated, {title: '<Byggnad>', isomClaim: () => 'ISOM 521', escapeHtml});
 assert.match(sharedPopup, /&lt;Byggnad&gt;/);
 assert.match(sharedPopup, /OpenStreetMap · way\/2/);

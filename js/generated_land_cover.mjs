@@ -35,7 +35,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, renderer, getData, 
   function style(feature) {
     const properties = feature.properties || {};
     const symbol = String(properties.isomSymbol || '');
-    if (generatedStatus(feature) === 'excluded') return excludedStyle(Math.max(.7, symbolScale()));
+    if (['excluded', 'deleted'].includes(generatedStatus(feature))) return excludedStyle(Math.max(.7, symbolScale()));
     const fallbackSymbols = {open_land: '401', rough_open_land: '403', cultivated_land: '412'};
     const renderedStyle = feature.geometry?.type?.includes('Line') ? isomLineStyle(symbol, feature) : isomAreaStyle(symbol || fallbackSymbols[properties.mapClass], properties);
     return {...renderedStyle, opacity: 1, className: generatedClass(feature, `osm-land-cover isom-pattern-${symbol} ${properties.mapClass || ''} ${properties.restrictedKind || ''}`)};

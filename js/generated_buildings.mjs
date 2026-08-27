@@ -14,7 +14,7 @@ export function createGeneratedBuildingLayer({Leaflet, map, getData, isVisible, 
   let attributionVisible = false;
 
   function style(feature) {
-    if (generatedStatus(feature) === 'excluded') return excludedStyle(Math.max(1, symbolScale()));
+    if (['excluded', 'deleted'].includes(generatedStatus(feature))) return excludedStyle(Math.max(1, symbolScale()));
     return {...isomAreaStyle('521', feature.properties), className: generatedClass(feature, 'osm-building')};
   }
 
