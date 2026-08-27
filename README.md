@@ -27,6 +27,9 @@ Frontendens rena modultester körs med:
 
 `node tools/test_frontend_modules.mjs`
 
+GitHub Actions kör automatiskt modulernas syntaxkontroller, frontendmodultesterna
+och ISOM-renderertestet vid varje push och pull request.
+
 ## Normativa källor
 
 Kartans symboler, mått och generalisering ska följa **ISOM 2017-2, Revision 6
