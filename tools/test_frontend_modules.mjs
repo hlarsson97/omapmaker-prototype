@@ -7,6 +7,7 @@ import {applyGenerationProfile, generationSummary, readGenerationSettings} from 
 import {createIndexedDbStore} from '../js/indexeddb_store.mjs';
 import {createFieldMap} from '../js/map_setup.mjs';
 import {BUILDING_ATTRIBUTION, buildingMetaText, createGeneratedBuildingLayer} from '../js/generated_buildings.mjs';
+import {PAVED_AREA_ATTRIBUTION, createGeneratedPavedAreaLayer, pavedAreaMetaText} from '../js/generated_paved_areas.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 
@@ -53,6 +54,41 @@ assert.deepEqual(buildingEvents.at(-1), ['addAttribution', BUILDING_ATTRIBUTION]
 buildingsVisible = false;
 buildingView.render();
 assert.deepEqual(buildingEvents.slice(-2), [['remove', 'building-layer'], ['removeAttribution', BUILDING_ATTRIBUTION]]);
+assert.equal(pavedAreaMetaText({features: [{properties: {}}, {properties: {status: 'locally-excluded'}}]}, feature => feature.properties.status === 'locally-excluded' ? 'excluded' : 'source', () => ''), '2 automatiska · 1 uteslutna');
+
+const pavedEvents = [];
+let pavedVisible = true;
+let pavedOptions;
+const pavedMap = {
+  removeLayer: layer => pavedEvents.push(['remove', layer]),
+  attributionControl: {
+    addAttribution: text => pavedEvents.push(['addAttribution', text]),
+    removeAttribution: text => pavedEvents.push(['removeAttribution', text])
+  }
+};
+const pavedView = createGeneratedPavedAreaLayer({
+  Leaflet: {geoJSON: (_data, options) => { pavedOptions = options; return {addTo: target => { pavedEvents.push(['addLayer', target]); return 'paved-layer'; }}; }},
+  map: pavedMap,
+  getData: () => ({features: []}),
+  isVisible: () => pavedVisible,
+  generatedStatus: () => 'source',
+  generatedStatusLabel: () => 'Automatiskt kartunderlag',
+  generatedClass: (_feature, base) => `${base} generated-object source`,
+  generatedActionHtml: () => '<div class="generated-actions"></div>',
+  excludedStyle: () => ({}),
+  symbolScale: () => 1,
+  isomAreaStyle: () => ({fillColor: '#d9b36c'}),
+  isomClaim: () => 'ISOM 501',
+  escapeHtml,
+  centralLayerLabel: () => '',
+  metaElement: () => ({textContent: ''})
+});
+pavedView.render();
+assert.equal(pavedOptions.pane, 'pavedAreaPane');
+assert.deepEqual(pavedEvents.at(-1), ['addAttribution', PAVED_AREA_ATTRIBUTION]);
+pavedVisible = false;
+pavedView.render();
+assert.deepEqual(pavedEvents.slice(-2), [['remove', 'paved-layer'], ['removeAttribution', PAVED_AREA_ATTRIBUTION]]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 8, printScale: 15000, symbolRegistryVersion: 6});
 
 const apiCalls = [];
