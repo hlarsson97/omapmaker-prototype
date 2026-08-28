@@ -11,8 +11,8 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 3);
-assert.strictEqual(registry.renderingRevision, 3);
+assert.strictEqual(registry.registryVersion, 4);
+assert.strictEqual(registry.renderingRevision, 4);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -25,6 +25,10 @@ assert.strictEqual(registry.renderers['511'].supportWidthMm, 0.3);
 assert.strictEqual(registry.renderers['511'].largeSupportSizeMm, 0.8);
 assert.strictEqual(registry.renderers['511'].minimumLengthMm, undefined);
 assert.deepStrictEqual(registry.renderers['201'].settings.downhillSide.values, ['left', 'right']);
+assert.strictEqual(registry.renderers['513.1'].styleDiameterMm, 0.4);
+assert.strictEqual(registry.renderers['513.1'].styleSpacingMm, 2);
+assert.strictEqual(registry.renderers['516'].tagAngleDeg, 60);
+assert.deepStrictEqual(registry.renderers['516'].settings.tagSide.values, ['left', 'right']);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
 const railwayStyle = renderer.lineStyles('509', {}, screenContext);
@@ -61,8 +65,10 @@ const gully = {...shortPath, id: 'gully', properties: {isomSymbol: '108'}};
 const cliff = {...shortPath, id: 'cliff', properties: {isomSymbol: '201', downhillSide: 'right'}, geometry: {type: 'LineString', coordinates: [[18.0999, 59.2], [18.1001, 59.2]]}};
 const powerLine = {...shortPath, id: 'power', properties: {isomSymbol: '511', source: 'manual', supportCount: 1}, geometry: {type: 'LineString', coordinates: [[18.0999, 59.2], [18.1001, 59.2]]}};
 const powerSupport = {type: 'Feature', id: 'power:support:1', properties: {isomSymbol: '511', featureKind: 'support', angleDegrees: 0, largeMast: false}, geometry: {type: 'Point', coordinates: [18.1, 59.2]}};
+const wall = {...shortPath, id: 'wall', properties: {isomSymbol: '513.1'}, geometry: {type: 'LineString', coordinates: [[18.0998, 59.1999], [18.1002, 59.1999]]}};
+const fence = {...shortPath, id: 'fence', properties: {isomSymbol: '516', tagSide: 'right'}, geometry: {type: 'LineString', coordinates: [[18.0998, 59.2001], [18.1002, 59.2001]]}};
 const label = {...shortPath, id: 'label', properties: {isomSymbol: '101', mapText: '42,5', labelCoordinate: [center.lng, center.lat], textHeightMm: 1.5}};
-const svg = renderer.buildVectorSvg([building, road, railway, gully, cliff, powerLine, powerSupport, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+const svg = renderer.buildVectorSvg([building, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(svg.startsWith('<svg'));
 assert(svg.includes('symbolRegistryVersion'));
 assert(svg.includes('data-colour="black"'));
@@ -75,7 +81,11 @@ assert(svg.includes('stroke-dasharray="0 '));
 assert(svg.includes('data-orientation="magnetic-north"'));
 assert((svg.match(/stroke-linecap="round"/g) || []).length >= 2, 'Branttaggar eller punktlinje saknas');
 assert(svg.includes('rotate(81.5)'), 'Stödmarkeringen ska roteras vinkelrätt mot ledningen och kartrotationen');
+assert(svg.includes('data-decoration-symbol="513.1"'), 'Murens punkter saknas i vektorutskriften');
+assert(svg.includes('data-decoration-symbol="516"'), 'Staketets ensidiga taggar saknas i vektorutskriften');
 check = renderer.preflight([{...powerLine, properties: {...powerLine.properties, supportCount: 0}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'support-missing'));
+check = renderer.preflight([{...fence, properties: {isomSymbol: '516'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+assert(check.issues.some(issue => issue.code === 'direction-missing'));
 
 console.log('ISOM renderer: alla kontroller godkända');

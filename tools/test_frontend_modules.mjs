@@ -15,7 +15,7 @@ import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer,
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
-import {applyDefaultSymbolSettings, cliffTagSegments, nearestPointOnLine, powerSupportFeatures, snapPowerSupports, symbolObjectControlsHtml} from '../js/symbol_object_settings.mjs';
+import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, isDecoratedBarrierSymbol, nearestPointOnLine, powerSupportFeatures, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -50,6 +50,15 @@ assert.equal(supportFeatures[0].properties.parentObjectId, 'power-1');
 assert.equal(supportFeatures[0].properties.largeMast, true);
 assert(Math.abs(supportFeatures[0].geometry.coordinates[1] - 59) < 1e-10);
 assert.match(symbolObjectControlsHtml(powerObject, escapeHtml), /Placera stor mast/);
+const fenceObject = applyDefaultSymbolSettings({id: 'fence-1', symbol: '516', coordinates: [[18, 59], [18.001, 59]]}, '516');
+assert.equal(fenceObject.tagSide, 'right');
+assert.equal(isDecoratedBarrierSymbol('516'), true);
+assert.match(symbolObjectControlsHtml(fenceObject, escapeHtml), /data-symbol-object-action="fence-side"/);
+const fenceTags = fenceTagSegments(fenceObject.coordinates, {styleSpacingMm: 2, tagLengthMm: 0.4, tagAngleDeg: 60}, 'right');
+assert(fenceTags.length >= 1);
+assert(fenceTags[0][1][1] < fenceTags[0][0][1], 'Högertaggar på ett östgående staket ska ligga söderut');
+const wallDots = wallDotCoordinates(fenceObject.coordinates, {styleSpacingMm: 2});
+assert.equal(wallDots.length, 2);
 assert.deepEqual(mapObjectSource('osm', 'way/42'), {type: 'osm', label: 'OpenStreetMap', id: 'way/42'});
 const adaptedLocal = localMapObject('point', {id: 'local-2', objectType: 'boulder', source: 'gps', syncStatus: 'local', modifiedBy: 'manual'}, '204');
 assert.equal(adaptedLocal.geometryType, 'Point');
@@ -69,9 +78,10 @@ assert.deepEqual(restorableLocal.coordinates, [18.1, 59.2]);
 assert.equal(restorableLocal.source, 'gps');
 assert.equal(restorableLocal.status, undefined);
 assert.equal(restorableLocal.modifiedBy, undefined);
-const legacyRestorable = {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]], originalObject: {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]]}, downhillSide: 'right', supports: []};
+const legacyRestorable = {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]], originalObject: {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]]}, downhillSide: 'right', tagSide: 'left', supports: []};
 restoreLocalOriginal(legacyRestorable);
 assert.equal(legacyRestorable.downhillSide, undefined);
+assert.equal(legacyRestorable.tagSide, undefined);
 assert.equal(legacyRestorable.supports, undefined);
 const adaptedGenerated = generatedMapObject('buildings', {id: 'building/2', properties: {sourceId: 'way/2'}, geometry: {type: 'Polygon'}}, {symbol: '521', statusLabel: 'Automatiskt kartunderlag'});
 assert.equal(adaptedGenerated.source.type, 'osm');
@@ -370,9 +380,9 @@ assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=2'));
-assert(fieldHtml.includes('isom_symbols.js?v=5'));
-assert(fieldHtml.includes('isom_renderer.js?v=5'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=2"'));
+assert(fieldHtml.includes('isom_symbols.js?v=6'));
+assert(fieldHtml.includes('isom_renderer.js?v=6'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=3"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

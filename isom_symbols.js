@@ -1,6 +1,6 @@
 window.OMAPMAKER_ISOM_REGISTRY = {
-  "registryVersion": 3,
-  "renderingRevision": 3,
+  "registryVersion": 4,
+  "renderingRevision": 4,
   "standard": "ISOM 2017-2 Revision 6",
   "measurementBasis": {"unit":"mm","baseScale":15000,"enlargeProportionally":true},
   "colours": {
@@ -67,8 +67,8 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "509":{"kind":"railway","colour":"black","innerColour":"white","widthMm":0.35,"innerWidthMm":0.1,"dashMm":[1,0.5],"minimumLengthMm":4,"minimumDashes":2},
     "510":{"kind":"line-with-supports","colour":"black","widthMm":0.14,"supportWidthMm":0.3,"supportStrokeMm":0.14,"minimumLengthMm":5,"settings":{"supports":{"type":"line-supports","exactPosition":true,"defaultSupportType":"pole","labelSv":"Stolpar"}}},
     "511":{"kind":"double-line-with-supports","colour":"black","lineWidthMm":0.14,"lineCentreGapMm":0.4,"supportWidthMm":0.3,"supportStrokeMm":0.2,"largeSupportSizeMm":0.8,"settings":{"supports":{"type":"line-supports","exactPosition":true,"defaultSupportType":"tower","allowLargeMast":true,"labelSv":"Master"}}},
-    "513.1":{"kind":"styled-line","style":"dots","colour":"black","widthMm":0.14,"styleDiameterMm":0.4,"styleSpacingMm":2,"minimumLengthMm":1.4},
-    "516":{"kind":"styled-line","style":"fence-tags","colour":"black","widthMm":0.14,"tagLengthMm":0.4,"tagWidthMm":0.14,"styleSpacingMm":2,"minimumLengthMm":1.5},
+    "513.1":{"kind":"styled-line","style":"dots","colour":"black","widthMm":0.14,"styleDiameterMm":0.4,"styleSpacingMm":2,"endGapMm":0.8,"minimumLengthMm":1.4,"minimumHeightMetres":1},
+    "516":{"kind":"styled-line","style":"fence-tags","colour":"black","widthMm":0.14,"tagLengthMm":0.4,"tagWidthMm":0.14,"tagAngleDeg":60,"styleSpacingMm":2,"minimumLengthMm":1.5,"requiresDirection":true,"directionProperty":"tagSide","settings":{"tagSide":{"type":"side","required":true,"values":["left","right"],"default":"right","labelSv":"Taggarnas sida"}}},
     "520":{"kind":"area","fill":"yellowGreen50","outline":"black","outlineWidthMm":0.18,"outlineConditional":"clear","minimumBoxMm":[1,1],"impassable":true,"pathWhiteOverlapMm":0.15},
     "521":{"kind":"area","fill":"black","largeFill":"black50","largeThresholdMetres":75,"minimumBoxMm":[0.5,0.5],"minimumPassageMm":0.4,"impassable":true},
     "524":{"kind":"high-tower","colour":"black","diameterMm":0.8,"strokeWidthMm":0.16,"northOriented":true},
