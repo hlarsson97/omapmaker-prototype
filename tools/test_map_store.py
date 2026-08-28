@@ -3,6 +3,7 @@ import unittest
 import uuid
 from pathlib import Path
 
+from isom_registry import REGISTRY_VERSION
 from map_store import MapStore, contributor_hash
 
 
@@ -29,7 +30,7 @@ class CentralMapStoreTests(unittest.TestCase):
             feature=store.global_objects([17.9,58.9,18.1,59.1])['features'][0]
             self.assertEqual(feature['properties']['objectType'],'boulder')
             self.assertEqual(feature['properties']['symbol'],'204')
-            self.assertEqual(feature['properties']['symbolRegistryVersion'],2)
+            self.assertEqual(feature['properties']['symbolRegistryVersion'],REGISTRY_VERSION)
 
     def test_unmapped_manual_type_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

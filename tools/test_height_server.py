@@ -361,6 +361,39 @@ class LandCoverTests(unittest.TestCase):
         self.assertEqual(len(polygons),1)
         self.assertEqual(polygons[0][0][0],polygons[0][0][-1])
 
+    def test_directed_coastline_generates_sea_on_its_right(self):
+        coastline=self.osm_way(100,{'natural':'coastline'},[(18.005,58.99),(18.005,59.02)])
+        feature=server.coastline_sea_feature([coastline],[18.0,59.0,18.01,59.01])
+        self.assertIsNotNone(feature)
+        self.assertEqual(feature['properties']['isomSymbol'],'301')
+        self.assertEqual(feature['properties']['water'],'sea')
+        self.assertEqual(feature['properties']['sourceDataset'],'OSM coastline')
+        self.assertTrue(feature['properties']['reviewRequired'])
+        west=min(point[0] for point in feature['geometry']['coordinates'][0])
+        east=max(point[0] for point in feature['geometry']['coordinates'][0])
+        self.assertAlmostEqual(west,18.005,places=6)
+        self.assertAlmostEqual(east,18.01,places=6)
+
+    def test_reversed_coastline_reverses_the_sea_side(self):
+        coastline=self.osm_way(101,{'natural':'coastline'},[(18.005,59.02),(18.005,58.99)])
+        feature=server.coastline_sea_feature([coastline],[18.0,59.0,18.01,59.01])
+        self.assertIsNotNone(feature)
+        west=min(point[0] for point in feature['geometry']['coordinates'][0])
+        east=max(point[0] for point in feature['geometry']['coordinates'][0])
+        self.assertAlmostEqual(west,18.0,places=6)
+        self.assertAlmostEqual(east,18.005,places=6)
+
+    def test_island_is_left_as_a_hole_in_the_sea(self):
+        coastline=self.osm_way(102,{'natural':'coastline'},[(18.004,59.004),(18.006,59.004),(18.006,59.006),(18.004,59.006),(18.004,59.004)])
+        feature=server.coastline_sea_feature([coastline],[18.0,59.0,18.01,59.01])
+        self.assertIsNotNone(feature)
+        self.assertEqual(feature['geometry']['type'],'Polygon')
+        self.assertEqual(len(feature['geometry']['coordinates']),2)
+
+    def test_dangling_coastline_is_rejected(self):
+        coastline=self.osm_way(103,{'natural':'coastline'},[(18.002,59.002),(18.006,59.006)])
+        self.assertIsNone(server.coastline_sea_feature([coastline],[18.0,59.0,18.01,59.01]))
+
 
 class AutomaticHeightDataTests(unittest.TestCase):
     def test_missing_credentials_are_reported_explicitly(self):

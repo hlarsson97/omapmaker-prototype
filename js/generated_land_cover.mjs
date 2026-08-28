@@ -11,7 +11,7 @@ export function isWaterFeature(feature) {
 }
 
 export function isCurrentLandCoverData(data) {
-  return Number(data?.properties?.importVersion || 0) >= 8;
+  return Number(data?.properties?.importVersion || 0) >= 9;
 }
 
 export function landCoverMetaText(data, generatedStatus, centralLayerLabel) {

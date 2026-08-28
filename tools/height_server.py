@@ -9,7 +9,7 @@ import rasterio
 from pyproj import Transformer
 from rasterio.merge import merge as merge_rasters
 from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polygon, box as geometry_box, mapping as geometry_mapping
-from shapely.ops import transform as transform_geometry, unary_union
+from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from map_store import MapStore
 from isom_registry import REGISTRY_VERSION
@@ -532,6 +532,59 @@ def element_line(element):
     coordinates=[(point['lon'],point['lat']) for point in element.get('geometry') or [] if 'lon' in point and 'lat' in point]
     return coordinates if len(coordinates)>=2 else None
 
+def point_is_right_of_nearest_segment(point,segments,latitude):
+    """Use OSM coastline direction (water on the right) to classify a point."""
+    longitude_scale=111320*max(.1,math.cos(math.radians(latitude)));latitude_scale=111320
+    px=point.x*longitude_scale;py=point.y*latitude_scale;nearest=None
+    for first,second in segments:
+        x1=first[0]*longitude_scale;y1=first[1]*latitude_scale
+        dx=(second[0]-first[0])*longitude_scale;dy=(second[1]-first[1])*latitude_scale
+        length_squared=dx*dx+dy*dy
+        if length_squared<=0:continue
+        position=max(0,min(1,((px-x1)*dx+(py-y1)*dy)/length_squared))
+        offset_x=px-(x1+position*dx);offset_y=py-(y1+position*dy)
+        distance_squared=offset_x*offset_x+offset_y*offset_y
+        cross=dx*(py-y1)-dy*(px-x1)
+        if nearest is None or distance_squared<nearest[0]:nearest=(distance_squared,cross)
+    return bool(nearest and nearest[1]<-1e-6)
+
+def coastline_sea_feature(elements,bbox,construction_bbox=None):
+    """Build a conservative ISOM 301 sea polygon from directed OSM coastlines.
+
+    The coastline and the construction boundary must form at least two closed
+    cells. This deliberately rejects dangling/broken coastline fragments rather
+    than risk turning an entire work area into water.
+    """
+    construction_bbox=construction_bbox or bbox
+    construction_area=geometry_box(*construction_bbox);target_area=geometry_box(*bbox)
+    lines=[];segments=[];way_ids=[]
+    for element in elements:
+        if element.get('type')!='way' or (element.get('tags') or {}).get('natural')!='coastline':continue
+        coordinates=element_line(element)
+        if not coordinates:continue
+        try:clipped=LineString(coordinates).intersection(construction_area)
+        except (TypeError,ValueError):continue
+        if clipped.is_empty:continue
+        lines.append(clipped);way_ids.append(str(element.get('id')))
+        for first,second in zip(coordinates,coordinates[1:]):
+            if first!=second and LineString([first,second]).intersects(construction_area):segments.append((first,second))
+    if not lines or not segments:return None
+    try:cells=list(polygonize(unary_union([construction_area.boundary,*lines])))
+    except (TypeError,ValueError):return None
+    if len(cells)<2:return None
+    latitude=(construction_bbox[1]+construction_bbox[3])/2
+    water_cells=[cell for cell in cells if point_is_right_of_nearest_segment(cell.representative_point(),segments,latitude)]
+    sea=polygonal_geometry(unary_union(water_cells).intersection(target_area)) if water_cells else None
+    if sea is None or sea.is_empty:return None
+    try:
+        to_local=Transformer.from_crs('EPSG:4326','EPSG:3006',always_xy=True)
+        area,min_dimension=projected_polygon_metrics(transform_geometry(to_local.transform,sea))
+    except Exception:
+        area=min_dimension=None
+    identity=hashlib.sha256(json.dumps([sorted(set(way_ids)),[round(value,7) for value in bbox]],separators=(',',':')).encode()).hexdigest()[:20]
+    properties={'source':'OpenStreetMap','sourceId':f'coastline/{identity}','sourceDataset':'OSM coastline','sourceWayIds':sorted(set(way_ids)),'status':'automatic-unverified','license':'ODbL','isomSymbol':'301','automaticIsomSymbol':'301','mapClass':'water_301','automaticMapClass':'water_301','classificationConfidence':'medium','classificationReason':'derived-from-directed-coastline','reviewRequired':True,'areaSquareMetres':round(area) if area is not None else None,'minimumDimensionMetres':round(min_dimension,1) if min_dimension is not None else None,'natural':'coastline','water':'sea','name':'Hav','generatorVersion':1,'coastlineTopology':'polygonized'}
+    return {'type':'Feature','id':f'osm-sea-{identity}','properties':properties,'geometry':geometry_mapping(sea)}
+
 def traversable_path(tags):
     highway=tags.get('highway','')
     if highway not in PUBLIC_PATH_HIGHWAYS:return False
@@ -740,12 +793,13 @@ relation["landuse"~"^(reservoir|basin|farmland|meadow|grass|recreation_ground|vi
     result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark och vatten © OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'land-cover','importVersion':2,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'residentialWarning':'Only small OSM residential polygons (maximum 6000 m²) are shown as preliminary ISOM 520.'},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
 def osm_land_cover(bbox,print_scale=10000):
-    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-land-cover-v8',bbox,int(print_scale)],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-land-cover.geojson')
+    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-land-cover-v9',bbox,int(print_scale)],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-land-cover.geojson')
     if target.exists() and time.time()-target.stat().st_mtime<86400:return json.loads(target.read_text(encoding='utf-8'))
     west,south,east,north=bbox;water_west,water_south,water_east,water_north=expand_bbox(bbox)
     query=f'''[out:json][timeout:60];(
 way["natural"="water"]({water_south},{water_west},{water_north},{water_east});
 way["water"]({water_south},{water_west},{water_north},{water_east});
+way["natural"="coastline"]({water_south},{water_west},{water_north},{water_east});
 way["waterway"~"^(river|stream|canal|ditch|drain|riverbank)$"]({water_south},{water_west},{water_north},{water_east});
 way["natural"="wetland"]({water_south},{water_west},{water_north},{water_east});
 way["natural"="grassland"]({south},{west},{north},{east});
@@ -791,8 +845,10 @@ node["waterway"="waterfall"]({water_south},{water_west},{water_north},{water_eas
             else:continue
         properties={'source':'OpenStreetMap','sourceId':f"{element_type}/{element['id']}",'status':'automatic-unverified','license':'ODbL','isomSymbol':symbol,'automaticIsomSymbol':symbol,'mapClass':map_class,'automaticMapClass':map_class,'classificationConfidence':confidence,'classificationReason':reason,'reviewRequired':confidence!='high','areaSquareMetres':round(area) if area is not None else None,'minimumDimensionMetres':round(min_dimension,1) if min_dimension is not None else None,'natural':tags.get('natural'),'landuse':tags.get('landuse'),'waterway':tags.get('waterway'),'wetland':tags.get('wetland'),'water':tags.get('water'),'depth':tags.get('depth'),'width':tags.get('width'),'intermittent':tags.get('intermittent'),'seasonal':tags.get('seasonal'),'manMade':tags.get('man_made'),'amenity':tags.get('amenity'),'access':tags.get('access'),'name':tags.get('name')}
         features.append({'type':'Feature','id':f"osm-land-{element_type}-{element['id']}",'properties':properties,'geometry':geojson_geometry})
+    sea=coastline_sea_feature(raw.get('elements',[]),bbox,[water_west,water_south,water_east,water_north])
+    if sea:features.append(sea)
     restricted=osm_restricted_areas(bbox,print_scale);features.extend(restricted.get('features') or [])
-    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'waterSearchBboxWgs84':[water_west,water_south,water_east,water_north],'objectType':'land-cover','importVersion':8,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'waterStrategy':'ISOM 301-313 candidates; uncertain classifications require review.','restrictedAreaStrategy':'ISOM 520 prefers explicit boundaries, with compact merged building estimates as fallback. Public corridors cut the geometry and apartment areas remain omitted.','restrictedAreaCount':len(restricted.get('features') or []),'printScale':int(print_scale)},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
+    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'waterSearchBboxWgs84':[water_west,water_south,water_east,water_north],'objectType':'land-cover','importVersion':9,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'waterStrategy':'ISOM 301-313 candidates, including conservative sea polygons derived from directed OSM coastlines; uncertain classifications require review.','seaAreaCount':1 if sea else 0,'restrictedAreaStrategy':'ISOM 520 prefers explicit boundaries, with compact merged building estimates as fallback. Public corridors cut the geometry and apartment areas remain omitted.','restrictedAreaCount':len(restricted.get('features') or []),'printScale':int(print_scale)},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
 def covers(path,bbox):
     try:
@@ -1256,7 +1312,7 @@ class Handler(SimpleHTTPRequestHandler):
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)
                 if print_scale not in {7500,10000,15000}:raise ValueError('Ogiltig utskriftsskala')
-                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':8,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
+                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':9,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})

@@ -284,13 +284,14 @@ assert.deepEqual(infrastructureEvents.at(-1), ['addAttribution', INFRASTRUCTURE_
 assert.equal(WATER_SYMBOL_CLASSES['308'], 'marsh_308');
 assert.equal(isWaterFeature({properties: {isomSymbol: '301'}}), true);
 assert.equal(isWaterFeature({properties: {isomSymbol: '401'}}), false);
-assert.equal(isCurrentLandCoverData({properties: {importVersion: 8}}), true);
-assert.equal(landCoverMetaText({properties: {importVersion: 8}, features: [{properties: {isomSymbol: '301'}}, {properties: {isomSymbol: '520'}}]}, () => 'source', () => ''), '1 vatten · 1 st 520');
+assert.equal(isCurrentLandCoverData({properties: {importVersion: 8}}), false);
+assert.equal(isCurrentLandCoverData({properties: {importVersion: 9}}), true);
+assert.equal(landCoverMetaText({properties: {importVersion: 9}, features: [{properties: {isomSymbol: '301'}}, {properties: {isomSymbol: '520'}}]}, () => 'source', () => ''), '1 vatten · 1 st 520');
 
 const landCoverEvents = [];
 const landCoverOptions = [];
 let scheduledPatternInstall;
-const landCoverData = {properties: {importVersion: 8}, features: []};
+const landCoverData = {properties: {importVersion: 9}, features: []};
 const landCoverMap = {
   removeLayer: layer => landCoverEvents.push(['remove', layer]),
   attributionControl: {
@@ -337,7 +338,7 @@ const waterMarker = landCoverOptions[0].pointToLayer({properties: {isomSymbol: '
 assert.equal(waterMarker.options.pane, 'landCoverPane');
 assert.equal(typeof scheduledPatternInstall, 'function');
 assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTION]);
-assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 8, printScale: 15000, symbolRegistryVersion: 6});
+assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 9, printScale: 15000, symbolRegistryVersion: 6});
 
 const apiCalls = [];
 const mapLayerApi = createMapLayerApi({
