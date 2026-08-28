@@ -186,6 +186,11 @@ class LandCoverTests(unittest.TestCase):
         result = server.land_cover_classification({'natural': 'water', 'depth': '0.4'}, True, 1000, 20)
         self.assertEqual(result[:2], ('water_302', '302'))
 
+    def test_not_deep_requires_natural_water(self):
+        self.assertIsNone(server.land_cover_classification({'water': 'not_deep'}, True, 1000, 20))
+        result=server.land_cover_classification({'natural':'water','water':'not_deep'},True,1000,20)
+        self.assertEqual(result[:2],('water_302','302'))
+
     def test_wide_watercourse_uses_304(self):
         result = server.land_cover_classification({'waterway': 'stream', 'width': '2.5'}, False)
         self.assertEqual(result[:2], ('watercourse_304', '304'))
@@ -389,6 +394,20 @@ class LandCoverTests(unittest.TestCase):
         self.assertIsNotNone(feature)
         self.assertEqual(feature['geometry']['type'],'Polygon')
         self.assertEqual(len(feature['geometry']['coordinates']),2)
+
+    def test_counter_clockwise_not_deep_outline_becomes_inferred_island_hole(self):
+        island=self.osm_way(318080293,{'water':'not_deep'},[(18.004,59.004),(18.006,59.004),(18.006,59.006),(18.004,59.006),(18.004,59.004)])
+        self.assertTrue(server.inferred_island_boundary(island['tags'],server.element_line(island)))
+        self.assertIsNone(server.land_cover_classification(island['tags'],True,1000,20))
+        feature=server.coastline_sea_feature([island],[18.0,59.0,18.01,59.01])
+        self.assertIsNotNone(feature)
+        self.assertEqual(len(feature['geometry']['coordinates']),2)
+        self.assertEqual(feature['properties']['inferredIslandSourceIds'],['way/318080293'])
+        self.assertEqual(feature['properties']['generatorVersion'],2)
+
+    def test_clockwise_not_deep_outline_is_not_inferred_as_an_island(self):
+        coordinates=[(18.004,59.004),(18.004,59.006),(18.006,59.006),(18.006,59.004),(18.004,59.004)]
+        self.assertFalse(server.inferred_island_boundary({'water':'not_deep'},coordinates))
 
     def test_dangling_coastline_is_rejected(self):
         coastline=self.osm_way(103,{'natural':'coastline'},[(18.002,59.002),(18.006,59.006)])
