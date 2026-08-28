@@ -11,8 +11,8 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 5);
-assert.strictEqual(registry.renderingRevision, 5);
+assert.strictEqual(registry.registryVersion, 6);
+assert.strictEqual(registry.renderingRevision, 6);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -35,11 +35,29 @@ assert.strictEqual(registry.renderers['515'].withinGroupSpacingMm, 0.8);
 assert.strictEqual(registry.renderers['517'].minimumLengthMm, 3.65);
 assert.strictEqual(registry.renderers['518'].groupSpacingMm, 2.5);
 assert.strictEqual(registry.renderers['519'].barSpacingMm, 0.6);
+assert.deepStrictEqual(registry.renderers['522'].minimumBoxMm, [0.6, 0.6]);
+assert.deepStrictEqual(registry.renderers['523'].dashMm, [0.5, 0.25]);
+assert.strictEqual(registry.renderers['524'].innerDiameterMm, 0.3);
+assert.strictEqual(registry.renderers['525'].widthMm, 1);
+assert.strictEqual(registry.renderers['526'].innerDiameterMm, 0.14);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
 const railwayStyle = renderer.lineStyles('509', {}, screenContext);
 assert.strictEqual(railwayStyle.outer.dashArray, null, 'Järnvägens svarta grundlinje måste vara heldragen');
 assert(railwayStyle.inner.dashArray, 'Järnvägens vita mittlinje ska vara streckad');
+const canopyStyle = renderer.areaStyle('522', {}, screenContext);
+assert.strictEqual(canopyStyle.fillColor, '#cccccc');
+assert.strictEqual(canopyStyle.color, '#111111');
+const ruinStyle = renderer.areaStyle('523', {}, screenContext);
+assert(ruinStyle.dashArray, 'Ruinens kontur ska vara streckad');
+assert.strictEqual(ruinStyle.fillOpacity, 0);
+const highTowerMarkup = renderer.pointMarkup('524', screenContext).html;
+assert(highTowerMarkup.includes('H0.4') && highTowerMarkup.includes('V0.4'), 'Högt torn ska ha räta armar');
+assert(highTowerMarkup.includes('r="0.15"'), 'Högt torn ska ha en fylld mittpunkt på 0,3 mm');
+const smallTowerMarkup = renderer.pointMarkup('525', screenContext).html;
+assert(smallTowerMarkup.includes('H0.5') && smallTowerMarkup.includes('V0.5'), 'Litet torn ska vara en 1,0 × 1,0 mm T-symbol');
+const cairnMarkup = renderer.pointMarkup('526', screenContext).html;
+assert.strictEqual((cairnMarkup.match(/<circle/g) || []).length, 2, 'Röse ska ha ring och mittpunkt');
 
 const center = {lat: 59.2, lng: 18.1};
 const shortPath = {
@@ -62,6 +80,10 @@ const tinyArea = {
 };
 check = renderer.preflight([tinyArea], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'minimum-area'));
+for (const symbol of ['522', '523']) {
+  check = renderer.preflight([{...tinyArea, properties: {isomSymbol: symbol, name: `För liten ISOM ${symbol}`}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+  assert(check.issues.some(issue => issue.code === 'minimum-area'), `ISOM ${symbol} ska kontrolleras mot sitt minsta yttermått`);
+}
 check = renderer.preflight([{...shortPath, properties: {isomSymbol: '999'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'renderer-missing'));
 
@@ -79,8 +101,12 @@ const impassableWall = {...wall, id: 'impassable-wall', properties: {isomSymbol:
 const ruinedFence = {...fence, id: 'ruined-fence', properties: {isomSymbol: '517', tagSide: 'right'}};
 const impassableFence = {...fence, id: 'impassable-fence', properties: {isomSymbol: '518', tagSide: 'right'}};
 const crossing = {type: 'Feature', id: 'crossing', properties: {isomSymbol: '519', parentObjectId: 'impassable-wall', parentSymbol: '515', angleDegrees: 0, breakBarrier: true}, geometry: {type: 'Point', coordinates: [18.1, 59.1999]}};
+const canopy = {...building, id: 'canopy', properties: {isomSymbol: '522'}};
+const ruin = {...building, id: 'ruin', properties: {isomSymbol: '523'}};
+const smallTower = {type: 'Feature', id: 'small-tower', properties: {isomSymbol: '525'}, geometry: {type: 'Point', coordinates: [18.1002, 59.2]}};
+const cairn = {type: 'Feature', id: 'cairn', properties: {isomSymbol: '526'}, geometry: {type: 'Point', coordinates: [18.1003, 59.2]}};
 const label = {...shortPath, id: 'label', properties: {isomSymbol: '101', mapText: '42,5', labelCoordinate: [center.lng, center.lat], textHeightMm: 1.5}};
-const svg = renderer.buildVectorSvg([building, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, retainingWall, ruinedWall, impassableWall, ruinedFence, impassableFence, crossing, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+const svg = renderer.buildVectorSvg([building, canopy, ruin, smallTower, cairn, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, retainingWall, ruinedWall, impassableWall, ruinedFence, impassableFence, crossing, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(svg.startsWith('<svg'));
 assert(svg.includes('symbolRegistryVersion'));
 assert(svg.includes('data-colour="black"'));
@@ -99,6 +125,8 @@ for (const symbol of ['513.2', '514', '515', '517', '518']) assert(svg.includes(
 assert(svg.includes('stroke-dasharray="2.4749999999999996 0.5249999999999999"') || svg.includes('stroke-dasharray="2.475 0.525"'), 'Raserad barriär ska ha 1,65/0,35 mm-mönster');
 assert(svg.includes('rotate(-8.5)'), 'Passage 519 ska följa barriärens och kartans riktning');
 assert(svg.includes('<rect'), 'Linjemask för passage 519 saknas');
+assert(svg.includes('data-colour="black20"'), 'Skärmtakets svarta 20 %-fyllning saknas');
+assert(svg.includes('stroke-dasharray="0.75 0.375"'), 'Ruinens 0,5/0,25 mm-kontur saknas');
 check = renderer.preflight([{...powerLine, properties: {...powerLine.properties, supportCount: 0}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'support-missing'));
 check = renderer.preflight([{...fence, properties: {isomSymbol: '516'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});

@@ -402,8 +402,8 @@ assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=2'));
-assert(fieldHtml.includes('isom_symbols.js?v=7'));
-assert(fieldHtml.includes('isom_renderer.js?v=7'));
+assert(fieldHtml.includes('isom_symbols.js?v=8'));
+assert(fieldHtml.includes('isom_renderer.js?v=8'));
 assert(fieldHtml.includes('type="module" src="app.mjs?v=4"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);

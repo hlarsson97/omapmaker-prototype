@@ -41,8 +41,8 @@
     const d=definition(symbol);if(!d)return{color:'#111',weight:1,fillColor:'#fff',fillOpacity:.15};
     const clear=d.outline&&!d.outlineConditional||d.outlineConditional==='clear'&&properties.boundary==='clear';
     const large=d.largeThresholdMetres&&number(properties.maximumDimensionMetres)>=d.largeThresholdMetres;
-    const fill=large&&d.largeFill?d.largeFill:d.fill;
-    return{color:clear?colour(d.outline):'transparent',weight:clear?px(d.outlineWidthMm||.1,context):0,fillColor:colour(fill||'white'),fillOpacity:1,opacity:1,lineCap:'round',lineJoin:'round'};
+    const fill=large&&d.largeFill?d.largeFill:d.fill,hasFill=Boolean(fill)&&fill!=='none';
+    return{color:clear?colour(d.outline):'transparent',weight:clear?px(d.outlineWidthMm||.1,context):0,dashArray:clear&&d.dashMm?dashPixels(d.dashMm,context):null,fillColor:hasFill?colour(fill):'transparent',fillOpacity:hasFill?1:0,opacity:1,lineCap:d.dashMm?'butt':'round',lineJoin:'round'};
   }
   function pointMarkup(symbol,context,properties={}){
     const d=definition(symbol),largeSupport=d?.kind==='double-line-with-supports'&&Boolean(properties.largeMast),supportSize=largeSupport?d.largeSupportSizeMm:d?.supportWidthMm,stroke=colour(d?.colour||'black'),sw=paperMm(d?.supportStrokeMm||d?.strokeWidthMm||.14,context.scale),w=paperMm(supportSize||d?.widthMm||d?.diameterMm||.8,context.scale),h=paperMm(supportSize||d?.heightMm||d?.diameterMm||.8,context.scale),pad=Math.max(sw,.08),view=`${-w/2-pad} ${-h/2-pad} ${w+2*pad} ${h+2*pad}`;let body='';
@@ -51,7 +51,9 @@
     else if(d?.kind==='pit'||d?.kind==='waterhole')body=`<path d="M${-w/2},${-h/2} V${h*.12} L0,${h/2} L${w/2},${h*.12} V${-h/2}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round"/>`;
     else if(d?.kind==='spring')body=`<path d="M${-w/2},0 A${w/2},${h/2} 0 1 0 ${w/2},0 M${w*.2},${h*.2} L${w*.55},${h*.65}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`;
     else if(d?.kind==='point-cross')body=`<path d="M${-w/2},${-h/2} L${w/2},${h/2} M${w/2},${-h/2} L${-w/2},${h/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
-    else if(d?.kind==='high-tower')body=`<circle cx="0" cy="0" r="${w/2}" fill="none" stroke="${stroke}" stroke-width="${sw}"/><path d="M${-w*.3},${-h*.3} L${w*.3},${h*.3} M${w*.3},${-h*.3} L${-w*.3},${h*.3}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    else if(d?.kind==='high-tower'){const inner=paperMm(d.innerDiameterMm,context.scale);body=`<path d="M${-w/2},0H${w/2} M0,${-h/2}V${h/2}" stroke="${stroke}" stroke-width="${sw}"/><circle cx="0" cy="0" r="${inner/2}" fill="${stroke}"/>`}
+    else if(d?.kind==='small-tower')body=`<path d="M${-w/2},${-h*.3}H${w/2} M0,${-h/2}V${h/2}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="butt"/>`;
+    else if(d?.kind==='cairn'){const inner=paperMm(d.innerDiameterMm,context.scale);body=`<circle cx="0" cy="0" r="${Math.max(.01,w/2-sw/2)}" fill="none" stroke="${stroke}" stroke-width="${sw}"/><circle cx="0" cy="0" r="${inner/2}" fill="${stroke}"/>`}
     else if(d?.kind==='crossing-point'){const spacing=paperMm(d.barSpacingMm,context.scale),length=paperMm(d.barLengthMm,context.scale),mask=paperMm(d.maskWidthMm,context.scale),maskHeight=Math.max(sw,paperMm(.3,context.scale)),rotation=-number(properties.angleDegrees)-number(context.declination);body=`<g transform="rotate(${rotation})">${properties.breakBarrier?`<rect x="${-mask/2}" y="${-maskHeight/2}" width="${mask}" height="${maskHeight}" fill="white"/>`:''}<path d="M${-spacing/2},${-length/2}V${length/2} M${spacing/2},${-length/2}V${length/2}" stroke="${stroke}" stroke-width="${sw}"/></g>`}
     else if(d?.kind==='line-with-supports')body=`<path d="M${-w/2},0H${w/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
     else if(d?.kind==='double-line-with-supports')body=largeSupport?`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`:`<path d="M${-w/2},0H${w/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
@@ -147,9 +149,11 @@
       const w=point.widthMm,h=point.heightMm,pad=Math.max(paperMm(d.supportStrokeMm||d.strokeWidthMm||.14,context.scale),.08);
       elements.push({layer:layer(d.colour||'black'),markup:`<svg x="${p.x-w/2-pad}" y="${p.y-h/2-pad}" width="${w+2*pad}" height="${h+2*pad}" viewBox="${-w/2-pad} ${-h/2-pad} ${w+2*pad} ${h+2*pad}" overflow="visible">${markup}</svg>`});return elements;
     }
-    if(d.kind==='area'||d.kind==='pattern-area'){
+    if(d.kind==='area'||d.kind==='pattern-area'||d.kind==='outline-area'){
       const showOutline=d.outline&&(!d.outlineConditional||feature.properties?.boundary==='clear'),large=d.largeThresholdMetres&&number(feature.properties?.maximumDimensionMetres)>=d.largeThresholdMetres,fill=large&&d.largeFill?colour(d.largeFill):areaFill(symbol,d),fillLayer=layer(large&&d.largeFill?d.largeFill:d.fill||d.patternColour||'white');elements.push({layer:fillLayer,markup:`<path d="${path}" fill="${fill}" fill-rule="evenodd"/>`});
-      if(showOutline)elements.push({layer:layer(d.outline),markup:`<path d="${path}" fill="none" stroke="${colour(d.outline)}" stroke-width="${paperMm(d.outlineWidthMm,context.scale)}" stroke-linejoin="round"/>`});return elements;
+      if(d.kind==='outline-area')elements.pop();
+      const outlineDash=d.dashMm?` stroke-dasharray="${d.dashMm.map(value=>paperMm(value,context.scale)).join(' ')}"`:'';
+      if(showOutline)elements.push({layer:layer(d.outline),markup:`<path d="${path}" fill="none" stroke="${colour(d.outline)}" stroke-width="${paperMm(d.outlineWidthMm,context.scale)}"${outlineDash} stroke-linejoin="round"/>`});return elements;
     }
     const stroke=name=>colour(name),lineWidth=value=>paperMm(value,context.scale),dash=d.kind==='dotted-line'?` stroke-dasharray="0 ${lineWidth(Math.max(0,(d.repeatMm||d.dotDiameterMm)-d.dotDiameterMm))}"`:d.dashMm?` stroke-dasharray="${d.dashMm.map(v=>paperMm(v,context.scale)).join(' ')}"`:'';
     if(d.kind==='cased-line'){

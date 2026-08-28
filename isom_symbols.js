@@ -1,11 +1,12 @@
 window.OMAPMAKER_ISOM_REGISTRY = {
-  "registryVersion": 5,
-  "renderingRevision": 5,
+  "registryVersion": 6,
+  "renderingRevision": 6,
   "standard": "ISOM 2017-2 Revision 6",
   "measurementBasis": {"unit":"mm","baseScale":15000,"enlargeProportionally":true},
   "colours": {
     "white":{"cmyk":[0,0,0,0],"screen":"#ffffff"},
     "black":{"cmyk":[0,0,0,100],"screen":"#111111"},
+    "black20":{"cmyk":[0,0,0,20],"screen":"#cccccc"},
     "black50":{"cmyk":[0,0,0,50],"screen":"#777777"},
     "blue":{"cmyk":[100,0,0,0],"screen":"#009fc5"},
     "blue70":{"cmyk":[70,0,0,0],"screen":"#43b6d2"},
@@ -22,7 +23,7 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "yellowGreen50":{"cmyk":[38,27,100,0],"screen":"#b7c75b"},
     "purple":{"cmyk":[35,85,0,0],"screen":"#c3258d"}
   },
-  "colourOrder": ["white","yellow","yellow75","yellow50","green30","green60","green","yellowGreen50","blue50","blue70","brown50","black50","purple","blue","brown","darkGreen","black"],
+  "colourOrder": ["white","yellow","yellow75","yellow50","green30","green60","green","yellowGreen50","blue50","blue70","brown50","black20","black50","purple","blue","brown","darkGreen","black"],
   "overprint": {"previewBlendMode":"multiply","upperColours":["black","brown","blue"],"courseColour":"purple"},
   "textRules": {"orientation":"magnetic-north","fontFamily":"Arial, Helvetica, sans-serif","minimumSansHeightMm":1.5},
   "technical": {"601":{"lineWidthBlackMm":0.1,"lineWidthBlueMm":0.12,"spacingGroundMetres":300,"preferredColour":"black","breakForLegibility":true}},
@@ -77,7 +78,11 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "519":{"kind":"crossing-point","colour":"black","widthMm":0.78,"heightMm":1,"barLengthMm":1,"barSpacingMm":0.6,"strokeWidthMm":0.18,"maskWidthMm":0.6,"settings":{"breakBarrier":{"type":"boolean","default":false,"labelSv":"Bryt barriärlinjen"}}},
     "520":{"kind":"area","fill":"yellowGreen50","outline":"black","outlineWidthMm":0.18,"outlineConditional":"clear","minimumBoxMm":[1,1],"impassable":true,"pathWhiteOverlapMm":0.15},
     "521":{"kind":"area","fill":"black","largeFill":"black50","largeThresholdMetres":75,"minimumBoxMm":[0.5,0.5],"minimumPassageMm":0.4,"impassable":true},
-    "524":{"kind":"high-tower","colour":"black","diameterMm":0.8,"strokeWidthMm":0.16,"northOriented":true},
+    "522":{"kind":"area","fill":"black20","outline":"black","outlineWidthMm":0.1,"minimumBoxMm":[0.6,0.6],"minimumWidthMm":0.4},
+    "523":{"kind":"outline-area","outline":"black","outlineWidthMm":0.16,"dashMm":[0.5,0.25],"minimumBoxMm":[0.8,0.8],"outsideMeasure":true,"solidBelowMinimum":true},
+    "524":{"kind":"high-tower","colour":"black","diameterMm":0.8,"innerDiameterMm":0.3,"strokeWidthMm":0.16,"northOriented":true},
+    "525":{"kind":"small-tower","colour":"black","widthMm":1,"heightMm":1,"strokeWidthMm":0.16,"northOriented":true},
+    "526":{"kind":"cairn","colour":"black","diameterMm":0.8,"innerDiameterMm":0.14,"strokeWidthMm":0.16,"minimumHeightMetres":0.5},
     "601":{"kind":"north-line","colour":"black","widthMm":0.1,"spacingGroundMetres":300,"northOriented":true}
   },
   "symbols": {
@@ -130,7 +135,11 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "519": {"nameSv":"Passage","nameEn":"Crossing point","geometry":["Point"],"bindingRules":["Port, stätta eller annan passage genom en linjär barriär"],"supportStatus":"partial","rendererStatus":"semantic-match"},
     "520": {"nameSv":"Område som inte får beträdas","nameEn":"Area that shall not be entered","geometry":["Polygon","MultiPolygon"],"bindingRules":["Får inte beträdas; intern kartinformation ska begränsas enligt normen"],"supportStatus":"partial","rendererStatus":"semantic-match"},
     "521": {"nameSv":"Byggnad","nameEn":"Building","geometry":["Polygon","MultiPolygon"],"bindingRules":["Ritas skalenligt och generaliseras enligt minimimått"],"supportStatus":"partial","rendererStatus":"semantic-match"},
-    "524": {"nameSv":"Högt torn","nameEn":"High tower","geometry":["Point"],"bindingRules":["Prominent högt torn eller mast"],"supportStatus":"partial","rendererStatus":"semantic-match"}
+    "522": {"nameSv":"Skärmtak","nameEn":"Canopy","geometry":["Polygon","MultiPolygon"],"bindingRules":["Tillgänglig och löpbar yta under tak","Minsta inre bredd 0,4 mm"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "523": {"nameSv":"Ruin","nameEn":"Ruin","geometry":["LineString","MultiLineString","Polygon","MultiPolygon"],"bindingRules":["Grundplanen visas skalenligt","Minsta yttermått 0,8 × 0,8 mm"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "524": {"nameSv":"Högt torn","nameEn":"High tower","geometry":["Point"],"bindingRules":["Prominent högt torn eller mast"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "525": {"nameSv":"Litet torn","nameEn":"Small tower","geometry":["Point"],"bindingRules":["Tydligt litet torn, upphöjd plattform eller jakttorn","Symbolen orienteras mot norr"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "526": {"nameSv":"Röse eller minnessten","nameEn":"Cairn","geometry":["Point"],"bindingRules":["Prominent röse, minnessten, gränssten eller triangelpunkt","Minst 0,5 m hög"],"supportStatus":"partial","rendererStatus":"semantic-match"}
   },
   "manualTypes": {
     "boulder": {"category":"point","geometry":"Point","symbol":"204","nameSv":"Sten","selectable":true,"publishable":true},
@@ -138,6 +147,8 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "knoll": {"category":"point","geometry":"Point","symbol":"109","nameSv":"Liten kulle","selectable":true,"publishable":true},
     "pit": {"category":"point","geometry":"Point","symbol":"112","nameSv":"Grop","selectable":true,"publishable":true},
     "tower": {"category":"point","geometry":"Point","symbol":"524","nameSv":"Högt torn","selectable":true,"publishable":true},
+    "small_tower": {"category":"point","geometry":"Point","symbol":"525","nameSv":"Litet torn","selectable":true,"publishable":true},
+    "cairn": {"category":"point","geometry":"Point","symbol":"526","nameSv":"Röse eller minnessten","selectable":true,"publishable":true},
     "well": {"category":"point","geometry":"Point","symbol":"311","nameSv":"Brunn, fontän eller vattentank","selectable":true,"publishable":true},
     "crossing_point": {"category":"point","geometry":"Point","symbol":"519","nameSv":"Passage genom barriär","selectable":true,"publishable":true},
     "rootstock": {"category":"point","geometry":"Point","symbol":null,"nameSv":"Rotvälta – ej normkopplad","selectable":false,"publishable":false},
@@ -164,6 +175,8 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "cliff": {"category":"line","geometry":"LineString","symbol":"201","nameSv":"Ej passerbar brant","selectable":true,"publishable":true},
     "passable_cliff": {"category":"line","geometry":"LineString","symbol":"202","nameSv":"Brant","selectable":true,"publishable":true},
     "building": {"category":"area","geometry":"Polygon","symbol":"521","nameSv":"Byggnad","selectable":true,"publishable":true},
+    "canopy": {"category":"area","geometry":"Polygon","symbol":"522","nameSv":"Skärmtak","selectable":true,"publishable":true},
+    "ruin": {"category":"area","geometry":"Polygon","symbol":"523","nameSv":"Ruin","selectable":true,"publishable":true},
     "dense": {"category":"area","geometry":"Polygon","symbol":"408","nameSv":"Vegetation, gång","selectable":true,"publishable":true},
     "very_dense": {"category":"area","geometry":"Polygon","symbol":"410","nameSv":"Vegetation, mycket svår","selectable":true,"publishable":true},
     "open_land": {"category":"area","geometry":"Polygon","symbol":"401","nameSv":"Öppen mark","selectable":true,"publishable":true},
