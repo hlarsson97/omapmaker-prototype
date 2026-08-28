@@ -11,8 +11,8 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 4);
-assert.strictEqual(registry.renderingRevision, 4);
+assert.strictEqual(registry.registryVersion, 5);
+assert.strictEqual(registry.renderingRevision, 5);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -29,6 +29,12 @@ assert.strictEqual(registry.renderers['513.1'].styleDiameterMm, 0.4);
 assert.strictEqual(registry.renderers['513.1'].styleSpacingMm, 2);
 assert.strictEqual(registry.renderers['516'].tagAngleDeg, 60);
 assert.deepStrictEqual(registry.renderers['516'].settings.tagSide.values, ['left', 'right']);
+assert.strictEqual(registry.renderers['513.2'].style, 'half-dots');
+assert.deepStrictEqual(registry.renderers['514'].dashMm, [1.65, 0.35]);
+assert.strictEqual(registry.renderers['515'].withinGroupSpacingMm, 0.8);
+assert.strictEqual(registry.renderers['517'].minimumLengthMm, 3.65);
+assert.strictEqual(registry.renderers['518'].groupSpacingMm, 2.5);
+assert.strictEqual(registry.renderers['519'].barSpacingMm, 0.6);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
 const railwayStyle = renderer.lineStyles('509', {}, screenContext);
@@ -67,8 +73,14 @@ const powerLine = {...shortPath, id: 'power', properties: {isomSymbol: '511', so
 const powerSupport = {type: 'Feature', id: 'power:support:1', properties: {isomSymbol: '511', featureKind: 'support', angleDegrees: 0, largeMast: false}, geometry: {type: 'Point', coordinates: [18.1, 59.2]}};
 const wall = {...shortPath, id: 'wall', properties: {isomSymbol: '513.1'}, geometry: {type: 'LineString', coordinates: [[18.0998, 59.1999], [18.1002, 59.1999]]}};
 const fence = {...shortPath, id: 'fence', properties: {isomSymbol: '516', tagSide: 'right'}, geometry: {type: 'LineString', coordinates: [[18.0998, 59.2001], [18.1002, 59.2001]]}};
+const retainingWall = {...wall, id: 'retaining-wall', properties: {isomSymbol: '513.2', lowerSide: 'right'}};
+const ruinedWall = {...wall, id: 'ruined-wall', properties: {isomSymbol: '514'}};
+const impassableWall = {...wall, id: 'impassable-wall', properties: {isomSymbol: '515'}};
+const ruinedFence = {...fence, id: 'ruined-fence', properties: {isomSymbol: '517', tagSide: 'right'}};
+const impassableFence = {...fence, id: 'impassable-fence', properties: {isomSymbol: '518', tagSide: 'right'}};
+const crossing = {type: 'Feature', id: 'crossing', properties: {isomSymbol: '519', parentObjectId: 'impassable-wall', parentSymbol: '515', angleDegrees: 0, breakBarrier: true}, geometry: {type: 'Point', coordinates: [18.1, 59.1999]}};
 const label = {...shortPath, id: 'label', properties: {isomSymbol: '101', mapText: '42,5', labelCoordinate: [center.lng, center.lat], textHeightMm: 1.5}};
-const svg = renderer.buildVectorSvg([building, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+const svg = renderer.buildVectorSvg([building, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, retainingWall, ruinedWall, impassableWall, ruinedFence, impassableFence, crossing, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(svg.startsWith('<svg'));
 assert(svg.includes('symbolRegistryVersion'));
 assert(svg.includes('data-colour="black"'));
@@ -83,9 +95,16 @@ assert((svg.match(/stroke-linecap="round"/g) || []).length >= 2, 'Branttaggar el
 assert(svg.includes('rotate(81.5)'), 'Stödmarkeringen ska roteras vinkelrätt mot ledningen och kartrotationen');
 assert(svg.includes('data-decoration-symbol="513.1"'), 'Murens punkter saknas i vektorutskriften');
 assert(svg.includes('data-decoration-symbol="516"'), 'Staketets ensidiga taggar saknas i vektorutskriften');
+for (const symbol of ['513.2', '514', '515', '517', '518']) assert(svg.includes(`data-decoration-symbol="${symbol}"`), `Dekoration saknas för ISOM ${symbol}`);
+assert(svg.includes('stroke-dasharray="2.4749999999999996 0.5249999999999999"') || svg.includes('stroke-dasharray="2.475 0.525"'), 'Raserad barriär ska ha 1,65/0,35 mm-mönster');
+assert(svg.includes('rotate(-8.5)'), 'Passage 519 ska följa barriärens och kartans riktning');
+assert(svg.includes('<rect'), 'Linjemask för passage 519 saknas');
 check = renderer.preflight([{...powerLine, properties: {...powerLine.properties, supportCount: 0}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'support-missing'));
 check = renderer.preflight([{...fence, properties: {isomSymbol: '516'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'direction-missing'));
+check = renderer.preflight([{...retainingWall, properties: {isomSymbol: '513.2'}}, {...crossing, properties: {isomSymbol: '519'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+assert(check.issues.some(issue => issue.code === 'direction-missing'));
+assert(check.issues.some(issue => issue.code === 'crossing-unlinked'));
 
 console.log('ISOM renderer: alla kontroller godkända');

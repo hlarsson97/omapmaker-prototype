@@ -15,7 +15,7 @@ import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer,
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
-import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, isDecoratedBarrierSymbol, nearestPointOnLine, powerSupportFeatures, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
+import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, groupedFenceTagSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isDecoratedBarrierSymbol, isImpassableBarrierSymbol, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, retainingWallHalfDotPolygons, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -59,6 +59,25 @@ assert(fenceTags.length >= 1);
 assert(fenceTags[0][1][1] < fenceTags[0][0][1], 'Högertaggar på ett östgående staket ska ligga söderut');
 const wallDots = wallDotCoordinates(fenceObject.coordinates, {styleSpacingMm: 2});
 assert.equal(wallDots.length, 2);
+const retainingObject = applyDefaultSymbolSettings({id: 'retaining-1', symbol: '513.2', coordinates: [[18, 59], [18.001, 59]]}, '513.2');
+assert.equal(retainingObject.lowerSide, 'right');
+assert.match(symbolObjectControlsHtml(retainingObject, escapeHtml), /data-symbol-object-action="retaining-wall-side"/);
+const halfDots = retainingWallHalfDotPolygons(retainingObject.coordinates, {styleSpacingMm: 1, styleOffsetMm: 0.8, styleDiameterMm: 0.4, sideOffsetMm: 0.05}, 'right');
+assert(halfDots.length >= 2);
+assert(halfDots[0].some(coordinate => coordinate[1] < 59), 'Stödmurens högersida ska bukta söderut för en östgående linje');
+const groupedDots = groupedWallDotCoordinates(retainingObject.coordinates, {groupSpacingMm: 3, groupOffsetMm: 1.5, withinGroupSpacingMm: 0.8});
+assert(groupedDots.length >= 2 && groupedDots.length % 2 === 0);
+const groupedTags = groupedFenceTagSegments(retainingObject.coordinates, {groupSpacingMm: 2.5, groupOffsetMm: 1, withinGroupSpacingMm: 0.6, tagLengthMm: 0.4, tagAngleDeg: 60}, 'right');
+assert(groupedTags.length >= 2 && groupedTags.length % 2 === 0);
+assert.equal(isBarrierLineSymbol('514'), true);
+assert.equal(isImpassableBarrierSymbol('515'), true);
+assert.equal(isImpassableBarrierSymbol('516'), false);
+const attachment = nearestBarrierAttachment([{id: 'path', symbol: '506', coordinates: [[18, 59], [18.001, 59]]}, {id: 'wall', symbol: '515', coordinates: [[18, 59.0001], [18.001, 59.0001]]}], [18.0004, 59.00011], 25);
+assert.equal(attachment.barrier.id, 'wall');
+assert(Math.abs(attachment.snapped.coordinate[1] - 59.0001) < 1e-10);
+const crossingControls = symbolObjectControlsHtml({id: 'crossing-1', symbol: '519', parentObjectId: 'wall-1', parentSymbol: '515', breakBarrier: true}, escapeHtml);
+assert.match(crossingControls, /Kopplad till ISOM 515/);
+assert.match(crossingControls, /data-symbol-object-action="crossing-break"/);
 assert.deepEqual(mapObjectSource('osm', 'way/42'), {type: 'osm', label: 'OpenStreetMap', id: 'way/42'});
 const adaptedLocal = localMapObject('point', {id: 'local-2', objectType: 'boulder', source: 'gps', syncStatus: 'local', modifiedBy: 'manual'}, '204');
 assert.equal(adaptedLocal.geometryType, 'Point');
@@ -78,11 +97,14 @@ assert.deepEqual(restorableLocal.coordinates, [18.1, 59.2]);
 assert.equal(restorableLocal.source, 'gps');
 assert.equal(restorableLocal.status, undefined);
 assert.equal(restorableLocal.modifiedBy, undefined);
-const legacyRestorable = {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]], originalObject: {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]]}, downhillSide: 'right', tagSide: 'left', supports: []};
+const legacyRestorable = {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]], originalObject: {objectType: 'cliff', symbol: '201', coordinates: [[18, 59], [18.001, 59]]}, downhillSide: 'right', tagSide: 'left', lowerSide: 'right', supports: [], angleDegrees: 20, parentObjectId: 'wall-1', parentSymbol: '515', breakBarrier: true, breakBarrierMode: 'manual'};
 restoreLocalOriginal(legacyRestorable);
 assert.equal(legacyRestorable.downhillSide, undefined);
 assert.equal(legacyRestorable.tagSide, undefined);
+assert.equal(legacyRestorable.lowerSide, undefined);
 assert.equal(legacyRestorable.supports, undefined);
+assert.equal(legacyRestorable.parentObjectId, undefined);
+assert.equal(legacyRestorable.breakBarrier, undefined);
 const adaptedGenerated = generatedMapObject('buildings', {id: 'building/2', properties: {sourceId: 'way/2'}, geometry: {type: 'Polygon'}}, {symbol: '521', statusLabel: 'Automatiskt kartunderlag'});
 assert.equal(adaptedGenerated.source.type, 'osm');
 assert.deepEqual(adaptedGenerated.capabilities, MAP_OBJECT_CAPABILITIES);
@@ -380,9 +402,9 @@ assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=2'));
-assert(fieldHtml.includes('isom_symbols.js?v=6'));
-assert(fieldHtml.includes('isom_renderer.js?v=6'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=3"'));
+assert(fieldHtml.includes('isom_symbols.js?v=7'));
+assert(fieldHtml.includes('isom_renderer.js?v=7'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=4"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }
