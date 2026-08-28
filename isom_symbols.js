@@ -1,6 +1,6 @@
 window.OMAPMAKER_ISOM_REGISTRY = {
-  "registryVersion": 6,
-  "renderingRevision": 6,
+  "registryVersion": 7,
+  "renderingRevision": 7,
   "standard": "ISOM 2017-2 Revision 6",
   "measurementBasis": {"unit":"mm","baseScale":15000,"enlargeProportionally":true},
   "colours": {
@@ -83,6 +83,11 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "524":{"kind":"high-tower","colour":"black","diameterMm":0.8,"innerDiameterMm":0.3,"strokeWidthMm":0.16,"northOriented":true},
     "525":{"kind":"small-tower","colour":"black","widthMm":1,"heightMm":1,"strokeWidthMm":0.16,"northOriented":true},
     "526":{"kind":"cairn","colour":"black","diameterMm":0.8,"innerDiameterMm":0.14,"strokeWidthMm":0.16,"minimumHeightMetres":0.5},
+    "527":{"kind":"fodder-rack","colour":"black","widthMm":0.9,"heightMm":0.9,"roofRiseMm":0.354,"strokeWidthMm":0.16,"northOriented":true},
+    "528":{"kind":"styled-line","style":"chevrons","colour":"black","widthMm":0.14,"tagLengthMm":0.4,"tagWidthMm":0.14,"tagAngleDeg":45,"styleSpacingMm":2,"styleOffsetMm":1,"minimumLengthMm":1.5,"requiresDefinition":true},
+    "529":{"kind":"styled-line","style":"grouped-chevrons","colour":"black","widthMm":0.25,"tagLengthMm":0.4,"tagWidthMm":0.14,"tagAngleDeg":45,"groupSpacingMm":2,"groupOffsetMm":1,"withinGroupSpacingMm":0.6,"minimumLengthMm":2,"impassable":true,"requiresDefinition":true},
+    "530":{"kind":"point-ring","colour":"black","diameterMm":0.8,"strokeWidthMm":0.16,"requiresDefinition":true},
+    "531":{"kind":"point-cross","colour":"black","widthMm":0.8,"heightMm":0.8,"strokeWidthMm":0.16,"northOriented":true,"requiresDefinition":true},
     "601":{"kind":"north-line","colour":"black","widthMm":0.1,"spacingGroundMetres":300,"northOriented":true}
   },
   "symbols": {
@@ -139,7 +144,12 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "523": {"nameSv":"Ruin","nameEn":"Ruin","geometry":["LineString","MultiLineString","Polygon","MultiPolygon"],"bindingRules":["Grundplanen visas skalenligt","Minsta yttermått 0,8 × 0,8 mm"],"supportStatus":"partial","rendererStatus":"semantic-match"},
     "524": {"nameSv":"Högt torn","nameEn":"High tower","geometry":["Point"],"bindingRules":["Prominent högt torn eller mast"],"supportStatus":"partial","rendererStatus":"semantic-match"},
     "525": {"nameSv":"Litet torn","nameEn":"Small tower","geometry":["Point"],"bindingRules":["Tydligt litet torn, upphöjd plattform eller jakttorn","Symbolen orienteras mot norr"],"supportStatus":"partial","rendererStatus":"semantic-match"},
-    "526": {"nameSv":"Röse eller minnessten","nameEn":"Cairn","geometry":["Point"],"bindingRules":["Prominent röse, minnessten, gränssten eller triangelpunkt","Minst 0,5 m hög"],"supportStatus":"partial","rendererStatus":"semantic-match"}
+    "526": {"nameSv":"Röse eller minnessten","nameEn":"Cairn","geometry":["Point"],"bindingRules":["Prominent röse, minnessten, gränssten eller triangelpunkt","Minst 0,5 m hög"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "527": {"nameSv":"Foderhäck","nameEn":"Fodder rack","geometry":["Point"],"bindingRules":["Fristående foderhäck","Symbolen orienteras mot norr"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "528": {"nameSv":"Framträdande linjeobjekt","nameEn":"Prominent line feature","geometry":["LineString","MultiLineString"],"bindingRules":["Framträdande människoskapat linjeobjekt","Betydelsen ska förklaras på kartan"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "529": {"nameSv":"Framträdande opasserbart linjeobjekt","nameEn":"Prominent uncrossable line feature","geometry":["LineString","MultiLineString"],"bindingRules":["Framträdande människoskapat linjeobjekt som inte får passeras","Betydelsen ska förklaras på kartan"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "530": {"nameSv":"Framträdande människoskapat objekt – ring","nameEn":"Prominent man-made feature – ring","geometry":["Point"],"bindingRules":["Framträdande människoskapat punktobjekt","Betydelsen ska förklaras på kartan"],"supportStatus":"partial","rendererStatus":"semantic-match"},
+    "531": {"nameSv":"Framträdande människoskapat objekt – kryss","nameEn":"Prominent man-made feature – x","geometry":["Point"],"bindingRules":["Framträdande människoskapat punktobjekt","Betydelsen ska förklaras på kartan","Symbolen orienteras mot norr"],"supportStatus":"partial","rendererStatus":"semantic-match"}
   },
   "manualTypes": {
     "boulder": {"category":"point","geometry":"Point","symbol":"204","nameSv":"Sten","selectable":true,"publishable":true},
@@ -149,6 +159,9 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "tower": {"category":"point","geometry":"Point","symbol":"524","nameSv":"Högt torn","selectable":true,"publishable":true},
     "small_tower": {"category":"point","geometry":"Point","symbol":"525","nameSv":"Litet torn","selectable":true,"publishable":true},
     "cairn": {"category":"point","geometry":"Point","symbol":"526","nameSv":"Röse eller minnessten","selectable":true,"publishable":true},
+    "fodder_rack": {"category":"point","geometry":"Point","symbol":"527","nameSv":"Foderhäck","selectable":true,"publishable":true},
+    "prominent_manmade_ring": {"category":"point","geometry":"Point","symbol":"530","nameSv":"Framträdande människoskapat objekt – ring","selectable":true,"publishable":true},
+    "prominent_manmade_x": {"category":"point","geometry":"Point","symbol":"531","nameSv":"Framträdande människoskapat objekt – kryss","selectable":true,"publishable":true},
     "well": {"category":"point","geometry":"Point","symbol":"311","nameSv":"Brunn, fontän eller vattentank","selectable":true,"publishable":true},
     "crossing_point": {"category":"point","geometry":"Point","symbol":"519","nameSv":"Passage genom barriär","selectable":true,"publishable":true},
     "rootstock": {"category":"point","geometry":"Point","symbol":null,"nameSv":"Rotvälta – ej normkopplad","selectable":false,"publishable":false},
@@ -172,6 +185,8 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "retaining_wall": {"category":"line","geometry":"LineString","symbol":"513.2","nameSv":"Stödmur","selectable":true,"publishable":true},
     "ruined_wall": {"category":"line","geometry":"LineString","symbol":"514","nameSv":"Raserad mur","selectable":true,"publishable":true},
     "impassable_wall": {"category":"line","geometry":"LineString","symbol":"515","nameSv":"Opasserbar mur","selectable":true,"publishable":true},
+    "prominent_line_feature": {"category":"line","geometry":"LineString","symbol":"528","nameSv":"Framträdande linjeobjekt","selectable":true,"publishable":true},
+    "prominent_uncrossable_line_feature": {"category":"line","geometry":"LineString","symbol":"529","nameSv":"Framträdande opasserbart linjeobjekt","selectable":true,"publishable":true},
     "cliff": {"category":"line","geometry":"LineString","symbol":"201","nameSv":"Ej passerbar brant","selectable":true,"publishable":true},
     "passable_cliff": {"category":"line","geometry":"LineString","symbol":"202","nameSv":"Brant","selectable":true,"publishable":true},
     "building": {"category":"area","geometry":"Polygon","symbol":"521","nameSv":"Byggnad","selectable":true,"publishable":true},

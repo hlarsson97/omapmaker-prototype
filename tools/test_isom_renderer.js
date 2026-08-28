@@ -11,8 +11,8 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 6);
-assert.strictEqual(registry.renderingRevision, 6);
+assert.strictEqual(registry.registryVersion, 7);
+assert.strictEqual(registry.renderingRevision, 7);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -40,6 +40,13 @@ assert.deepStrictEqual(registry.renderers['523'].dashMm, [0.5, 0.25]);
 assert.strictEqual(registry.renderers['524'].innerDiameterMm, 0.3);
 assert.strictEqual(registry.renderers['525'].widthMm, 1);
 assert.strictEqual(registry.renderers['526'].innerDiameterMm, 0.14);
+assert.strictEqual(registry.renderers['527'].roofRiseMm, 0.354);
+assert.strictEqual(registry.renderers['528'].styleSpacingMm, 2);
+assert.strictEqual(registry.renderers['528'].tagAngleDeg, 45);
+assert.strictEqual(registry.renderers['529'].withinGroupSpacingMm, 0.6);
+assert.strictEqual(registry.renderers['529'].minimumLengthMm, 2);
+assert.strictEqual(registry.renderers['530'].diameterMm, 0.8);
+assert.strictEqual(registry.renderers['531'].widthMm, 0.8);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
 const railwayStyle = renderer.lineStyles('509', {}, screenContext);
@@ -58,6 +65,12 @@ const smallTowerMarkup = renderer.pointMarkup('525', screenContext).html;
 assert(smallTowerMarkup.includes('H0.5') && smallTowerMarkup.includes('V0.5'), 'Litet torn ska vara en 1,0 × 1,0 mm T-symbol');
 const cairnMarkup = renderer.pointMarkup('526', screenContext).html;
 assert.strictEqual((cairnMarkup.match(/<circle/g) || []).length, 2, 'Röse ska ha ring och mittpunkt');
+const fodderRackMarkup = renderer.pointMarkup('527', screenContext).html;
+assert(fodderRackMarkup.includes('L0,-0.096') && fodderRackMarkup.includes('V0.45'), 'Foderhäcken ska ha 0,354 mm takhöjd och 0,9 mm totalhöjd');
+const prominentRingMarkup = renderer.pointMarkup('530', screenContext).html;
+assert(prominentRingMarkup.includes('<circle') && prominentRingMarkup.includes('r="0.32"'), 'ISOM 530 ska vara en 0,8 mm ring med 0,16 mm linje');
+const prominentXMarkup = renderer.pointMarkup('531', screenContext).html;
+assert(prominentXMarkup.includes('M-0.4,-0.4 L0.4,0.4'), 'ISOM 531 ska vara ett 0,8 × 0,8 mm kryss');
 
 const center = {lat: 59.2, lng: 18.1};
 const shortPath = {
@@ -67,6 +80,10 @@ const shortPath = {
 let check = renderer.preflight([shortPath], {scale: 10000, declination: null, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'declination-missing'));
 assert(check.issues.some(issue => issue.code === 'minimum-length'));
+for (const symbol of ['528', '529']) {
+  check = renderer.preflight([{...shortPath, properties: {isomSymbol: symbol, name: `Kort ISOM ${symbol}`}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+  assert(check.issues.some(issue => issue.code === 'minimum-length'), `ISOM ${symbol} ska kontrolleras mot sin minimilängd`);
+}
 
 const building = {
   type: 'Feature', id: 'building', properties: {isomSymbol: '521', name: 'Byggnad'},
@@ -105,8 +122,13 @@ const canopy = {...building, id: 'canopy', properties: {isomSymbol: '522'}};
 const ruin = {...building, id: 'ruin', properties: {isomSymbol: '523'}};
 const smallTower = {type: 'Feature', id: 'small-tower', properties: {isomSymbol: '525'}, geometry: {type: 'Point', coordinates: [18.1002, 59.2]}};
 const cairn = {type: 'Feature', id: 'cairn', properties: {isomSymbol: '526'}, geometry: {type: 'Point', coordinates: [18.1003, 59.2]}};
+const fodderRack = {type: 'Feature', id: 'fodder-rack', properties: {isomSymbol: '527'}, geometry: {type: 'Point', coordinates: [18.1004, 59.2]}};
+const prominentLine = {...wall, id: 'prominent-line', properties: {isomSymbol: '528'}};
+const prominentUncrossableLine = {...wall, id: 'prominent-uncrossable-line', properties: {isomSymbol: '529'}};
+const prominentRing = {type: 'Feature', id: 'prominent-ring', properties: {isomSymbol: '530'}, geometry: {type: 'Point', coordinates: [18.1005, 59.2]}};
+const prominentX = {type: 'Feature', id: 'prominent-x', properties: {isomSymbol: '531'}, geometry: {type: 'Point', coordinates: [18.1006, 59.2]}};
 const label = {...shortPath, id: 'label', properties: {isomSymbol: '101', mapText: '42,5', labelCoordinate: [center.lng, center.lat], textHeightMm: 1.5}};
-const svg = renderer.buildVectorSvg([building, canopy, ruin, smallTower, cairn, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, retainingWall, ruinedWall, impassableWall, ruinedFence, impassableFence, crossing, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+const svg = renderer.buildVectorSvg([building, canopy, ruin, smallTower, cairn, fodderRack, prominentLine, prominentUncrossableLine, prominentRing, prominentX, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, retainingWall, ruinedWall, impassableWall, ruinedFence, impassableFence, crossing, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(svg.startsWith('<svg'));
 assert(svg.includes('symbolRegistryVersion'));
 assert(svg.includes('data-colour="black"'));
@@ -122,6 +144,7 @@ assert(svg.includes('rotate(81.5)'), 'Stödmarkeringen ska roteras vinkelrätt m
 assert(svg.includes('data-decoration-symbol="513.1"'), 'Murens punkter saknas i vektorutskriften');
 assert(svg.includes('data-decoration-symbol="516"'), 'Staketets ensidiga taggar saknas i vektorutskriften');
 for (const symbol of ['513.2', '514', '515', '517', '518']) assert(svg.includes(`data-decoration-symbol="${symbol}"`), `Dekoration saknas för ISOM ${symbol}`);
+for (const symbol of ['528', '529']) assert(svg.includes(`data-decoration-symbol="${symbol}"`), `45-gradersmarkeringar saknas för ISOM ${symbol}`);
 assert(svg.includes('stroke-dasharray="2.4749999999999996 0.5249999999999999"') || svg.includes('stroke-dasharray="2.475 0.525"'), 'Raserad barriär ska ha 1,65/0,35 mm-mönster');
 assert(svg.includes('rotate(-8.5)'), 'Passage 519 ska följa barriärens och kartans riktning');
 assert(svg.includes('<rect'), 'Linjemask för passage 519 saknas');

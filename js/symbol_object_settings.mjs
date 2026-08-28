@@ -1,7 +1,8 @@
 const CLIFF_SYMBOLS = new Set(['201', '202']);
 const POWER_LINE_SYMBOLS = new Set(['510', '511']);
 const DECORATED_BARRIER_SYMBOLS = new Set(['513.1', '513.2', '514', '515', '516', '517', '518']);
-const IMPASSABLE_BARRIER_SYMBOLS = new Set(['515', '518']);
+const PROMINENT_LINE_SYMBOLS = new Set(['528', '529']);
+const IMPASSABLE_BARRIER_SYMBOLS = new Set(['515', '518', '529']);
 const METRES_PER_DEGREE = 111320;
 
 export function isCliffSymbol(symbol) {
@@ -16,8 +17,14 @@ export function isDecoratedBarrierSymbol(symbol) {
   return DECORATED_BARRIER_SYMBOLS.has(String(symbol || ''));
 }
 
+export function isDecoratedLineSymbol(symbol) {
+  const value = String(symbol || '');
+  return DECORATED_BARRIER_SYMBOLS.has(value) || PROMINENT_LINE_SYMBOLS.has(value);
+}
+
 export function isBarrierLineSymbol(symbol) {
-  return DECORATED_BARRIER_SYMBOLS.has(String(symbol || ''));
+  const value = String(symbol || '');
+  return DECORATED_BARRIER_SYMBOLS.has(value) || value === '529';
 }
 
 export function isImpassableBarrierSymbol(symbol) {
@@ -231,6 +238,26 @@ export function groupedFenceTagSegments(coordinates, definition, tagSide, baseSc
     const end = {x: sample.point.x + Math.cos(sample.angle + angleOffset) * tagLength, y: sample.point.y + Math.sin(sample.angle + angleOffset) * tagLength};
     return [sample.coordinate, sample.toCoordinate(end)];
   });
+}
+
+function chevronSegmentsFromSamples(samples, definition, baseScale) {
+  const tagLength = Number(definition?.tagLengthMm || 0) * Number(baseScale) / 1000;
+  const angleOffset = Number(definition?.tagAngleDeg || 45) * Math.PI / 180;
+  return samples.flatMap(sample => [-1, 1].map(direction => {
+    const angle = sample.angle + Math.PI + direction * angleOffset;
+    const end = {x: sample.point.x + Math.cos(angle) * tagLength, y: sample.point.y + Math.sin(angle) * tagLength};
+    return [sample.coordinate, sample.toCoordinate(end)];
+  }));
+}
+
+export function prominentLineChevronSegments(coordinates, definition, baseScale = 15000) {
+  const spacing = Number(definition?.styleSpacingMm || 0) * Number(baseScale) / 1000;
+  const offset = Number(definition?.styleOffsetMm || definition?.styleSpacingMm / 2 || 0) * Number(baseScale) / 1000;
+  return chevronSegmentsFromSamples(sampledLinePoints(coordinates, spacing, offset), definition, baseScale);
+}
+
+export function groupedProminentLineChevronSegments(coordinates, definition, baseScale = 15000) {
+  return chevronSegmentsFromSamples(groupedSamples(coordinates, definition, baseScale), definition, baseScale);
 }
 
 export function powerSupportFeatures(object, symbol) {

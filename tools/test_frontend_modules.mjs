@@ -15,7 +15,7 @@ import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer,
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
-import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, groupedFenceTagSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isDecoratedBarrierSymbol, isImpassableBarrierSymbol, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, retainingWallHalfDotPolygons, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
+import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -72,6 +72,16 @@ assert(groupedTags.length >= 2 && groupedTags.length % 2 === 0);
 assert.equal(isBarrierLineSymbol('514'), true);
 assert.equal(isImpassableBarrierSymbol('515'), true);
 assert.equal(isImpassableBarrierSymbol('516'), false);
+const prominentChevrons = prominentLineChevronSegments(fenceObject.coordinates, {styleSpacingMm: 2, styleOffsetMm: 1, tagLengthMm: 0.4, tagAngleDeg: 45});
+assert(prominentChevrons.length >= 2 && prominentChevrons.length % 2 === 0);
+assert(prominentChevrons[0][1][0] < prominentChevrons[0][0][0], 'ISOM 528-markeringen ska peka bakåt längs en östgående linje');
+const groupedProminentChevrons = groupedProminentLineChevronSegments(fenceObject.coordinates, {groupSpacingMm: 2, groupOffsetMm: 1, withinGroupSpacingMm: 0.6, tagLengthMm: 0.4, tagAngleDeg: 45});
+assert(groupedProminentChevrons.length >= 4 && groupedProminentChevrons.length % 4 === 0);
+assert.equal(isDecoratedBarrierSymbol('528'), false);
+assert.equal(isDecoratedLineSymbol('528'), true);
+assert.equal(isBarrierLineSymbol('528'), false);
+assert.equal(isBarrierLineSymbol('529'), true);
+assert.equal(isImpassableBarrierSymbol('529'), true);
 const attachment = nearestBarrierAttachment([{id: 'path', symbol: '506', coordinates: [[18, 59], [18.001, 59]]}, {id: 'wall', symbol: '515', coordinates: [[18, 59.0001], [18.001, 59.0001]]}], [18.0004, 59.00011], 25);
 assert.equal(attachment.barrier.id, 'wall');
 assert(Math.abs(attachment.snapped.coordinate[1] - 59.0001) < 1e-10);
@@ -403,8 +413,8 @@ assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=2'));
-assert(fieldHtml.includes('isom_symbols.js?v=8'));
-assert(fieldHtml.includes('isom_renderer.js?v=8'));
+assert(fieldHtml.includes('isom_symbols.js?v=9'));
+assert(fieldHtml.includes('isom_renderer.js?v=9'));
 assert(fieldHtml.includes('type="module" src="app.mjs?v=4"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
