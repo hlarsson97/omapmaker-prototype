@@ -1,7 +1,7 @@
 import {$, cloneJson, escapeHtml, formatBytes, jsonResponse, uuidPattern, wait} from './js/utils.mjs';
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from './js/generation_settings.mjs';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
-import {createFieldMap} from './js/map_setup.mjs';
+import {createFieldMap} from './js/map_setup.mjs?v=2';
 import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs';
 import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs';
 import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs';

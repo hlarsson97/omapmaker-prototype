@@ -434,7 +434,7 @@ assert(fieldHtml.includes('styles.css?v=3'));
 assert(fieldHtml.includes('isom_symbols.js?v=9'));
 assert(fieldHtml.includes('isom_renderer.js?v=9'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.3'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=7"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=8"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }
