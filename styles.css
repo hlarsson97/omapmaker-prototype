@@ -353,6 +353,11 @@ body.generated-geometry-editing #editBar{border:2px solid #286fc0}
 .generation-options .future-option{opacity:.55;cursor:not-allowed}
 .generation-select{display:grid;gap:6px;margin:0 0 14px;font-size:11px;font-weight:800}
 .generation-select select{width:100%;min-height:44px;padding:8px 10px;border:1px solid #cfd8d1;border-radius:10px;background:#fff;font:600 12px/1.2 system-ui,sans-serif}
+.generation-advanced{margin:0 0 14px;border:1px solid #d9e1db;border-radius:11px;background:#fafbf8}
+.generation-advanced summary{padding:11px 12px;color:#315645;font-size:10px;font-weight:800;cursor:pointer}
+.generation-advanced[open] summary{border-bottom:1px solid #e1e7e2}
+.generation-advanced .generation-select{margin:0;padding:11px 12px}
+.generation-advanced select:disabled{color:#7b847f;background:#f0f2ef}
 .generation-note{display:grid;gap:3px;margin:0 0 14px;padding:11px 12px;border-radius:11px;background:#f0f3ec;color:#506159}
 .generation-note b{color:#1a573e;font-size:10px}
 .generation-note span{font-size:9px;line-height:1.4}

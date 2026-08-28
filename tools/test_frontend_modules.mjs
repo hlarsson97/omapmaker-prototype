@@ -389,8 +389,10 @@ const memoryStorage = {
 const generation = readGenerationSettings(memoryStorage, 'settings');
 assert.equal(generation.surface.profile, 'quick');
 assert.equal(generation.surface.paved, false);
+assert.deepEqual(generation.sources, {buildings: 'automatic', roads: 'automatic'});
 applyGenerationProfile(generation, 'line', 'detailed');
 assert.equal(generation.line.aerialways, true);
+assert.equal(generation.sources.buildings, 'automatic');
 assert.equal(generationSummary(generation, 'line'), 'Detaljerad · 8 kategorier');
 
 const panes = new Map();

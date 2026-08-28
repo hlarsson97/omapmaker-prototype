@@ -5,6 +5,8 @@ export const generationProfileLabels = {
   custom: 'Eget urval'
 };
 
+export const defaultGenerationSources = Object.freeze({buildings: 'automatic', roads: 'automatic'});
+
 export const generationPresets = {
   surface: {
     quick: {buildings: true, water: true, land: true, paved: false, restricted: true, restrictedMode: 'cautious'},
@@ -27,7 +29,8 @@ export function readGenerationSettings(storage, storageKey) {
   const lineProfile = generationPresets.line[saved.line?.profile] ? saved.line.profile : 'standard';
   return {
     surface: {profile: surfaceProfile, ...generationPresets.surface[surfaceProfile], ...(saved.surface || {})},
-    line: {profile: lineProfile, ...generationPresets.line[lineProfile], ...(saved.line || {})}
+    line: {profile: lineProfile, ...generationPresets.line[lineProfile], ...(saved.line || {})},
+    sources: {...defaultGenerationSources, ...(saved.sources || {})}
   };
 }
 
