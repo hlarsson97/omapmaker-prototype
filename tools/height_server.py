@@ -10,7 +10,7 @@ from pyproj import Transformer
 from rasterio.merge import merge as merge_rasters
 from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polygon, box as geometry_box, mapping as geometry_mapping
 from shapely.ops import polygonize, transform as transform_geometry, unary_union
-from lantmateriet_height import ApiError as LantmaterietApiError, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
+from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from map_store import MapStore
 from isom_registry import REGISTRY_VERSION
 
@@ -1012,6 +1012,18 @@ def lantmateriet_auth():
         return {'bearer_token':'','username':username,'password':password}
     raise LantmaterietCredentialsRequired('Servern behöver konfigureras med en OAuth2-nyckel för Lantmäteriets STAC-hojd.')
 
+def lantmateriet_map_api_status():
+    """Probe map APIs without exposing credentials or returned feature data."""
+    token=lantmateriet_bearer_token();services={}
+    for name,root in (('buildings',VECTOR_API_ROOT),('propertyBoundaries',PROPERTY_API_ROOT)):
+        try:
+            result=lantmateriet_api_json(root,'/collections',bearer_token=token)
+            collections=result.get('collections') or []
+            services[name]={'available':True,'collections':[str(item.get('id')) for item in collections if item.get('id')]}
+        except LantmaterietApiError as exc:
+            services[name]={'available':False,'error':str(exc)}
+    return {'ok':True,'authenticationMode':'oauth2','services':services}
+
 def set_lantmateriet_credentials(username,password):
     username=str(username or '').strip();password=str(password or '')
     if not username or not password:raise ValueError('Användarnamn och lösenord krävs')
@@ -1280,6 +1292,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path=='/api/height-status':
             mode=lantmateriet_auth_mode();cached_files=len(list(DATA.rglob('*.tif'))) if DATA.exists() else 0
             return self.send_json(200,{'ok':True,'credentialsConfigured':mode!='not-configured','authenticationMode':mode,'collection':'dtm-cog','cachedHeightFiles':cached_files})
+        if path=='/api/lantmateriet-map-status':
+            try:return self.send_json(200,lantmateriet_map_api_status())
+            except (LantmaterietCredentialsRequired,LantmaterietApiError) as exc:return self.send_json(502,{'ok':False,'error':str(exc)})
         if path.startswith('/api/contour-jobs/'):
             job_id=path.rsplit('/',1)[-1];job=public_job(job_id)
             if not job:return self.send_json(404,{'error':'Höjdjobbet hittades inte','code':'job_not_found'})

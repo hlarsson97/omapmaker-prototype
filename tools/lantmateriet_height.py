@@ -21,6 +21,8 @@ from pathlib import Path
 
 
 API_ROOT = "https://api.lantmateriet.se/stac-hojd/v1"
+VECTOR_API_ROOT = "https://api.lantmateriet.se/stac-vektor/v1"
+PROPERTY_API_ROOT = "https://api.lantmateriet.se/ogc-features/v1/fastighetsindelning"
 TOKEN_ENDPOINT = "https://apimanager.lantmateriet.se/oauth2/token"
 
 
@@ -114,6 +116,12 @@ def oauth_token(client_id: str, client_secret: str) -> tuple[str, int]:
 
 def get_json(path: str, username: str = "", password: str = "", *, bearer_token: str = "") -> dict:
     with request(API_ROOT + path, username, password, bearer_token=bearer_token) as response:
+        return json.load(response)
+
+
+def api_json(api_root: str, path: str, *, bearer_token: str) -> dict:
+    """Read JSON from another Lantmateriet API with the server OAuth token."""
+    with request(api_root.rstrip("/") + "/" + path.lstrip("/"), bearer_token=bearer_token) as response:
         return json.load(response)
 
 

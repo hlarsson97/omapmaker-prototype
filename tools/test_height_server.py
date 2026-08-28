@@ -505,6 +505,30 @@ class OAuthTests(unittest.TestCase):
         self.assertEqual(captured['request'].data,b'grant_type=client_credentials')
         self.assertTrue(captured['request'].get_header('Authorization').startswith('Basic '))
 
+    def test_api_json_uses_requested_api_and_bearer_token(self):
+        class Response:
+            def __enter__(self):return self
+            def __exit__(self,*_):return False
+            def read(self,*_):return b'{"collections":[]}'
+        captured={}
+        def open_request(request,timeout):
+            captured['request']=request;return Response()
+        with patch('urllib.request.urlopen',open_request):
+            result=lm_height.api_json('https://example.test/root/','/collections',bearer_token='test-token')
+        self.assertEqual(result,{'collections':[]})
+        self.assertEqual(captured['request'].full_url,'https://example.test/root/collections')
+        self.assertEqual(captured['request'].get_header('Authorization'),'Bearer test-token')
+
+    def test_map_api_status_reports_collections_without_token(self):
+        def result(root,path,*,bearer_token):
+            self.assertEqual(path,'/collections');self.assertEqual(bearer_token,'secret-token')
+            return {'collections':[{'id':'first'},{'id':'second'}]}
+        with patch.object(server,'lantmateriet_bearer_token',return_value='secret-token'),patch.object(server,'lantmateriet_api_json',side_effect=result):
+            status=server.lantmateriet_map_api_status()
+        self.assertTrue(status['services']['buildings']['available'])
+        self.assertEqual(status['services']['propertyBoundaries']['collections'],['first','second'])
+        self.assertNotIn('secret-token',json.dumps(status))
+
 
 class ContourJobTests(unittest.TestCase):
     def test_completed_background_job_exposes_result(self):
