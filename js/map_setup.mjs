@@ -1,8 +1,9 @@
 export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
-  const map = Leaflet.map('map', {zoomControl: false}).setView(
+  const map = Leaflet.map('map', {zoomControl: false, rotate: true, bearing: 0, touchRotate: true, dragRotate: true, shiftKeyRotate: true}).setView(
     [initialCenter.lat, initialCenter.lng],
     hasWorkspace ? 14 : 15
   );
+  for (const handler of ['touchRotate','dragRotate','shiftKeyRotate']) map[handler]?.disable?.();
   Leaflet.control.zoom({position: 'bottomright'}).addTo(map);
 
   const panes = {

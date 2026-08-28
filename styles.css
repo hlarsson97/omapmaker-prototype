@@ -142,6 +142,7 @@ body.manual-mode{--mode-color:#286fc0;--mode-color-translucent:#286fc0ed;--mode-
 
 #mapNavControls{position:fixed;z-index:1060;right:10px;bottom:calc(92px + env(safe-area-inset-bottom));display:grid;gap:6px}
 #mapNavControls button{display:grid;place-items:center;width:42px;height:42px;border:0;border-radius:12px;background:#fffdf3ed;color:#17241c;font-size:21px;font-weight:900;box-shadow:0 2px 9px #17241c35;backdrop-filter:blur(7px);cursor:pointer}
+#mapOrientationButton{position:relative}#mapOrientationButton i{grid-area:1/1;font-style:normal;font-size:20px;line-height:1;transform:rotate(var(--compass-bearing,0deg))}#mapOrientationButton small{position:absolute;right:3px;bottom:2px;min-width:16px;padding:1px 3px;border-radius:5px;background:var(--green);color:white;font-size:7px;line-height:11px;letter-spacing:.03em}#mapOrientationButton.free small{background:var(--blue)}
 #mapNavControls button:disabled{opacity:.5}
 #mapNavControls button.busy{color:transparent;position:relative}
 #mapNavControls button.busy::after{content:"";position:absolute;width:15px;height:15px;border:2px solid #aab3ad;border-top-color:var(--mode-color);border-radius:50%;animation:nav-spin .8s linear infinite}

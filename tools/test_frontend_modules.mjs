@@ -14,6 +14,7 @@ import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, createGeneratedLandCoverLa
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {magneticNorthRequestUrl, magneticNorthSummary} from '../js/magnetic_north.mjs';
+import {mapOrientationBearing, mapOrientationLabel, nextMapOrientation} from '../js/map_orientation.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
@@ -26,6 +27,13 @@ assert.equal(formatBytes(205 * 1024 * 1024), '205 MB');
 assert(uuidPattern.test('5eda656c-ddba-43d3-b124-72184e7f91fc'));
 assert.equal(magneticNorthRequestUrl({lat:59.3,lng:18.1},'2026-08-28'),'/api/magnetic-north?lat=59.3&lng=18.1&date=2026-08-28');
 assert.match(magneticNorthSummary({model:'WMM2025',date:'2026-08-28',declinationDegrees:7.73,meridianConvergenceDegrees:1.59,gridToMagneticDegrees:6.14}),/nordlinjer \+7,73°/);
+assert.equal(nextMapOrientation('map-north'),'magnetic-north');
+assert.equal(nextMapOrientation('magnetic-north'),'free');
+assert.equal(nextMapOrientation('free'),'map-north');
+assert.equal(mapOrientationBearing('map-north',7.7,23),0);
+assert.equal(mapOrientationBearing('magnetic-north',7.7,23),-7.7);
+assert.equal(mapOrientationBearing('free',7.7,23),23);
+assert.equal(mapOrientationLabel('free'),'Fri rotation');
 assert.equal(localObjectSourceLabel('gps'), 'GPS-inmätt');
 assert.equal(localObjectSourceLabel('manual'), 'Manuellt skapad');
 const localPopup = localObjectPopup('point', {id: 'local-1', objectType: 'boulder', symbol: '204', source: 'gps', syncStatus: 'local', accuracy: 3.6}, {name: () => 'Sten', isomClaim: () => 'ISOM 204', escapeHtml});
@@ -417,10 +425,11 @@ assert.equal(panes.get('gpsPane').style.zIndex, 650);
 assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=2'));
+assert(fieldHtml.includes('styles.css?v=3'));
 assert(fieldHtml.includes('isom_symbols.js?v=9'));
 assert(fieldHtml.includes('isom_renderer.js?v=9'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=6"'));
+assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.3'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=7"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

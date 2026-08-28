@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=2"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=3"></head>
 <body class="gps-mode">
 <header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><button id="export">Exportera</button></header>
 <main id="map"></main>
@@ -9,6 +9,7 @@
 <div id="draftHint">LOKALT UTKAST · Inget skickas automatiskt</div>
 <button id="layersButton" aria-label="Öppna kartlager och generering"><i aria-hidden="true">▤</i><span><b>Kartlager</b><small>Visa och generera</small></span></button>
 <div id="mapNavControls" aria-label="Kartnavigering">
+  <button id="mapOrientationButton" type="button" aria-label="Kartnorr upp. Tryck för magnetiskt norr upp" title="Kartnorr upp"><i aria-hidden="true">🧭</i><small>N</small></button>
   <button id="centerWorkspaceButton" type="button" aria-label="Visa hela arbetsområdet" title="Visa hela arbetsområdet">▣</button>
   <button id="centerLocationButton" type="button" aria-label="Centrera på min position" title="Centrera på min position">◎</button>
 </div>
@@ -136,4 +137,4 @@
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="printAttribution">Höjddata © Lantmäteriet · övrigt underlag © OpenStreetMap contributors · egen fältdata</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="isom_symbols.js?v=9"></script><script src="isom_renderer.js?v=9"></script><script type="module" src="app.mjs?v=6"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.3/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=9"></script><script src="isom_renderer.js?v=9"></script><script type="module" src="app.mjs?v=7"></script></body></html>
