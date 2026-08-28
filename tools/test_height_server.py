@@ -19,6 +19,7 @@ import height_server as server
 import lantmateriet_height as lm_height
 import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
+from magnetic_north import calculate_magnetic_north
 from test_map_store import CentralMapStoreTests
 from map_store import MapStore
 
@@ -54,6 +55,21 @@ class CentralStorageApiTests(unittest.TestCase):
     def test_submission_requires_anonymous_device_identifier(self):
         with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/submissions',{'clientSubmissionId':'missing','features':[]})
         self.assertEqual(caught.exception.code,400)
+
+    def test_magnetic_north_endpoint_combines_wmm_and_grid_convergence(self):
+        status,result=self.request('/api/magnetic-north?lat=59.3293&lng=18.0686&date=2026-08-28')
+        self.assertEqual(status,200);self.assertEqual(result['model'],'WMM2025')
+        self.assertAlmostEqual(result['declinationDegrees'],7.7327,places=3)
+        self.assertAlmostEqual(result['gridToMagneticDegrees'],result['declinationDegrees']-result['meridianConvergenceDegrees'],places=3)
+
+    def test_magnetic_north_endpoint_rejects_date_outside_model(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/magnetic-north?lat=59.3&lng=18.1&date=2030-01-01')
+        self.assertEqual(caught.exception.code,400)
+
+    def test_stockholm_reference_is_stable(self):
+        result=calculate_magnetic_north(59.3293,18.0686,'2026-08-28')
+        self.assertEqual(result['projection'],'SWEREF 99 TM (EPSG:3006)')
+        self.assertGreater(result['declinationDegrees'],result['gridToMagneticDegrees'])
 
     def test_central_layer_resolver_returns_covering_snapshot(self):
         collection={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL'},'features':[{'type':'Feature','id':'way-1','properties':{'sourceId':'way/1'},'geometry':{'type':'LineString','coordinates':[[18,59],[18.02,59.02]]}}]}

@@ -13,6 +13,7 @@ import {INFRASTRUCTURE_ATTRIBUTION, INFRASTRUCTURE_TYPES, createGeneratedInfrast
 import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature, landCoverMetaText} from '../js/generated_land_cover.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
+import {magneticNorthRequestUrl, magneticNorthSummary} from '../js/magnetic_north.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
@@ -23,6 +24,8 @@ assert.equal(escapeHtml('<sten & "stig">'), '&lt;sten &amp; &quot;stig&quot;&gt;
 assert.deepEqual(cloneJson({coordinates: [18.1, 59.2]}), {coordinates: [18.1, 59.2]});
 assert.equal(formatBytes(205 * 1024 * 1024), '205 MB');
 assert(uuidPattern.test('5eda656c-ddba-43d3-b124-72184e7f91fc'));
+assert.equal(magneticNorthRequestUrl({lat:59.3,lng:18.1},'2026-08-28'),'/api/magnetic-north?lat=59.3&lng=18.1&date=2026-08-28');
+assert.match(magneticNorthSummary({model:'WMM2025',date:'2026-08-28',declinationDegrees:7.73,meridianConvergenceDegrees:1.59,gridToMagneticDegrees:6.14}),/nordlinjer \+7,73°/);
 assert.equal(localObjectSourceLabel('gps'), 'GPS-inmätt');
 assert.equal(localObjectSourceLabel('manual'), 'Manuellt skapad');
 const localPopup = localObjectPopup('point', {id: 'local-1', objectType: 'boulder', symbol: '204', source: 'gps', syncStatus: 'local', accuracy: 3.6}, {name: () => 'Sten', isomClaim: () => 'ISOM 204', escapeHtml});
@@ -417,7 +420,7 @@ const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=2'));
 assert(fieldHtml.includes('isom_symbols.js?v=9'));
 assert(fieldHtml.includes('isom_renderer.js?v=9'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=4"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=6"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

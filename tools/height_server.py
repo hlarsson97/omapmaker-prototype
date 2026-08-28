@@ -13,6 +13,7 @@ from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from map_store import MapStore
 from isom_registry import REGISTRY_VERSION
+from magnetic_north import calculate_magnetic_north
 
 ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE)
 LEVELS={'detailed':2,'normal':5,'soft':10}
@@ -1295,6 +1296,11 @@ class Handler(SimpleHTTPRequestHandler):
         if path=='/api/lantmateriet-map-status':
             try:return self.send_json(200,lantmateriet_map_api_status())
             except (LantmaterietCredentialsRequired,LantmaterietApiError) as exc:return self.send_json(502,{'ok':False,'error':str(exc)})
+        if path=='/api/magnetic-north':
+            try:
+                query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                return self.send_json(200,calculate_magnetic_north((query.get('lat') or [''])[0],(query.get('lng') or [''])[0],(query.get('date') or [None])[0]))
+            except (ValueError,TypeError) as exc:return self.send_json(400,{'error':str(exc)})
         if path.startswith('/api/contour-jobs/'):
             job_id=path.rsplit('/',1)[-1];job=public_job(job_id)
             if not job:return self.send_json(404,{'error':'Höjdjobbet hittades inte','code':'job_not_found'})
