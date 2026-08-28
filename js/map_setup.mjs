@@ -22,8 +22,9 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     gpsPane: 650
   };
   const nonInteractive = new Set(['contourPane', 'northLinePane', 'evidencePane', 'gpsPane']);
+  const rotatingPane = map.getPane('overlayPane')?.parentElement;
   for (const [name, zIndex] of Object.entries(panes)) {
-    map.createPane(name);
+    map.createPane(name, rotatingPane);
     const pane = map.getPane(name);
     pane.style.zIndex = zIndex;
     if (nonInteractive.has(name)) pane.style.pointerEvents = 'none';

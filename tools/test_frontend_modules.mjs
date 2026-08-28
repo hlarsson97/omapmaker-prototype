@@ -407,10 +407,12 @@ assert.equal(generation.sources.buildings, 'automatic');
 assert.equal(generationSummary(generation, 'line'), 'Detaljerad · 8 kategorier');
 
 const panes = new Map();
+const rotatingPane = {className: 'leaflet-rotate-pane'};
+const paneParents = new Map();
 const fakeMap = {
   setView() { return this; },
-  createPane(name) { panes.set(name, {style: {}}); },
-  getPane(name) { return panes.get(name); }
+  createPane(name, parent) { panes.set(name, {style: {}}); paneParents.set(name,parent); },
+  getPane(name) { return name==='overlayPane'?{parentElement:rotatingPane}:panes.get(name); }
 };
 const fakeLeaflet = {
   map: () => fakeMap,
@@ -423,6 +425,9 @@ assert.equal(panes.get('contourPane').style.zIndex, 340);
 assert.equal(panes.get('northLinePane').style.zIndex, 360);
 assert.equal(panes.get('gpsPane').style.zIndex, 650);
 assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
+assert.equal(paneParents.get('buildingPane'),rotatingPane);
+assert.equal(paneParents.get('contourPane'),rotatingPane);
+assert.equal(paneParents.get('fieldPane'),rotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=3'));
