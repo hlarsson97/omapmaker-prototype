@@ -1,9 +1,9 @@
 export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
-  const map = Leaflet.map('map', {zoomControl: false, rotate: true, bearing: 0, touchRotate: true, dragRotate: true, shiftKeyRotate: true}).setView(
+  const map = Leaflet.map('map', {zoomControl: false, rotate: true, bearing: 0, touchRotate: true, dragRotate: false, shiftKeyRotate: true}).setView(
     [initialCenter.lat, initialCenter.lng],
     hasWorkspace ? 14 : 15
   );
-  for (const handler of ['touchRotate','dragRotate','shiftKeyRotate']) map[handler]?.disable?.();
+  for (const handler of ['touchGestures','dragRotate','shiftKeyRotate']) map[handler]?.disable?.();
   Leaflet.control.zoom({position: 'bottomright'}).addTo(map);
 
   const panes = {
@@ -21,12 +21,11 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     fieldPane: 450,
     gpsPane: 650
   };
-  const markerPanes = {
+  const rotatingMarkerPanes = {
     landCoverMarkerPane: 305,
     infrastructureMarkerPane: 387,
     globalMarkerPane: 441,
-    fieldMarkerPane: 451,
-    editMarkerPane: 700
+    fieldMarkerPane: 451
   };
   const nonInteractive = new Set(['contourPane', 'northLinePane', 'evidencePane', 'gpsPane']);
   const rotatingPane = map.getPane('overlayPane')?.parentElement;
@@ -36,11 +35,13 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     pane.style.zIndex = zIndex;
     if (nonInteractive.has(name)) pane.style.pointerEvents = 'none';
   }
-  const nonRotatingPane = map.getPane('markerPane')?.parentElement;
-  for (const [name, zIndex] of Object.entries(markerPanes)) {
-    map.createPane(name, nonRotatingPane);
+  for (const [name, zIndex] of Object.entries(rotatingMarkerPanes)) {
+    map.createPane(name, rotatingPane);
     map.getPane(name).style.zIndex = zIndex;
   }
+  const nonRotatingPane = map.getPane('markerPane')?.parentElement;
+  map.createPane('editMarkerPane', nonRotatingPane);
+  map.getPane('editMarkerPane').style.zIndex = 700;
 
   const baseMaps = {
     osm: Leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {pane: 'basemapPane', maxZoom: 20, attribution: '© OpenStreetMap'}),

@@ -15,6 +15,7 @@ import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer,
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {magneticNorthRequestUrl, magneticNorthSummary} from '../js/magnetic_north.mjs';
 import {mapOrientationBearing, mapOrientationLabel, nextMapOrientation} from '../js/map_orientation.mjs';
+import {anchoredMapCenter, anchoredRotationTranslation, createSmoothMapMarkerFactory} from '../js/smooth_rotation.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
@@ -34,6 +35,36 @@ assert.equal(mapOrientationBearing('map-north',7.7,23),0);
 assert.equal(mapOrientationBearing('magnetic-north',7.7,23),-7.7);
 assert.equal(mapOrientationBearing('free',7.7,23),23);
 assert.equal(mapOrientationLabel('free'),'Fri rotation');
+class TestPoint {
+  constructor(x, y) { this.x = x; this.y = y; }
+  divideBy(value) { return new TestPoint(this.x / value, this.y / value); }
+  subtract(point) { return new TestPoint(this.x - point.x, this.y - point.y); }
+  rotate(radians) { return new TestPoint(this.x * Math.cos(radians) - this.y * Math.sin(radians), this.x * Math.sin(radians) + this.y * Math.cos(radians)); }
+}
+const anchoredCenter = anchoredMapCenter({
+  getSize: () => new TestPoint(1000, 800),
+  getZoom: () => 15,
+  project: () => new TestPoint(700, 500),
+  unproject: point => point
+}, {lat: 59, lng: 18}, new TestPoint(600, 400), Math.PI / 2);
+assert(Math.abs(anchoredCenter.x - 700) < 1e-8);
+assert(Math.abs(anchoredCenter.y - 600) < 1e-8);
+const pivotTranslation = anchoredRotationTranslation(new TestPoint(600, 400), new TestPoint(500, 400), Math.PI / 2);
+assert(Math.abs(pivotTranslation.x - 100) < 1e-8);
+assert(Math.abs(pivotTranslation.y + 100) < 1e-8);
+class FakeMarker {
+  static extend(methods) { class ExtendedMarker extends FakeMarker {} Object.assign(ExtendedMarker.prototype, methods); return ExtendedMarker; }
+  constructor(latlng, options) { this.latlng = latlng; this.options = options; }
+  getEvents() { return {zoom: 'update', rotate: '_rotateReposition', rotateend: '_rotateEnd'}; }
+  _setPos(position) { this.position = position; return position; }
+  _initInteraction() {}
+}
+const smoothMarker = createSmoothMapMarkerFactory({Marker: FakeMarker, DomEvent: {on() {}}, point: (x, y) => new TestPoint(x, y)})([59, 18], {pane: 'fieldMarkerPane'});
+assert.equal(smoothMarker.options.rotateWithView, false);
+assert.deepEqual(smoothMarker.getEvents(), {zoom: 'update'});
+smoothMarker._map = {_rotate: true, _bearing: 30, mapPanePointToRotatedPoint: position => new TestPoint(position.x - 10, position.y - 20)};
+smoothMarker._setPos(new TestPoint(50, 60));
+assert.deepEqual(smoothMarker.position, new TestPoint(40, 40));
 assert.equal(localObjectSourceLabel('gps'), 'GPS-inmätt');
 assert.equal(localObjectSourceLabel('manual'), 'Manuellt skapad');
 const localPopup = localObjectPopup('point', {id: 'local-1', objectType: 'boulder', symbol: '204', source: 'gps', syncStatus: 'local', accuracy: 3.6}, {name: () => 'Sten', isomClaim: () => 'ISOM 204', escapeHtml});
@@ -300,7 +331,7 @@ assert.equal(infrastructureOptions[1].interactive, false);
 assert.equal(infrastructureOptions[1].filter({properties: {featureKind: 'line', isomSymbol: '509'}}), true);
 const supportMarker = infrastructureOptions[2].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
 assert.equal(supportMarker.options.pane, 'infrastructureMarkerPane');
-assert.equal(supportMarker.options.rotateWithView, true);
+assert.equal(supportMarker.options.rotateWithView, undefined);
 assert(supportMarker.options.icon.html.includes('rotate(60deg)'));
 assert.deepEqual(infrastructureEvents.at(-1), ['addAttribution', INFRASTRUCTURE_ATTRIBUTION]);
 assert.equal(WATER_SYMBOL_CLASSES['308'], 'marsh_308');
@@ -358,7 +389,7 @@ assert.equal(landCoverOptions[0].filter({properties: {isomSymbol: '301'}}), true
 assert.equal(landCoverOptions[1].filter({properties: {isomSymbol: '520'}}), true);
 const waterMarker = landCoverOptions[0].pointToLayer({properties: {isomSymbol: '303'}}, [59, 18]);
 assert.equal(waterMarker.options.pane, 'landCoverMarkerPane');
-assert.equal(waterMarker.options.rotateWithView, true);
+assert.equal(waterMarker.options.rotateWithView, undefined);
 assert.equal(typeof scheduledPatternInstall, 'function');
 assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTION]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 10, printScale: 15000, symbolRegistryVersion: 6});
@@ -435,18 +466,18 @@ assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 assert.equal(paneParents.get('buildingPane'),rotatingPane);
 assert.equal(paneParents.get('contourPane'),rotatingPane);
 assert.equal(paneParents.get('fieldPane'),rotatingPane);
-assert.equal(paneParents.get('landCoverMarkerPane'),nonRotatingPane);
-assert.equal(paneParents.get('infrastructureMarkerPane'),nonRotatingPane);
-assert.equal(paneParents.get('globalMarkerPane'),nonRotatingPane);
-assert.equal(paneParents.get('fieldMarkerPane'),nonRotatingPane);
+assert.equal(paneParents.get('landCoverMarkerPane'),rotatingPane);
+assert.equal(paneParents.get('infrastructureMarkerPane'),rotatingPane);
+assert.equal(paneParents.get('globalMarkerPane'),rotatingPane);
+assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=3'));
 assert(fieldHtml.includes('isom_symbols.js?v=9'));
 assert(fieldHtml.includes('isom_renderer.js?v=9'));
-assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.3'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=9"'));
+assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=10"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

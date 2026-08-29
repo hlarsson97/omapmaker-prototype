@@ -27,7 +27,7 @@ export function landCoverMetaText(data, generatedStatus, centralLayerLabel) {
   return `${counts.water} vatten · ${counts.restricted} st 520${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
 }
 
-export function createGeneratedLandCoverLayer({Leaflet, map, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
+export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
   let layer = null;
   let attributionVisible = false;
   let patternSerial = 0;
@@ -122,7 +122,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, renderer, getData, 
     }
     const data = getData();
     if (!data || !isVisible()) return;
-    const base = Leaflet.geoJSON(data, {pane: 'landCoverPane', filter: feature => String(feature.properties?.isomSymbol) !== '520' && featureIsSelected(feature), style, pointToLayer: (feature, latlng) => Leaflet.marker(latlng, {pane: 'landCoverMarkerPane', rotateWithView: true, icon: pointIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
+    const base = Leaflet.geoJSON(data, {pane: 'landCoverPane', filter: feature => String(feature.properties?.isomSymbol) !== '520' && featureIsSelected(feature), style, pointToLayer: (feature, latlng) => mapMarker(latlng, {pane: 'landCoverMarkerPane', icon: pointIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
     const restricted = Leaflet.geoJSON(data, {pane: 'restrictedAreaPane', filter: feature => isCurrentLandCoverData(data) && String(feature.properties?.isomSymbol) === '520' && featureIsSelected(feature), style, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
     layer = Leaflet.layerGroup([base, restricted]).addTo(map);
     schedule(installPatterns);
