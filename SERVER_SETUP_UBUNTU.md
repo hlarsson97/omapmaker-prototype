@@ -127,3 +127,48 @@ curl http://127.0.0.1:8765/api/storage-status
 ```
 
 Stoppa en manuellt startad server med `Ctrl+C`.
+
+## Privata användarkonton och arbetsområden
+
+OMapMaker har ingen publik registrering. Konton skapas lokalt på servern så att
+obehöriga inte kan registrera sig. Installera först de aktuella beroendena och
+skapa det första administratörskontot som den användare som kör tjänsten:
+
+```bash
+.venv/bin/python -m pip install -r requirements-server.txt
+.venv/bin/python tools/manage_users.py create ditt-anvandarnamn --admin
+```
+
+Kommandot frågar efter lösenordet utan att lägga det i skalhistoriken. Använd
+minst 12 tecken. Fler inbjudna konton skapas utan `--admin`:
+
+```bash
+.venv/bin/python tools/manage_users.py create kartlaggare --name "Kartläggare"
+```
+
+Byt ett glömt lösenord och återkalla samtidigt alla användarens sessioner med:
+
+```bash
+.venv/bin/python tools/manage_users.py reset-password kartlaggare
+```
+
+Arbetsområden, privata kartobjekt, fältloggar och lokala ändringar i genererade
+kartlager lagras i
+`data/omapmaker.sqlite3` med användar-id och revision. Webbläsaren behåller en
+separat lokal cache per konto. Befintliga lokala arbetsområden, ritade objekt och
+GPS-loggar samt redigerade, uteslutna eller raderade lagerobjekt kan flyttas till
+kontot från dialogen som visas efter den första
+inloggningen; importen kan upprepas utan dubbletter. Dialogen redovisar särskilt
+att exakta GPS-data överförs innan användaren godkänner migreringen.
+
+Ritade objekt och avvikelser från de gemensamma grundlagren köas lokalt och
+synkroniseras efter varje ändring. Grundlagren delas fortsatt mellan användare,
+men varje användares ändringar hålls privata. Servern avvisar
+en gammal revision i stället för att tyst skriva över en annan enhets ändring.
+Ett pågående GPS-pass sparas endast lokalt medan mätningen pågår. Avslutade eller
+avbrutna pass synkroniseras privat till servern och komprimeras i databasen.
+
+Lösenorden lagras med Argon2id. Inloggningen använder tidsbegränsade,
+återkallningsbara sessioner i `HttpOnly`-cookies samt separat CSRF-skydd.
+Systemtjänsten sätter `OMAP_SECURE_COOKIES=1` eftersom den ska nås genom HTTPS.
+Vid helt lokal utveckling över vanlig HTTP lämnas variabeln avstängd.

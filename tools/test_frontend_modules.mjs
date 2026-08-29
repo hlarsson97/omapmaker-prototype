@@ -20,8 +20,50 @@ import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyFix, formatFieldSurveyDuration, headingUpBearing, movementHeading, usableSurveyFix} from '../js/field_survey.mjs';
+import {AccountApiError, createAccountApi, userMapCacheKey, workspaceCacheKey} from '../js/account_api.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+class MemoryStorage {
+  constructor() { this.values = new Map(); }
+  getItem(key) { return this.values.has(key) ? this.values.get(key) : null; }
+  setItem(key, value) { this.values.set(key, String(value)); }
+  removeItem(key) { this.values.delete(key); }
+}
+const accountRequests = [], accountResponses = [
+  {authenticated:true,user:{id:'user-1',username:'anna',displayName:'Anna',role:'user'},csrfToken:'csrf-1'},
+  {workspaces:[]},
+  {id:'11111111-1111-4111-8111-111111111111',name:'Skogen',revision:1},
+  {error:'Arbetsområdet har ändrats',code:'revision_conflict',current:{id:'11111111-1111-4111-8111-111111111111',revision:2}}
+];
+const accountStorage = new MemoryStorage();
+const accountFetch = async (url, options={}) => {
+  accountRequests.push({url,options}); const body=accountResponses.shift(),status=body.error?409:(url==='/api/workspaces'&&options.method==='POST'?201:200);
+  return {ok:status<400,status,json:async()=>body};
+};
+const accountApi = createAccountApi({fetchImpl:accountFetch,storage:accountStorage});
+const accountSession = await accountApi.session();
+assert.equal(accountSession.user.id,'user-1');
+assert.equal(accountApi.cachedUser().username,'anna');
+assert.deepEqual(await accountApi.listWorkspaces('user-1'),[]);
+const cachedWorkspace = await accountApi.createWorkspace('user-1',{name:'Skogen'});
+assert.equal(cachedWorkspace.revision,1);
+assert.equal(JSON.parse(accountStorage.getItem(workspaceCacheKey('user-1')))[0].name,'Skogen');
+assert.equal(accountRequests[2].options.headers['X-OMapMaker-CSRF'],'csrf-1');
+await assert.rejects(accountApi.updateWorkspace('user-1',cachedWorkspace.id,{name:'Ny'},1),error=>error instanceof AccountApiError&&error.status===409&&error.current.revision===2);
+assert.equal(userMapCacheKey('user-1'),'omapmaker.user-map.user-1');
+const syncRequests=[];
+const syncResponses=[
+  {cursor:4,objects:[{id:'object-1',category:'point',payload:{id:'object-1'},revision:1,deleted:false}],fieldSurveys:[],layerOverrides:[]},
+  {authenticated:true,user:{id:'user-1',username:'anna'},csrfToken:'csrf-sync'},
+  {mutationId:'22222222-2222-4222-8222-222222222222',cursor:5,objects:[{id:'object-1',revision:2}],fieldSurveys:[],layerOverrides:[]},
+  {migrationId:'33333333-3333-4333-8333-333333333333',objectsImported:1,fieldSurveysImported:0,layerOverridesImported:1}
+];
+const syncApi=createAccountApi({storage:new MemoryStorage(),fetchImpl:async(url,options={})=>{syncRequests.push({url,options});return{ok:true,status:200,json:async()=>syncResponses.shift()}}});
+const syncedData=await syncApi.userData(0);assert.equal(syncedData.cursor,4);assert.equal(syncRequests[0].url,'/api/user-data?since=0');
+const layerChange={scopeId:'global',layerType:'roads',featureId:'way/42',payload:{properties:{status:'locally-edited'}}};
+await syncApi.syncUserData([{id:'object-1'}],[],[layerChange],'22222222-2222-4222-8222-222222222222');assert.equal(JSON.parse(syncRequests[2].options.body).mutationId,'22222222-2222-4222-8222-222222222222');assert.equal(JSON.parse(syncRequests[2].options.body).layerOverrides[0].featureId,'way/42');
+await syncApi.importUserData([{id:'object-1'}],[],[layerChange],'33333333-3333-4333-8333-333333333333');assert.equal(syncRequests[3].options.headers['X-OMapMaker-CSRF'],'csrf-sync');
 
 assert.equal(escapeHtml('<sten & "stig">'), '&lt;sten &amp; &quot;stig&quot;&gt;');
 assert.deepEqual(cloneJson({coordinates: [18.1, 59.2]}), {coordinates: [18.1, 59.2]});
@@ -521,7 +563,7 @@ assert(fieldHtml.includes('styles.css?v=4'));
 assert(fieldHtml.includes('isom_symbols.js?v=11'));
 assert(fieldHtml.includes('isom_renderer.js?v=11'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=13"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=15"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);

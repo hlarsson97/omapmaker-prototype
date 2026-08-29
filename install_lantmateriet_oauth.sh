@@ -58,6 +58,7 @@ unit_file="$temporary_dir/omapmaker.service"
   echo 'RestartSec=3'
   echo 'Environment=PYTHONUNBUFFERED=1'
   echo 'Environment=PYTHONDONTWRITEBYTECODE=1'
+  echo 'Environment=OMAP_SECURE_COOKIES=1'
   echo 'LoadCredentialEncrypted=lantmateriet_oauth_client_id:/etc/credstore.encrypted/omapmaker/lantmateriet_oauth_client_id.cred'
   echo 'LoadCredentialEncrypted=lantmateriet_oauth_client_secret:/etc/credstore.encrypted/omapmaker/lantmateriet_oauth_client_secret.cred'
   echo 'UMask=0077'

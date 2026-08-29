@@ -22,6 +22,7 @@ import generate_contours_tiled as tiled_generator
 from magnetic_north import calculate_magnetic_north
 from test_map_store import CentralMapStoreTests
 from map_store import MapStore
+from user_store import UserStore
 
 
 class QuietHandler(server.Handler):
@@ -90,6 +91,78 @@ class CentralStorageApiTests(unittest.TestCase):
         self.assertEqual(status,200);self.assertTrue(result['found'])
         self.assertEqual(result['metadata']['layerCount'],1);self.assertEqual(len(result['layer']['features']),1)
         self.assertTrue(result['layer']['properties']['centralMosaic'])
+
+
+class UserWorkspaceApiTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary=tempfile.TemporaryDirectory();self.previous_map_store=server.MAP_STORE;self.previous_user_store=server.USER_STORE
+        database=Path(self.temporary.name)/'accounts.sqlite3';server.MAP_STORE=MapStore(database);server.USER_STORE=UserStore(database)
+        server.LOGIN_FAILURES.clear();server.USER_STORE.create_user('anna','mycket långt testlosenord','Anna');server.USER_STORE.create_user('berit','annat mycket langt testlosenord','Berit')
+        self.http=server.ThreadingHTTPServer(('127.0.0.1',0),QuietHandler);self.thread=threading.Thread(target=self.http.serve_forever,daemon=True);self.thread.start();self.base=f'http://127.0.0.1:{self.http.server_address[1]}'
+
+    def tearDown(self):
+        self.http.shutdown();self.http.server_close();self.thread.join(timeout=2);server.MAP_STORE=self.previous_map_store;server.USER_STORE=self.previous_user_store;server.LOGIN_FAILURES.clear();self.temporary.cleanup()
+
+    def request(self,path,payload=None,method=None,headers=None):
+        data=json.dumps(payload).encode() if payload is not None else None;request_headers={'Content-Type':'application/json',**(headers or {})}
+        request=urllib.request.Request(self.base+path,data=data,headers=request_headers,method=method)
+        try:
+            with urllib.request.urlopen(request,timeout=3) as response:return response.status,json.load(response),response.headers
+        except urllib.error.HTTPError as error:return error.code,json.load(error),error.headers
+
+    def login(self,username='anna',password='mycket långt testlosenord'):
+        status,result,headers=self.request('/api/auth/login',{'username':username,'password':password},headers={'X-Forwarded-Proto':'https'})
+        self.assertEqual(status,200);cookie=headers['Set-Cookie'].split(';',1)[0]
+        return cookie,result['csrfToken'],result
+
+    @staticmethod
+    def workspace(name='Norrskogen'):
+        now='2026-08-29T10:00:00+00:00'
+        return {'id':str(uuid.uuid4()),'name':name,'scale':10000,'contourInterval':5,'symbolDisplayMode':'print','sizeKm':5,'center':{'lat':59.3,'lng':18.1},'createdAt':now,'updatedAt':now,'standard':'ISOM 2017-2 v6'}
+
+    def test_login_uses_secure_cookie_and_logout_revokes_session(self):
+        status,result,_=self.request('/api/auth/login',{'username':'anna','password':'felaktigt lösenord'})
+        self.assertEqual(status,401);self.assertEqual(result['code'],'invalid_credentials')
+        cookie,csrf,result=self.login();self.assertEqual(result['user']['username'],'anna')
+        _,_,headers=self.request('/api/auth/login',{'username':'anna','password':'mycket långt testlosenord'},headers={'X-Forwarded-Proto':'https'})
+        self.assertIn('Secure',headers['Set-Cookie']);self.assertIn('HttpOnly',headers['Set-Cookie']);self.assertIn('SameSite=Strict',headers['Set-Cookie'])
+        status,session,_=self.request('/api/auth/session',headers={'Cookie':cookie});self.assertEqual(status,200);self.assertTrue(session['authenticated'])
+        status,_,_=self.request('/api/auth/logout',{},headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf});self.assertEqual(status,200)
+        _,session,_=self.request('/api/auth/session',headers={'Cookie':cookie});self.assertFalse(session['authenticated'])
+
+    def test_workspaces_require_authentication_and_are_isolated(self):
+        workspace=self.workspace()
+        status,result,_=self.request('/api/workspaces',workspace);self.assertEqual(status,401);self.assertEqual(result['code'],'authentication_required')
+        anna_cookie,anna_csrf,_=self.login();status,result,_=self.request('/api/workspaces',workspace,headers={'Cookie':anna_cookie});self.assertEqual(status,403);self.assertEqual(result['code'],'csrf_failed')
+        status,created,_=self.request('/api/workspaces',workspace,headers={'Cookie':anna_cookie,'X-OMapMaker-CSRF':anna_csrf});self.assertEqual(status,201);self.assertEqual(created['revision'],1)
+        _,anna_list,_=self.request('/api/workspaces',headers={'Cookie':anna_cookie});self.assertEqual([item['id'] for item in anna_list['workspaces']],[workspace['id']])
+        berit_cookie,_,_=self.login('berit','annat mycket langt testlosenord');_,berit_list,_=self.request('/api/workspaces',headers={'Cookie':berit_cookie});self.assertEqual(berit_list['workspaces'],[])
+        status,_,_=self.request('/api/workspaces/'+workspace['id'],headers={'Cookie':berit_cookie});self.assertEqual(status,404)
+
+    def test_workspace_import_is_idempotent_and_updates_detect_conflicts(self):
+        cookie,csrf,_=self.login();workspace=self.workspace();migration=str(uuid.uuid4());headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf}
+        status,first,_=self.request('/api/workspaces/import',{'migrationId':migration,'workspaces':[workspace]},headers=headers);self.assertEqual(status,200);self.assertEqual(first['imported'],1);self.assertFalse(first['idempotent'])
+        _,second,_=self.request('/api/workspaces/import',{'migrationId':migration,'workspaces':[workspace]},headers=headers);self.assertEqual(second['imported'],1);self.assertTrue(second['idempotent'])
+        status,updated,_=self.request('/api/workspaces/'+workspace['id'],{'changes':{'name':'Sydskogen'},'expectedRevision':1},method='PATCH',headers=headers);self.assertEqual(status,200);self.assertEqual(updated['revision'],2);self.assertEqual(updated['name'],'Sydskogen')
+        status,conflict,_=self.request('/api/workspaces/'+workspace['id'],{'changes':{'name':'Gammal ändring'},'expectedRevision':1},method='PATCH',headers=headers);self.assertEqual(status,409);self.assertEqual(conflict['code'],'revision_conflict');self.assertEqual(conflict['current']['name'],'Sydskogen')
+
+    def test_private_map_data_and_field_surveys_sync_with_revisions(self):
+        cookie,csrf,_=self.login();headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf};object_id=str(uuid.uuid4());survey_id=str(uuid.uuid4());migration=str(uuid.uuid4())
+        map_object={'id':object_id,'category':'point','payload':{'id':object_id,'observationId':object_id,'objectType':'boulder','coordinates':[18.1,59.3]}}
+        survey={'id':survey_id,'payload':{'id':survey_id,'workspaceId':None,'status':'completed','raw':[{'longitude':18.1,'latitude':59.3,'accuracy':3}],'segments':[]}}
+        layer_override={'scopeId':'global','layerType':'roads','featureId':'way/42','payload':{'geometry':{'type':'LineString','coordinates':[[18.1,59.3],[18.2,59.4]]},'properties':{'status':'locally-edited','isomSymbol':'507'}}}
+        status,imported,_=self.request('/api/user-data/import',{'migrationId':migration,'objects':[map_object],'fieldSurveys':[survey],'layerOverrides':[layer_override]},headers=headers);self.assertEqual(status,200);self.assertEqual(imported['objectsImported'],1);self.assertEqual(imported['fieldSurveysImported'],1);self.assertEqual(imported['layerOverridesImported'],1)
+        _,duplicate,_=self.request('/api/user-data/import',{'migrationId':migration,'objects':[map_object],'fieldSurveys':[survey],'layerOverrides':[layer_override]},headers=headers);self.assertTrue(duplicate['idempotent'])
+        _,initial,_=self.request('/api/user-data?since=0',headers={'Cookie':cookie});self.assertEqual(len(initial['objects']),1);self.assertEqual(len(initial['fieldSurveys']),1);self.assertEqual(len(initial['layerOverrides']),1);self.assertEqual(initial['objects'][0]['revision'],1)
+        mutation=str(uuid.uuid4());map_object['payload']['coordinates']=[18.2,59.4];map_object['expectedRevision']=1;layer_override['payload']['properties']['isomSymbol']='506';layer_override['expectedRevision']=1
+        _,synced,_=self.request('/api/user-data/sync',{'mutationId':mutation,'objects':[map_object],'fieldSurveys':[],'layerOverrides':[layer_override]},headers=headers);self.assertEqual(synced['objects'][0]['revision'],2);self.assertEqual(synced['layerOverrides'][0]['revision'],2)
+        _,delta,_=self.request(f"/api/user-data?since={imported['cursor']}",headers={'Cookie':cookie});self.assertEqual([item['id'] for item in delta['objects']],[object_id]);self.assertEqual(delta['objects'][0]['payload']['coordinates'],[18.2,59.4]);self.assertEqual(delta['fieldSurveys'],[]);self.assertEqual(delta['layerOverrides'][0]['payload']['properties']['isomSymbol'],'506')
+        status,conflict,_=self.request('/api/user-data/sync',{'mutationId':str(uuid.uuid4()),'objects':[],'fieldSurveys':[],'layerOverrides':[layer_override]},headers=headers);self.assertEqual(status,409);self.assertEqual(conflict['code'],'sync_conflict');self.assertEqual(conflict['current'][0]['revision'],2)
+        deleted={**layer_override,'expectedRevision':2,'deleted':True,'payload':{}}
+        _,removed,_=self.request('/api/user-data/sync',{'mutationId':str(uuid.uuid4()),'objects':[],'fieldSurveys':[],'layerOverrides':[deleted]},headers=headers);self.assertTrue(removed['layerOverrides'][0]['deleted']);self.assertEqual(removed['layerOverrides'][0]['revision'],3)
+        restored={**layer_override,'expectedRevision':3,'deleted':False}
+        _,restored_result,_=self.request('/api/user-data/sync',{'mutationId':str(uuid.uuid4()),'objects':[],'fieldSurveys':[],'layerOverrides':[restored]},headers=headers);self.assertFalse(restored_result['layerOverrides'][0]['deleted']);self.assertEqual(restored_result['layerOverrides'][0]['revision'],4)
+        berit_cookie,_,_=self.login('berit','annat mycket langt testlosenord');_,private_data,_=self.request('/api/user-data?since=0',headers={'Cookie':berit_cookie});self.assertEqual(private_data['objects'],[]);self.assertEqual(private_data['fieldSurveys'],[]);self.assertEqual(private_data['layerOverrides'],[])
 
 
 class RoadClassificationTests(unittest.TestCase):

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Local OMapMaker server with a contour-generation endpoint."""
 from __future__ import annotations
-import argparse, datetime, hashlib, json, math, os, re, subprocess, sys, threading, time, traceback, urllib.parse, urllib.request, uuid
+import argparse, datetime, hashlib, hmac, json, math, os, re, subprocess, sys, threading, time, traceback, urllib.parse, urllib.request, uuid
 from concurrent.futures import ThreadPoolExecutor
+from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import rasterio
@@ -12,16 +13,18 @@ from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polyg
 from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from map_store import MapStore
+from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
 from magnetic_north import calculate_magnetic_north
 
-ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE)
+ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE); USER_STORE=UserStore(MAP_DATABASE)
 LEVELS={'detailed':2,'normal':5,'soft':10}
 HEIGHT_VALIDATION_VERSION=1
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
 HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':''}
 OAUTH_LOCK=threading.Lock();OAUTH_STATE={'accessToken':'','expiresAt':0.0}
 JOBS_LOCK=threading.Lock();JOBS={};JOB_CANCEL_EVENTS={};JOB_EXECUTOR=ThreadPoolExecutor(max_workers=2,thread_name_prefix='omapmaker-contours')
+LOGIN_LOCK=threading.Lock();LOGIN_FAILURES={}
 
 OAUTH_CLIENT_ID_CREDENTIAL='lantmateriet_oauth_client_id'
 OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
@@ -1247,6 +1250,19 @@ def cancel_contour_job(job_id):
         job.update(status='cancelling',stage='cancelling',message='Avbryter genereringen…',progressIndeterminate=True,updatedAt=time.time())
         return {key:value for key,value in job.items() if key not in ('createdAt','updatedAt','resultCleanupScheduled','deliveredAt')}
 
+def login_rate_limited(address):
+    now=time.time()
+    with LOGIN_LOCK:
+        failures=[value for value in LOGIN_FAILURES.get(address,[]) if now-value<300]
+        LOGIN_FAILURES[address]=failures
+        return len(failures)>=8
+
+def record_login_failure(address):
+    with LOGIN_LOCK:LOGIN_FAILURES.setdefault(address,[]).append(time.time())
+
+def clear_login_failures(address):
+    with LOGIN_LOCK:LOGIN_FAILURES.pop(address,None)
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs):super().__init__(*args,directory=str(STATIC),**kwargs)
     def end_headers(self):
@@ -1255,8 +1271,10 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Pragma','no-cache')
         self.send_header('Expires','0')
         super().end_headers()
-    def send_json(self,status,value):
-        body=json.dumps(value,ensure_ascii=False).encode();self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+    def send_json(self,status,value,headers=None):
+        body=json.dumps(value,ensure_ascii=False).encode();self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(body)))
+        for name,header_value in (headers or {}).items():self.send_header(name,header_value)
+        self.end_headers();self.wfile.write(body)
     def read_json(self,max_bytes=2_000_000):
         length=int(self.headers.get('Content-Length','0'))
         if length<=0 or length>max_bytes:raise ValueError('Begäran är tom eller för stor')
@@ -1265,6 +1283,36 @@ class Handler(SimpleHTTPRequestHandler):
         value=self.headers.get('X-OMapMaker-Device','')
         if not value:raise ValueError('En anonym enhetsidentifierare krävs')
         return value
+    def session_token(self):
+        try:
+            cookie=SimpleCookie(self.headers.get('Cookie',''));morsel=cookie.get('omap_session')
+            return morsel.value if morsel else ''
+        except Exception:return ''
+    def secure_cookie(self):
+        configured=os.environ.get('OMAP_SECURE_COOKIES','').strip().lower()
+        if configured in {'1','true','yes'}:return True
+        if configured in {'0','false','no'}:return False
+        return self.headers.get('X-Forwarded-Proto','').split(',')[0].strip().lower()=='https'
+    def session_cookie(self,token,max_age=None):
+        parts=[f'omap_session={token}','Path=/','HttpOnly','SameSite=Strict']
+        if max_age is not None:parts.append(f'Max-Age={max_age}')
+        if self.secure_cookie():parts.append('Secure')
+        return '; '.join(parts)
+    def same_origin(self):
+        if self.headers.get('Sec-Fetch-Site','').lower()=='cross-site':return False
+        origin=self.headers.get('Origin')
+        if not origin:return True
+        parsed=urllib.parse.urlparse(origin)
+        return parsed.netloc.lower()==self.headers.get('Host','').lower() and parsed.scheme in {'http','https'}
+    def require_session(self,csrf=False):
+        session=USER_STORE.session(self.session_token())
+        if not session:
+            self.send_json(401,{'error':'Logga in för att fortsätta','code':'authentication_required'})
+            return None
+        if csrf and (not self.same_origin() or not hmac.compare_digest(self.headers.get('X-OMapMaker-CSRF',''),session['csrfToken'])):
+            self.send_json(403,{'error':'Säkerhetskontrollen misslyckades. Ladda om sidan och försök igen.','code':'csrf_failed'})
+            return None
+        return session
     def query_bbox(self):
         query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         raw=(query.get('bbox') or [''])[0]
@@ -1272,6 +1320,27 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path=urllib.parse.urlparse(self.path).path
         if path=='/api/health':return self.send_json(200,{'ok':True})
+        if path=='/api/auth/session':
+            session=USER_STORE.session(self.session_token())
+            if not session:return self.send_json(200,{'authenticated':False},headers={'Set-Cookie':self.session_cookie('',0)})
+            return self.send_json(200,{'authenticated':True,'user':session['user'],'csrfToken':session['csrfToken'],'expiresAt':session['expiresAt']})
+        if path=='/api/workspaces':
+            session=self.require_session()
+            if not session:return
+            return self.send_json(200,{'workspaces':USER_STORE.list_workspaces(session['user']['id'])})
+        if path=='/api/user-data':
+            session=self.require_session()
+            if not session:return
+            try:
+                query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query);since=(query.get('since') or [0])[0]
+                return self.send_json(200,USER_STORE.user_data(session['user']['id'],since))
+            except ValueError as exc:return self.send_json(400,{'error':str(exc)})
+        if path.startswith('/api/workspaces/'):
+            session=self.require_session()
+            if not session:return
+            try:workspace=USER_STORE.get_workspace(session['user']['id'],path.rsplit('/',1)[-1])
+            except ValueError as exc:return self.send_json(400,{'error':str(exc)})
+            return self.send_json(200,workspace) if workspace else self.send_json(404,{'error':'Arbetsområdet hittades inte'})
         if path=='/api/storage-status':return self.send_json(200,MAP_STORE.status())
         if path=='/api/map-layers':
             try:return self.send_json(200,{'layers':MAP_STORE.list_layers(self.query_bbox())})
@@ -1310,6 +1379,15 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
     def do_DELETE(self):
         path=urllib.parse.urlparse(self.path).path
+        if path.startswith('/api/workspaces/'):
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:
+                query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query);revision=(query.get('revision') or [None])[0]
+                deleted=USER_STORE.delete_workspace(session['user']['id'],path.rsplit('/',1)[-1],revision)
+                return self.send_json(200,{'deleted':True}) if deleted else self.send_json(404,{'error':'Arbetsområdet hittades inte'})
+            except RevisionConflict as exc:return self.send_json(409,{'error':str(exc),'code':'revision_conflict','current':exc.current})
+            except ValueError as exc:return self.send_json(400,{'error':str(exc)})
         if path.startswith('/api/contour-jobs/'):
             job_id=path.rsplit('/',1)[-1];job=cancel_contour_job(job_id)
             if not job:return self.send_json(404,{'error':'Höjdjobbet hittades inte','code':'job_not_found'})
@@ -1317,6 +1395,48 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(404,{'error':'Okänd API-adress'})
     def do_POST(self):
         path=urllib.parse.urlparse(self.path).path
+        if path=='/api/auth/login':
+            address=self.client_address[0]
+            if login_rate_limited(address):return self.send_json(429,{'error':'För många misslyckade försök. Vänta några minuter.','code':'rate_limited'})
+            if not self.same_origin():return self.send_json(403,{'error':'Inloggningen avvisades av säkerhetskontrollen','code':'origin_failed'})
+            try:
+                request=self.read_json(64_000);result=USER_STORE.login(request.get('username'),request.get('password'));clear_login_failures(address)
+                return self.send_json(200,{'authenticated':True,'user':result['user'],'csrfToken':result['csrfToken'],'expiresAt':result['expiresAt']},headers={'Set-Cookie':self.session_cookie(result['token'],SESSION_DAYS*86400)})
+            except AuthenticationError as exc:
+                record_login_failure(address);return self.send_json(401,{'error':str(exc),'code':'invalid_credentials'})
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path=='/api/auth/logout':
+            session=self.require_session(csrf=True)
+            if not session:return
+            USER_STORE.logout(self.session_token())
+            return self.send_json(200,{'authenticated':False},headers={'Set-Cookie':self.session_cookie('',0)})
+        if path=='/api/workspaces':
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:return self.send_json(201,USER_STORE.create_workspace(session['user']['id'],self.read_json(128_000)))
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path=='/api/workspaces/import':
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:
+                request=self.read_json(2_000_000)
+                return self.send_json(200,USER_STORE.import_workspaces(session['user']['id'],request.get('migrationId'),request.get('workspaces')))
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path=='/api/user-data/import':
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:
+                request=self.read_json(25_000_000)
+                return self.send_json(200,USER_STORE.import_user_data(session['user']['id'],request.get('migrationId'),request.get('objects'),request.get('fieldSurveys'),request.get('layerOverrides')))
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path=='/api/user-data/sync':
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:
+                request=self.read_json(25_000_000)
+                return self.send_json(200,USER_STORE.sync_user_data(session['user']['id'],request.get('mutationId'),request.get('objects'),request.get('fieldSurveys'),request.get('layerOverrides')))
+            except SyncConflict as exc:return self.send_json(409,{'error':str(exc),'code':'sync_conflict','current':exc.current})
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
         if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=self.read_json()
@@ -1355,6 +1475,17 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError,KeyError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
         except subprocess.CalledProcessError as exc:return self.send_json(500,{'error':exc.stderr.strip() or 'Kurvorna kunde inte genereras'})
         except Exception as exc:return self.send_json(500,{'error':f'Internt fel: {exc}'})
+    def do_PATCH(self):
+        path=urllib.parse.urlparse(self.path).path
+        if not path.startswith('/api/workspaces/'):return self.send_json(404,{'error':'Okänd API-adress'})
+        session=self.require_session(csrf=True)
+        if not session:return
+        try:
+            request=self.read_json(128_000)
+            workspace=USER_STORE.update_workspace(session['user']['id'],path.rsplit('/',1)[-1],request.get('changes'),request.get('expectedRevision'))
+            return self.send_json(200,workspace) if workspace else self.send_json(404,{'error':'Arbetsområdet hittades inte'})
+        except RevisionConflict as exc:return self.send_json(409,{'error':str(exc),'code':'revision_conflict','current':exc.current})
+        except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--host',default='127.0.0.1');parser.add_argument('--port',type=int,default=8765);args=parser.parse_args();server=ThreadingHTTPServer((args.host,args.port),Handler)
