@@ -276,6 +276,47 @@ body.generated-geometry-editing #editBar{border:2px solid #286fc0}
 #editBar button.hidden{display:none}
 @media print{.generated-object.excluded{display:none}.geometry-handle,.geometry-midpoint,.generated-edit-shape{display:none!important}}
 
+/* ===== v15.css · dedicated field-survey workflow ===== */
+header>.header-actions{display:flex;flex:0 0 auto;gap:5px;min-width:0;padding:0;background:transparent;border-radius:0;box-shadow:none;backdrop-filter:none}
+header .header-actions button{margin:0;min-height:40px;padding:0 10px;border:0;border-radius:11px;background:#fffdf3ed;color:#17241c;font-size:11px;font-weight:850;box-shadow:0 2px 9px #17241c22}
+header #fieldSurveyToggle{color:#075b3a}
+body.field-survey-active header #fieldSurveyToggle{background:#075b3a;color:#fff}
+#fieldSurveyPanel{position:fixed;z-index:1080;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:min(560px,calc(100vw - 20px));max-height:min(56dvh,470px);overflow:auto;padding:10px;border:1px solid #cad7cd;border-radius:18px;background:#fffdf3f2;color:#17241c;box-shadow:0 8px 32px #17241c55;backdrop-filter:blur(12px)}
+#fieldSurveyPanel[hidden]{display:none}
+.field-survey-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;margin-bottom:8px}
+.field-live-dot{width:10px;height:10px;border-radius:50%;background:#e45548;box-shadow:0 0 0 5px #e4554820;animation:field-live 1.7s ease-in-out infinite}
+@keyframes field-live{50%{box-shadow:0 0 0 9px #e4554800}}
+.field-survey-head small,.field-survey-head b{display:block}.field-survey-head small{color:#075b3a;font-size:8px;font-weight:900;letter-spacing:.1em}.field-survey-head b{margin-top:2px;font-size:11px}
+.field-survey-head button{min-height:35px;border:0;border-radius:9px;padding:0 10px;background:#f1dedb;color:#94352d;font-size:10px;font-weight:850}
+.field-segments{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:0 0 7px;padding:0;border:0}
+.field-segments legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.field-segments button{display:grid;align-content:center;min-width:0;min-height:51px;padding:5px 3px;border:1px solid #d7dfd8;border-radius:10px;background:#f6f8f3;color:#304038}
+.field-segments button span,.field-segments button small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.field-segments button span{font-size:10px;font-weight:850}.field-segments button small{margin-top:2px;color:#77827b;font-size:7px}
+.field-segments button.active{border-color:#075b3a;background:#075b3a;color:#fff}.field-segments button.active small{color:#d5e5da}
+.field-actions{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:5px}
+.field-actions button{min-width:0;min-height:52px;padding:6px 8px;border:0;border-radius:11px;background:#e6efe9;color:#075b3a;text-align:left}.field-actions button:nth-child(2){background:#e8eef6;color:#235a96}.field-actions button:nth-child(3){background:#efe9dd;color:#665027}
+.field-actions small,.field-actions b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.field-actions small{font-size:7px;font-weight:900;letter-spacing:.06em}.field-actions b{margin-top:3px;font-size:11px}
+.field-survey-footer{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.field-survey-footer button{min-height:31px;border:0;border-radius:8px;padding:5px 8px;background:#edf1ed;color:#405047;font-size:9px;font-weight:800}.field-survey-footer button.active{background:#075b3a;color:#fff}
+#fieldSurveyNotice{margin:6px 2px 0;color:#67746c;font-size:8px;line-height:1.35}
+body.field-survey-active #toolbar{display:none}
+body.field-survey-active.field-survey-tools-open #toolbar{display:flex;bottom:calc(min(56dvh,470px) + 18px + env(safe-area-inset-bottom))!important}
+body.field-survey-active #mapNavControls{bottom:calc(min(56dvh,470px) + 18px + env(safe-area-inset-bottom))}
+body.field-survey-active #editBar{bottom:calc(min(56dvh,470px) + 18px + env(safe-area-inset-bottom))!important}
+body.field-survey-active #toast{bottom:calc(min(56dvh,470px) + 26px + env(safe-area-inset-bottom))}
+.field-survey-track{stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 2px #fff)}
+#fieldSurveyLogSheet form{max-height:88dvh;overflow:auto}.field-log-list{display:grid;gap:7px}.field-log-list article{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:11px;border:1px solid #dce3dc;border-radius:11px;background:#fafbf7}.field-log-list b,.field-log-list small{display:block}.field-log-list small{margin-top:3px;color:#69766e;font-size:9px}.field-log-list button{grid-row:1/3;grid-column:2;align-self:center;min-height:34px;border:0;border-radius:8px;padding:0 9px;background:#e5eee8;color:#075b3a;font-size:9px;font-weight:850}
+#fieldSurveyStartSheet>form>p,#fieldSurveyLogSheet>form>p{color:#56645c;font-size:11px;line-height:1.45}
+#mapOrientationButton.heading-up small{background:#b83e35}
+@media(max-width:560px){
+  header .header-actions{gap:3px}header .header-actions button{padding:0 8px;font-size:10px}header #export{display:none}
+  #fieldSurveyPanel{left:6px;bottom:calc(6px + env(safe-area-inset-bottom));width:calc(100vw - 12px);max-height:min(51dvh,430px);padding:8px;border-radius:15px}
+  .field-segments{grid-template-columns:repeat(5,minmax(55px,1fr));overflow-x:auto;padding-bottom:2px}.field-segments button{min-width:62px}
+  .field-actions{grid-template-columns:1fr 1fr}.field-actions button:nth-child(3){grid-column:1/3}
+  body.field-survey-active #mapNavControls{bottom:calc(min(51dvh,430px) + 14px + env(safe-area-inset-bottom))}
+  body.field-survey-active #editBar{bottom:calc(min(51dvh,430px) + 14px + env(safe-area-inset-bottom))!important}
+  body.field-survey-active.field-survey-tools-open #toolbar{bottom:calc(min(51dvh,430px) + 14px + env(safe-area-inset-bottom))!important}
+}
+
 /* ===== v13.css ===== */
 /* Mobile field view: keep the map primary and make generation discoverable. */
 #layersButton{display:flex;align-items:center;gap:8px;width:auto!important;height:auto!important;min-height:48px!important;padding:7px 11px!important;border-radius:13px!important;background:var(--mode-color)!important;color:#fff!important;text-align:left;line-height:1!important}
@@ -374,3 +415,6 @@ body.generated-geometry-editing #editBar{border:2px solid #286fc0}
 }
 
 @media print{.generation-sheet{display:none!important}}
+
+.field-log-actions{display:flex;align-items:center;gap:5px}.field-log-list .field-log-actions button{min-height:34px;border:0;border-radius:8px;padding:0 9px;background:#e5eee8;color:#075b3a;font-size:9px;font-weight:850}
+@media print{#fieldSurveyPanel,#fieldSurveyStartSheet,#fieldSurveyLogSheet{display:none!important}}

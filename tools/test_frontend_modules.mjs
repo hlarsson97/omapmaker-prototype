@@ -19,6 +19,7 @@ import {anchoredMapCenter, anchoredRotationTranslation, createSmoothMapMarkerFac
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
+import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyFix, formatFieldSurveyDuration, headingUpBearing, movementHeading, usableSurveyFix} from '../js/field_survey.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -29,17 +30,36 @@ assert(uuidPattern.test('5eda656c-ddba-43d3-b124-72184e7f91fc'));
 assert.equal(magneticNorthRequestUrl({lat:59.3,lng:18.1},'2026-08-28'),'/api/magnetic-north?lat=59.3&lng=18.1&date=2026-08-28');
 assert.match(magneticNorthSummary({model:'WMM2025',date:'2026-08-28',declinationDegrees:7.73,meridianConvergenceDegrees:1.59,gridToMagneticDegrees:6.14}),/nordlinjer \+7,73°/);
 assert.equal(nextMapOrientation('map-north'),'magnetic-north');
-assert.equal(nextMapOrientation('magnetic-north'),'free');
+assert.equal(nextMapOrientation('magnetic-north'),'heading-up');
+assert.equal(nextMapOrientation('heading-up'),'free');
 assert.equal(nextMapOrientation('free'),'map-north');
-assert.equal(nextSupportedMapOrientation('magnetic-north',false),'map-north');
-assert.equal(nextSupportedMapOrientation('magnetic-north',true),'free');
+assert.equal(nextSupportedMapOrientation('magnetic-north',false),'heading-up');
+assert.equal(nextSupportedMapOrientation('heading-up',false),'map-north');
+assert.equal(nextSupportedMapOrientation('magnetic-north',true),'heading-up');
 assert.equal(isAppleTouchDevice({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'}),true);
 assert.equal(isAppleTouchDevice({userAgent:'Mozilla/5.0',platform:'MacIntel',maxTouchPoints:5}),true);
 assert.equal(isAppleTouchDevice({userAgent:'Mozilla/5.0 (Windows NT 10.0)',platform:'Win32',maxTouchPoints:0}),false);
 assert.equal(mapOrientationBearing('map-north',7.7,23),0);
 assert.equal(mapOrientationBearing('magnetic-north',7.7,23),-7.7);
+assert.equal(mapOrientationBearing('heading-up',7.7,-82),-82);
 assert.equal(mapOrientationBearing('free',7.7,23),23);
+assert.equal(mapOrientationLabel('heading-up'),'Färdriktning upp');
 assert.equal(mapOrientationLabel('free'),'Fri rotation');
+assert.equal(FIELD_SURVEY_SEGMENTS.terrain.objectType,null);
+assert.equal(FIELD_SURVEY_SEGMENTS.wide_path.objectType,'wide_path');
+const surveyFix=fieldSurveyFix({timestamp:1234,coords:{longitude:18.1,latitude:59.2,accuracy:4.5,altitude:31,altitudeAccuracy:2,heading:82,speed:1.4}});
+assert.equal(surveyFix.heading,82);
+assert.equal(usableSurveyFix(surveyFix),true);
+assert.equal(usableSurveyFix({...surveyFix,accuracy:70}),false);
+const surveyCoordinates=[];
+assert.equal(appendSurveyCoordinate(surveyCoordinates,surveyFix),true);
+assert.equal(appendSurveyCoordinate(surveyCoordinates,{...surveyFix,timestamp:1300}),false);
+assert.equal(appendSurveyCoordinate(surveyCoordinates,{...surveyFix,longitude:18.1001,timestamp:2300}),true);
+assert(distanceMetres(surveyCoordinates[0],surveyCoordinates[1])>5);
+assert.equal(headingUpBearing(82),-82);
+assert.equal(headingUpBearing(370),-10);
+assert(Math.abs(movementHeading({longitude:18,latitude:59},{longitude:18.001,latitude:59})-90)<0.1);
+assert.equal(formatFieldSurveyDuration(65*60000),'1 h 05 min');
 class TestPoint {
   constructor(x, y) { this.x = x; this.y = y; }
   divideBy(value) { return new TestPoint(this.x / value, this.y / value); }
@@ -497,11 +517,12 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=3'));
+assert(fieldHtml.includes('styles.css?v=4'));
 assert(fieldHtml.includes('isom_symbols.js?v=10'));
 assert(fieldHtml.includes('isom_renderer.js?v=10'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=12"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=13"'));
+for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }
