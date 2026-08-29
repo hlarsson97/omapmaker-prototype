@@ -518,8 +518,8 @@ assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=4'));
-assert(fieldHtml.includes('isom_symbols.js?v=10'));
-assert(fieldHtml.includes('isom_renderer.js?v=10'));
+assert(fieldHtml.includes('isom_symbols.js?v=11'));
+assert(fieldHtml.includes('isom_renderer.js?v=11'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
 assert(fieldHtml.includes('type="module" src="app.mjs?v=13"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs']) assert(fieldHtml.includes(`id="${fieldControl}"`));

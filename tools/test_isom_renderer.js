@@ -11,8 +11,8 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 8);
-assert.strictEqual(registry.renderingRevision, 8);
+assert.strictEqual(registry.registryVersion, 9);
+assert.strictEqual(registry.renderingRevision, 9);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -55,10 +55,22 @@ assert.strictEqual(registry.renderers['417'].maskDiameterMm, 1.1);
 assert.strictEqual(registry.renderers['418'].strokeWidthMm, 0.2);
 assert.strictEqual(registry.renderers['419'].maskStrokeWidthMm, 0.36);
 assert.strictEqual(registry.renderers['532'].minimumSteps, 3);
+assert.strictEqual(registry.renderers['110'].widthMm, 0.8);
+assert.strictEqual(registry.renderers['111'].strokeWidthMm, 0.18);
+assert.strictEqual(registry.renderers['203.2'].innerDiameterMm, 0.35);
+assert.strictEqual(registry.renderers['206'].minimumAreaMm2, 0.3);
+assert.strictEqual(registry.renderers['207'].settings.sizePercent.values[1], 120);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
 const pitMarkup = renderer.pointMarkup('112', screenContext).html;
 assert(pitMarkup.includes('M-0.35,-0.4 L0,0.4 L0.35,-0.4'), 'Grop 112 ska vara ett enkelt V utan lodräta ändar');
+assert.strictEqual((renderer.pointMarkup('110', screenContext).html.match(/<ellipse/g) || []).length, 3, 'Långsträckt kulle ska ha tre bruna ovaler');
+assert(renderer.pointMarkup('111', screenContext).html.includes('<path'), 'Liten sänka ska vara en brun båge');
+assert(renderer.pointMarkup('203.1', screenContext, {orientationDegrees: 90}).html.includes('rotate(90)'), 'Grottans öppning ska kunna riktas');
+const dangerousPitMarkup = renderer.pointMarkup('203.2', screenContext).html;
+assert(dangerousPitMarkup.includes('r="0.45"') && dangerousPitMarkup.includes('r="0.175"'), 'Farlig grop ska ha 0,9 mm ytterdiameter och 0,35 mm vitt centrum');
+assert(renderer.pointMarkup('207', screenContext).html.includes('L0.4,0.3465'), 'Stenklustret ska vara en fylld triangel med 0,8 mm sida');
+assert(Math.abs(renderer.pointMarkup('207', screenContext, {sizePercent: 120}).widthMm - 0.96) < 1e-9, 'Stenklustret ska kunna förstoras till tillåtna 120 % utan klippning');
 const railwayStyle = renderer.lineStyles('509', {}, screenContext);
 assert.strictEqual(railwayStyle.outer.dashArray, null, 'Järnvägens svarta grundlinje måste vara heldragen');
 assert(railwayStyle.inner.dashArray, 'Järnvägens vita mittlinje ska vara streckad');
@@ -121,6 +133,8 @@ for (const symbol of ['522', '523']) {
   check = renderer.preflight([{...tinyArea, properties: {isomSymbol: symbol, name: `För liten ISOM ${symbol}`}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
   assert(check.issues.some(issue => issue.code === 'minimum-area'), `ISOM ${symbol} ska kontrolleras mot sitt minsta yttermått`);
 }
+check = renderer.preflight([{...tinyArea, properties: {isomSymbol: '206', name: 'För liten jättesten'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
+assert(check.issues.some(issue => issue.code === 'minimum-area' && Math.abs(issue.requiredMm2 - 0.675) < 1e-9), 'ISOM 206 ska skala minsta area proportionellt vid 1:10 000');
 check = renderer.preflight([{...shortPath, properties: {isomSymbol: '999'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'renderer-missing'));
 
