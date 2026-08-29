@@ -14,7 +14,7 @@ import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, createGeneratedLandCoverLa
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {magneticNorthRequestUrl, magneticNorthSummary} from '../js/magnetic_north.mjs';
-import {mapOrientationBearing, mapOrientationLabel, nextMapOrientation} from '../js/map_orientation.mjs';
+import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextMapOrientation, nextSupportedMapOrientation} from '../js/map_orientation.mjs';
 import {anchoredMapCenter, anchoredRotationTranslation, createSmoothMapMarkerFactory} from '../js/smooth_rotation.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
@@ -31,6 +31,11 @@ assert.match(magneticNorthSummary({model:'WMM2025',date:'2026-08-28',declination
 assert.equal(nextMapOrientation('map-north'),'magnetic-north');
 assert.equal(nextMapOrientation('magnetic-north'),'free');
 assert.equal(nextMapOrientation('free'),'map-north');
+assert.equal(nextSupportedMapOrientation('magnetic-north',false),'map-north');
+assert.equal(nextSupportedMapOrientation('magnetic-north',true),'free');
+assert.equal(isAppleTouchDevice({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'}),true);
+assert.equal(isAppleTouchDevice({userAgent:'Mozilla/5.0',platform:'MacIntel',maxTouchPoints:5}),true);
+assert.equal(isAppleTouchDevice({userAgent:'Mozilla/5.0 (Windows NT 10.0)',platform:'Win32',maxTouchPoints:0}),false);
 assert.equal(mapOrientationBearing('map-north',7.7,23),0);
 assert.equal(mapOrientationBearing('magnetic-north',7.7,23),-7.7);
 assert.equal(mapOrientationBearing('free',7.7,23),23);
@@ -458,6 +463,9 @@ const rotatingPane = {className: 'leaflet-rotate-pane'};
 const nonRotatingPane = {className: 'leaflet-norotate-pane'};
 const paneParents = new Map();
 const fakeMap = {
+  touchGestures: {disable() { this.disabled = true; }},
+  touchZoom: {enable() { this.enabled = true; }},
+  shiftKeyRotate: {disable() { this.disabled = true; }},
   setView() { return this; },
   createPane(name, parent) { panes.set(name, {style: {}}); paneParents.set(name,parent); },
   getPane(name) {
@@ -473,6 +481,8 @@ const fakeLeaflet = {
 };
 const mapSetup = createFieldMap({Leaflet: fakeLeaflet, initialCenter: {lat: 59.2, lng: 18.1}, hasWorkspace: true});
 assert.equal(mapSetup.map, fakeMap);
+assert.equal(fakeMap.touchGestures.disabled, true);
+assert.equal(fakeMap.touchZoom.enabled, true);
 assert.equal(panes.get('contourPane').style.zIndex, 340);
 assert.equal(panes.get('northLinePane').style.zIndex, 360);
 assert.equal(panes.get('gpsPane').style.zIndex, 650);
@@ -491,7 +501,7 @@ assert(fieldHtml.includes('styles.css?v=3'));
 assert(fieldHtml.includes('isom_symbols.js?v=10'));
 assert(fieldHtml.includes('isom_renderer.js?v=10'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=11"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=12"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

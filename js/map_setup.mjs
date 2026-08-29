@@ -4,6 +4,7 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     hasWorkspace ? 14 : 15
   );
   for (const handler of ['touchGestures','dragRotate','shiftKeyRotate']) map[handler]?.disable?.();
+  map.touchZoom?.enable?.();
   Leaflet.control.zoom({position: 'bottomright'}).addTo(map);
 
   const panes = {
