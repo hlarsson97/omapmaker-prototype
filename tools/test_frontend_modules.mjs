@@ -299,7 +299,8 @@ assert(infrastructureOptions.every(options => options.pane === 'infrastructurePa
 assert.equal(infrastructureOptions[1].interactive, false);
 assert.equal(infrastructureOptions[1].filter({properties: {featureKind: 'line', isomSymbol: '509'}}), true);
 const supportMarker = infrastructureOptions[2].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
-assert.equal(supportMarker.options.pane, 'infrastructurePane');
+assert.equal(supportMarker.options.pane, 'infrastructureMarkerPane');
+assert.equal(supportMarker.options.rotateWithView, true);
 assert(supportMarker.options.icon.html.includes('rotate(60deg)'));
 assert.deepEqual(infrastructureEvents.at(-1), ['addAttribution', INFRASTRUCTURE_ATTRIBUTION]);
 assert.equal(WATER_SYMBOL_CLASSES['308'], 'marsh_308');
@@ -356,7 +357,8 @@ assert.equal(landCoverOptions[1].pane, 'restrictedAreaPane');
 assert.equal(landCoverOptions[0].filter({properties: {isomSymbol: '301'}}), true);
 assert.equal(landCoverOptions[1].filter({properties: {isomSymbol: '520'}}), true);
 const waterMarker = landCoverOptions[0].pointToLayer({properties: {isomSymbol: '303'}}, [59, 18]);
-assert.equal(waterMarker.options.pane, 'landCoverPane');
+assert.equal(waterMarker.options.pane, 'landCoverMarkerPane');
+assert.equal(waterMarker.options.rotateWithView, true);
 assert.equal(typeof scheduledPatternInstall, 'function');
 assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTION]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 10, printScale: 15000, symbolRegistryVersion: 6});
@@ -408,11 +410,16 @@ assert.equal(generationSummary(generation, 'line'), 'Detaljerad · 8 kategorier'
 
 const panes = new Map();
 const rotatingPane = {className: 'leaflet-rotate-pane'};
+const nonRotatingPane = {className: 'leaflet-norotate-pane'};
 const paneParents = new Map();
 const fakeMap = {
   setView() { return this; },
   createPane(name, parent) { panes.set(name, {style: {}}); paneParents.set(name,parent); },
-  getPane(name) { return name==='overlayPane'?{parentElement:rotatingPane}:panes.get(name); }
+  getPane(name) {
+    if (name === 'overlayPane') return {parentElement: rotatingPane};
+    if (name === 'markerPane') return {parentElement: nonRotatingPane};
+    return panes.get(name);
+  }
 };
 const fakeLeaflet = {
   map: () => fakeMap,
@@ -428,13 +435,18 @@ assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 assert.equal(paneParents.get('buildingPane'),rotatingPane);
 assert.equal(paneParents.get('contourPane'),rotatingPane);
 assert.equal(paneParents.get('fieldPane'),rotatingPane);
+assert.equal(paneParents.get('landCoverMarkerPane'),nonRotatingPane);
+assert.equal(paneParents.get('infrastructureMarkerPane'),nonRotatingPane);
+assert.equal(paneParents.get('globalMarkerPane'),nonRotatingPane);
+assert.equal(paneParents.get('fieldMarkerPane'),nonRotatingPane);
+assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=3'));
 assert(fieldHtml.includes('isom_symbols.js?v=9'));
 assert(fieldHtml.includes('isom_renderer.js?v=9'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.3'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=8"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=9"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

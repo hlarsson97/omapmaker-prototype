@@ -122,7 +122,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, renderer, getData, 
     }
     const data = getData();
     if (!data || !isVisible()) return;
-    const base = Leaflet.geoJSON(data, {pane: 'landCoverPane', filter: feature => String(feature.properties?.isomSymbol) !== '520' && featureIsSelected(feature), style, pointToLayer: (feature, latlng) => Leaflet.marker(latlng, {pane: 'landCoverPane', icon: pointIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
+    const base = Leaflet.geoJSON(data, {pane: 'landCoverPane', filter: feature => String(feature.properties?.isomSymbol) !== '520' && featureIsSelected(feature), style, pointToLayer: (feature, latlng) => Leaflet.marker(latlng, {pane: 'landCoverMarkerPane', rotateWithView: true, icon: pointIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
     const restricted = Leaflet.geoJSON(data, {pane: 'restrictedAreaPane', filter: feature => isCurrentLandCoverData(data) && String(feature.properties?.isomSymbol) === '520' && featureIsSelected(feature), style, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
     layer = Leaflet.layerGroup([base, restricted]).addTo(map);
     schedule(installPatterns);

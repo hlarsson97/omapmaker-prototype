@@ -21,6 +21,13 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     fieldPane: 450,
     gpsPane: 650
   };
+  const markerPanes = {
+    landCoverMarkerPane: 305,
+    infrastructureMarkerPane: 387,
+    globalMarkerPane: 441,
+    fieldMarkerPane: 451,
+    editMarkerPane: 700
+  };
   const nonInteractive = new Set(['contourPane', 'northLinePane', 'evidencePane', 'gpsPane']);
   const rotatingPane = map.getPane('overlayPane')?.parentElement;
   for (const [name, zIndex] of Object.entries(panes)) {
@@ -28,6 +35,11 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     const pane = map.getPane(name);
     pane.style.zIndex = zIndex;
     if (nonInteractive.has(name)) pane.style.pointerEvents = 'none';
+  }
+  const nonRotatingPane = map.getPane('markerPane')?.parentElement;
+  for (const [name, zIndex] of Object.entries(markerPanes)) {
+    map.createPane(name, nonRotatingPane);
+    map.getPane(name).style.zIndex = zIndex;
   }
 
   const baseMaps = {
