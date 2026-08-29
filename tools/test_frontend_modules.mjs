@@ -18,7 +18,7 @@ import {mapOrientationBearing, mapOrientationLabel, nextMapOrientation} from '..
 import {anchoredMapCenter, anchoredRotationTranslation, createSmoothMapMarkerFactory} from '../js/smooth_rotation.mjs';
 import {localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, restoreLocalOriginal} from '../js/map_objects.mjs';
-import {applyDefaultSymbolSettings, cliffTagSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
+import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -124,12 +124,26 @@ assert.equal(isDecoratedLineSymbol('528'), true);
 assert.equal(isBarrierLineSymbol('528'), false);
 assert.equal(isBarrierLineSymbol('529'), true);
 assert.equal(isImpassableBarrierSymbol('529'), true);
+const stairSteps = stairwayStepSegments(fenceObject.coordinates, {stepSpacingMm: 0.4, innerWidthMm: 0.4});
+assert(stairSteps.length >= 3);
+assert(stairSteps[0][0][1] < stairSteps[0][1][1], 'Trappsteg ska ligga tvärs över linjens ritningsriktning');
+assert.equal(isDecoratedLineSymbol('532'), true);
 const attachment = nearestBarrierAttachment([{id: 'path', symbol: '506', coordinates: [[18, 59], [18.001, 59]]}, {id: 'wall', symbol: '515', coordinates: [[18, 59.0001], [18.001, 59.0001]]}], [18.0004, 59.00011], 25);
 assert.equal(attachment.barrier.id, 'wall');
 assert(Math.abs(attachment.snapped.coordinate[1] - 59.0001) < 1e-10);
 const crossingControls = symbolObjectControlsHtml({id: 'crossing-1', symbol: '519', parentObjectId: 'wall-1', parentSymbol: '515', breakBarrier: true}, escapeHtml);
 assert.match(crossingControls, /Kopplad till ISOM 515/);
 assert.match(crossingControls, /data-symbol-object-action="crossing-break"/);
+const closedFenceCoordinates = [[18, 59], [18.001, 59], [18.001, 59.001], [18.00001, 59.00001]];
+const closedFence = closeLineCoordinates(closedFenceCoordinates, 3);
+assert.equal(closedFence.closed, true);
+assert.deepEqual(closedFence.coordinates.at(-1), closedFence.coordinates[0]);
+assert.equal(isClosedLineCoordinates(closedFence.coordinates), true);
+assert.match(symbolObjectControlsHtml({id: 'enclosure-1', symbol: '516', coordinates: closedFence.coordinates}, escapeHtml), /create-enclosed-area/);
+const lineParts = lineCoordinatesWithoutGaps([[18, 59], [18.002, 59]], [[18.001, 59]], 9);
+assert.equal(lineParts.length, 2);
+const gapWest = lineParts[0].at(-1), gapEast = lineParts[1][0];
+assert(gapWest[0] < 18.001 && gapEast[0] > 18.001, 'Passagen ska dela barriärlinjen i två synliga delar');
 assert.deepEqual(mapObjectSource('osm', 'way/42'), {type: 'osm', label: 'OpenStreetMap', id: 'way/42'});
 const adaptedLocal = localMapObject('point', {id: 'local-2', objectType: 'boulder', source: 'gps', syncStatus: 'local', modifiedBy: 'manual'}, '204');
 assert.equal(adaptedLocal.geometryType, 'Point');
@@ -474,10 +488,10 @@ assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=3'));
-assert(fieldHtml.includes('isom_symbols.js?v=9'));
-assert(fieldHtml.includes('isom_renderer.js?v=9'));
+assert(fieldHtml.includes('isom_symbols.js?v=10'));
+assert(fieldHtml.includes('isom_renderer.js?v=10'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=10"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=11"'));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }

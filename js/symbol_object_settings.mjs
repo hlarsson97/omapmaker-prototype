@@ -2,6 +2,7 @@ const CLIFF_SYMBOLS = new Set(['201', '202']);
 const POWER_LINE_SYMBOLS = new Set(['510', '511']);
 const DECORATED_BARRIER_SYMBOLS = new Set(['513.1', '513.2', '514', '515', '516', '517', '518']);
 const PROMINENT_LINE_SYMBOLS = new Set(['528', '529']);
+const STAIRWAY_SYMBOLS = new Set(['532']);
 const IMPASSABLE_BARRIER_SYMBOLS = new Set(['515', '518', '529']);
 const METRES_PER_DEGREE = 111320;
 
@@ -19,7 +20,7 @@ export function isDecoratedBarrierSymbol(symbol) {
 
 export function isDecoratedLineSymbol(symbol) {
   const value = String(symbol || '');
-  return DECORATED_BARRIER_SYMBOLS.has(value) || PROMINENT_LINE_SYMBOLS.has(value);
+  return DECORATED_BARRIER_SYMBOLS.has(value) || PROMINENT_LINE_SYMBOLS.has(value) || STAIRWAY_SYMBOLS.has(value);
 }
 
 export function isBarrierLineSymbol(symbol) {
@@ -43,6 +44,7 @@ export function applyDefaultSymbolSettings(object, symbol) {
 export function symbolObjectControlsHtml(object, escapeHtml) {
   const symbol = String(object.symbol || '');
   const id = escapeHtml(object.id);
+  const enclosureControls = isBarrierLineSymbol(symbol) && isClosedLineCoordinates(object.coordinates) ? `<div class="symbol-object-settings"><small>Sluten inhägnad identifierad. Ytan skapas med den områdestyp som är vald i ritverktyget.</small><div class="symbol-setting-options"><button type="button" data-symbol-object-action="create-enclosed-area" data-object-id="${id}">Skapa vald yta innanför</button></div></div>` : '';
   if (isCliffSymbol(symbol)) {
     const selected = object.downhillSide;
     const button = (side, label) => `<button type="button" class="${selected === side ? 'selected' : ''}" data-symbol-object-action="cliff-side" data-object-id="${id}" data-symbol-setting-value="${side}">${label}</button>`;
@@ -57,12 +59,12 @@ export function symbolObjectControlsHtml(object, escapeHtml) {
   if (['516', '517', '518'].includes(symbol)) {
     const selected = object.tagSide;
     const button = (side, label) => `<button type="button" class="${selected === side ? 'selected' : ''}" data-symbol-object-action="fence-side" data-object-id="${id}" data-symbol-setting-value="${side}">${label}</button>`;
-    return `<div class="symbol-object-settings"><small>Taggarnas sida, räknat i linjens ritningsriktning. För inhägnader ska de peka inåt.</small><div class="symbol-setting-options">${button('left', 'Vänster sida')}${button('right', 'Höger sida')}</div></div>`;
+    return `<div class="symbol-object-settings"><small>Taggarnas sida, räknat i linjens ritningsriktning. För inhägnader ska de peka inåt.</small><div class="symbol-setting-options">${button('left', 'Vänster sida')}${button('right', 'Höger sida')}</div></div>${enclosureControls}`;
   }
   if (symbol === '513.2') {
     const selected = object.lowerSide;
     const button = (side, label) => `<button type="button" class="${selected === side ? 'selected' : ''}" data-symbol-object-action="retaining-wall-side" data-object-id="${id}" data-symbol-setting-value="${side}">${label}</button>`;
-    return `<div class="symbol-object-settings"><small>Halvpunkterna ska peka mot den lägre sidan, räknat i linjens ritningsriktning.</small><div class="symbol-setting-options">${button('left', 'Lägre till vänster')}${button('right', 'Lägre till höger')}</div></div>`;
+    return `<div class="symbol-object-settings"><small>Halvpunkterna ska peka mot den lägre sidan, räknat i linjens ritningsriktning.</small><div class="symbol-setting-options">${button('left', 'Lägre till vänster')}${button('right', 'Lägre till höger')}</div></div>${enclosureControls}`;
   }
   if (symbol === '519') {
     const selected = Boolean(object.breakBarrier);
@@ -70,7 +72,7 @@ export function symbolObjectControlsHtml(object, escapeHtml) {
     const button = (value, label) => `<button type="button" class="${selected === value ? 'selected' : ''}" data-symbol-object-action="crossing-break" data-object-id="${id}" data-symbol-setting-value="${value}">${label}</button>`;
     return `<div class="symbol-object-settings"><small>${linked}</small><div class="symbol-setting-options">${button(true, 'Bryt barriärlinjen')}${button(false, 'Behåll barriärlinjen')}</div></div>`;
   }
-  return '';
+  return enclosureControls;
 }
 
 function projection(latitude) {
@@ -99,6 +101,47 @@ export function nearestPointOnLine(coordinates, coordinate) {
     if (!best || distanceSquared < best.distanceSquared) best = {point, distanceSquared, segmentIndex: index - 1, angleDegrees: Math.atan2(dy, dx) * 180 / Math.PI};
   }
   return best ? {...best, coordinate: project.toCoordinate(best.point)} : null;
+}
+
+export function isClosedLineCoordinates(coordinates, toleranceMetres = 0.25) {
+  if (!Array.isArray(coordinates) || coordinates.length < 3) return false;
+  const first = coordinates[0], last = coordinates.at(-1);
+  if (!Array.isArray(first) || !Array.isArray(last)) return false;
+  const project = projection((Number(first[1]) + Number(last[1])) / 2);
+  const a = project.toMetres(first), b = project.toMetres(last);
+  return Math.hypot(b.x - a.x, b.y - a.y) <= Number(toleranceMetres);
+}
+
+export function closeLineCoordinates(coordinates, toleranceMetres = 3) {
+  if (!isClosedLineCoordinates(coordinates, toleranceMetres)) return {coordinates, closed: false};
+  const closed = coordinates.map(coordinate => [...coordinate]);
+  closed[closed.length - 1] = [...closed[0]];
+  return {coordinates: closed, closed: true};
+}
+
+export function lineCoordinatesWithoutGaps(coordinates, gapCoordinates, gapMetres) {
+  if (!Array.isArray(coordinates) || coordinates.length < 2 || !Array.isArray(gapCoordinates) || !gapCoordinates.length || !(Number(gapMetres) > 0)) return [coordinates];
+  const latitude = coordinates.reduce((sum, coordinate) => sum + Number(coordinate[1]), 0) / coordinates.length;
+  const project = projection(latitude), points = coordinates.map(project.toMetres), cumulative = [0];
+  for (let index = 1; index < points.length; index++) cumulative.push(cumulative[index - 1] + Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y));
+  const total = cumulative.at(-1), halfGap = Number(gapMetres) / 2, intervals = [];
+  for (const coordinate of gapCoordinates) {
+    const target = project.toMetres(coordinate); let best = null;
+    for (let index = 1; index < points.length; index++) {
+      const a = points[index - 1], b = points[index], dx = b.x - a.x, dy = b.y - a.y, lengthSquared = dx * dx + dy * dy;
+      if (!lengthSquared) continue;
+      const t = Math.max(0, Math.min(1, ((target.x - a.x) * dx + (target.y - a.y) * dy) / lengthSquared)), x = a.x + t * dx, y = a.y + t * dy, distanceSquared = (target.x - x) ** 2 + (target.y - y) ** 2;
+      if (!best || distanceSquared < best.distanceSquared) best = {distanceSquared, along: cumulative[index - 1] + Math.sqrt(lengthSquared) * t};
+    }
+    if (best) intervals.push([Math.max(0, best.along - halfGap), Math.min(total, best.along + halfGap)]);
+  }
+  intervals.sort((a, b) => a[0] - b[0]); const merged = [];
+  for (const interval of intervals) { const previous = merged.at(-1); if (previous && interval[0] <= previous[1]) previous[1] = Math.max(previous[1], interval[1]); else merged.push([...interval]); }
+  const visible = []; let cursor = 0;
+  for (const [start, end] of merged) { if (start > cursor) visible.push([cursor, start]); cursor = Math.max(cursor, end); }
+  if (cursor < total) visible.push([cursor, total]);
+  const pointAt = distance => { let index = 1; while (index < cumulative.length && cumulative[index] < distance) index++; index = Math.min(index, cumulative.length - 1); const a = points[index - 1], b = points[index], length = cumulative[index] - cumulative[index - 1], t = length ? (distance - cumulative[index - 1]) / length : 0; return project.toCoordinate({x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t}); };
+  return visible.filter(([start, end]) => end - start > 1e-6).map(([start, end]) => { const part = [pointAt(start)]; for (let index = 1; index < coordinates.length - 1; index++) if (cumulative[index] > start && cumulative[index] < end) part.push(coordinates[index].slice(0, 2)); part.push(pointAt(end)); return part; });
 }
 
 export function nearestBarrierAttachment(barriers, coordinate, maxDistanceMetres = 25) {
@@ -258,6 +301,16 @@ export function prominentLineChevronSegments(coordinates, definition, baseScale 
 
 export function groupedProminentLineChevronSegments(coordinates, definition, baseScale = 15000) {
   return chevronSegmentsFromSamples(groupedSamples(coordinates, definition, baseScale), definition, baseScale);
+}
+
+export function stairwayStepSegments(coordinates, definition, baseScale = 15000) {
+  const scale = Number(baseScale) / 1000;
+  const spacing = Number(definition?.stepSpacingMm || 0) * scale;
+  const halfWidth = Number(definition?.innerWidthMm || 0) * scale / 2;
+  return sampledLinePoints(coordinates, spacing, spacing / 2).map(sample => {
+    const normal = {x: -Math.sin(sample.angle) * halfWidth, y: Math.cos(sample.angle) * halfWidth};
+    return [sample.toCoordinate({x: sample.point.x - normal.x, y: sample.point.y - normal.y}), sample.toCoordinate({x: sample.point.x + normal.x, y: sample.point.y + normal.y})];
+  });
 }
 
 export function powerSupportFeatures(object, symbol) {
