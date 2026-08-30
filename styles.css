@@ -381,6 +381,61 @@ body.field-survey-active #toast{bottom:calc(min(56dvh,470px) + 26px + env(safe-a
 .symbol-object-settings button{min-height:34px;border:0;border-radius:8px;padding:7px 6px;background:#e7efe9;color:#114a31;font-size:10px;font-weight:850}
 .symbol-object-settings button.selected{outline:2px solid #286fc0;background:#e6f0fc;color:#174f8d}
 
+/* Unified object popups and source-specific controls share one compact shell. */
+.leaflet-popup-content{margin:13px 16px 14px}
+.leaflet-popup-content-wrapper{border-radius:15px}
+.map-object-popup{display:grid!important;gap:3px!important;width:218px;min-width:0!important}
+.map-object-popup>b{display:block;font-size:14px;line-height:1.25}
+.map-object-popup>small{display:block;margin:0!important;color:#68736c;font-size:9px;line-height:1.35}
+.map-object-popup select{width:100%;min-height:32px;margin:6px 0 0!important;border:1px solid #d5ddd6;border-radius:7px;padding:5px 7px;background:#fff;font-size:10px;font-weight:700}
+.map-object-popup>button,.map-object-popup .object-type-control>button{width:100%;min-height:31px;margin:3px 0 0;border:0;border-radius:7px;padding:5px 7px;background:#e7efe9;color:#114a31;font-size:10px;font-weight:850}
+.map-object-popup .generated-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:4px!important;margin-top:6px!important}
+.map-object-popup .generated-actions button{width:auto!important;min-height:31px!important;margin:0!important;border-radius:7px!important;padding:5px!important;font-size:9.5px!important}
+.map-object-popup .generated-actions button[data-object-action="edit"]{grid-column:1/-1}
+.object-type-control{display:grid!important;grid-template-columns:1fr!important;gap:0!important;margin-top:3px!important}
+.object-type-control label{color:#68736c;font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.map-object-popup .symbol-object-settings{margin-top:6px;padding-top:6px}
+.global-map-object-popup .global-info-button{display:block;width:100%!important;height:auto!important;border-radius:7px!important;font-family:inherit!important;font-size:10px!important}
+
+/* Deleted local work lives in the trash, never as an interactive map ghost. */
+#trashButton:disabled{display:none}
+.utility-row>div{display:flex;gap:5px}
+#trashButton span{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:3px;border-radius:999px;background:#e7ece8;font-size:8px}
+#trashSheet form{max-height:88dvh;overflow:auto}
+.trash-intro{margin:0 0 12px;color:#607067;font-size:11px;line-height:1.4}
+#trashList{display:grid;gap:7px}
+.trash-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px;border:1px solid #dce3dd;border-radius:11px;background:#fafbf8}
+.trash-item.gps{border-color:#9ab9de;background:#f1f6fc}
+.trash-item b,.trash-item small{display:block}
+.trash-item b{font-size:12px}.trash-item small{margin-top:2px;color:#6d7a72;font-size:9px;line-height:1.3}
+.trash-item button{min-height:34px;border:0;border-radius:8px;padding:7px 10px;background:#dfeee5;color:#075b3a;font-size:10px;font-weight:850}
+#trashEmpty{padding:20px;text-align:center;color:#758079;font-size:11px}
+
+/* Drawing takes precedence over feature inspection. */
+body.object-placement-active .leaflet-interactive,body.object-placement-active .leaflet-marker-icon{pointer-events:none!important}
+
+/* Compact split buttons: the arrow is visually part of the main tool. */
+#toolbar{width:min(286px,calc(100vw - 78px))!important}
+#toolbar .tool-row{display:grid;grid-template-columns:minmax(0,1fr) 39px!important;gap:0!important;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;filter:drop-shadow(0 2px 7px #17241c25)}
+#toolbar .tool-main,#toolbar .tool-menu{min-height:45px!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+#toolbar .tool-main{padding:6px 11px}
+#toolbar .tool-menu{border-left:1px solid #cbd3cd!important;background:#f0f3f0!important;font-size:17px}
+#toolbar .point-row{border-color:var(--mode-color)}
+#toolbar .point-row .tool-menu{border-left-color:#ffffff66!important;background:var(--mode-color)!important;color:#fff}
+
+/* The symbol catalogue is image-led and uses the normative renderer. */
+#objectSheet form{max-height:92dvh;overflow:auto}
+#sheetOptions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#sheetOptions .symbol-choice{display:grid;grid-template-rows:72px auto auto;align-content:start;min-width:0;min-height:126px;padding:8px;border:1px solid var(--line);border-radius:12px;background:#fbfcf8;text-align:center}
+#sheetOptions .symbol-choice.selected{border:2px solid var(--mode-color);padding:7px;background:#edf5f0}
+.symbol-preview{display:grid;place-items:center;min-width:0;overflow:hidden;border-radius:8px;background:#fff}
+.symbol-preview svg{display:block;width:88%;height:60px;overflow:visible}
+.symbol-preview .symbol-svg{width:44px;height:44px}
+.symbol-name{align-self:start;margin-top:6px;font-size:11px;font-weight:800;line-height:1.2;overflow-wrap:anywhere}
+#sheetOptions .symbol-choice small{display:block;margin-top:4px;color:#748078;font-size:8.5px;font-weight:700;line-height:1.2}
+
+@media(max-width:520px){#toolbar{width:min(246px,calc(100vw - 82px))!important}#toolbar .utility-row{align-items:center}.utility-row>div{gap:3px}.utility-row button{padding:5px 6px!important;font-size:9px!important}.map-object-popup{width:min(218px,calc(100vw - 74px))}}
+
 .generation-sheet form{width:min(520px,calc(100vw - 28px));max-height:min(90dvh,780px);overflow:auto}
 .generation-intro{margin:0 0 14px;color:#53665a;font-size:12px;line-height:1.45}
 .generation-sheet fieldset{min-width:0;margin:0 0 14px;padding:0;border:0}

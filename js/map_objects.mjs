@@ -19,6 +19,12 @@ const LIFECYCLE_LABELS = Object.freeze({
   deleted: 'Raderat lokalt'
 });
 
+const CATEGORY_LIFECYCLE_LABELS = Object.freeze({
+  point: Object.freeze({edited: 'Ändrad lokalt', excluded: 'Utesluten lokalt', deleted: 'Raderad lokalt'}),
+  line: Object.freeze({edited: 'Ändrad lokalt', excluded: 'Utesluten lokalt', deleted: 'Raderad lokalt'}),
+  area: Object.freeze({edited: 'Ändrad lokalt', excluded: 'Utesluten lokalt', deleted: 'Raderad lokalt'})
+});
+
 const SYNC_LABELS = Object.freeze({local: 'Lokalt utkast', submitted: 'Insänd observation'});
 
 export function localObjectLifecycle(object) {
@@ -49,6 +55,12 @@ export function restoreLocalOriginal(object) {
   return object;
 }
 
+export function restoreLocalFromTrash(object) {
+  delete object.status;
+  delete object.deletedAt;
+  return object;
+}
+
 export function mapObjectSource(source, sourceId = '') {
   const type = String(source || 'unknown');
   return {type, label: SOURCE_LABELS[type] || type, id: String(sourceId || '')};
@@ -64,7 +76,7 @@ export function localMapObject(cat, object, symbol) {
     symbol: String(symbol || object.symbol || ''),
     geometryType,
     source: mapObjectSource(object.source),
-    status: {type: lifecycle, label: LIFECYCLE_LABELS[lifecycle]},
+    status: {type: lifecycle, label: CATEGORY_LIFECYCLE_LABELS[cat]?.[lifecycle] || LIFECYCLE_LABELS[lifecycle]},
     sync: {type: object.syncStatus || 'local', label: SYNC_LABELS[object.syncStatus] || object.syncStatus || SYNC_LABELS.local},
     capabilities: {...MAP_OBJECT_CAPABILITIES},
     modifiedBy: object.modifiedBy || null,
@@ -87,6 +99,34 @@ export function generatedMapObject(layerType, feature, {symbol, statusLabel, sou
   };
 }
 
+export function mergeGeneratedFeatureOverrides(next, previous, {status, propertyNames = []} = {}) {
+  const sourceKey = feature => String(feature?.properties?.sourceId || feature?.id || '');
+  const incoming = new Map((next?.features || []).map(feature => [sourceKey(feature), feature]));
+  const preserved = [];
+  for (const previousFeature of previous?.features || []) {
+    if ((status?.(previousFeature) || 'source') === 'source') continue;
+    const feature = incoming.get(sourceKey(previousFeature));
+    if (!feature) {
+      const retained = cloneJson(previousFeature);
+      retained.properties ||= {};
+      retained.properties.sourceMissing = true;
+      preserved.push(retained);
+      continue;
+    }
+    const sourceGeometry = cloneJson(feature.geometry);
+    const sourceProperties = cloneJson(feature.properties || {});
+    feature.geometry = cloneJson(previousFeature.geometry);
+    for (const property of ['status', 'mapStatus', 'originalGeometry', 'editedAt', 'deletedAt', 'reviewedAt', ...propertyNames]) {
+      if (previousFeature.properties?.[property] !== undefined) feature.properties[property] = cloneJson(previousFeature.properties[property]);
+    }
+    feature.properties.latestSourceGeometry = sourceGeometry;
+    feature.properties.latestSourceProperties = sourceProperties;
+    delete feature.properties.sourceMissing;
+  }
+  next.features.push(...preserved);
+  return next;
+}
+
 export function mapObjectActionHtml(object, {kind, layerType = '', escapeHtml}) {
   const status = object.status.type;
   const inactive = ['excluded', 'deleted', 'locally-excluded', 'locally-deleted'].includes(status);
@@ -100,6 +140,6 @@ export function mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDet
   const primary = [isomClaim(object.symbol, object.geometryType), object.status.label, ...primaryDetails].filter(Boolean).map(value => escapeHtml(value)).join(' · ');
   const source = [object.source.label, object.source.id].filter(Boolean).map(value => escapeHtml(value)).join(' · ');
   const secondary = secondaryDetails.filter(Boolean).map(value => `<small>${escapeHtml(value)}</small>`).join('');
-  const classes = [className, 'generated-object-popup'].filter(Boolean).join(' ');
+  const classes = ['map-object-popup', 'generated-object-popup', className].filter(Boolean).join(' ');
   return `<div class="${escapeHtml(classes)}"><b>${escapeHtml(title)}</b><small>${primary}</small><small>${source}</small>${secondary}${controlsHtml}${actionsHtml}</div>`;
 }
