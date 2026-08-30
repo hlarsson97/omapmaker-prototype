@@ -584,7 +584,7 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=8'));
+assert(fieldHtml.includes('styles.css?v=9'));
 assert(fieldHtml.includes('isom_symbols.js?v=11'));
 assert(fieldHtml.includes('isom_renderer.js?v=12'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
@@ -607,6 +607,7 @@ assert(appSource.includes("function pointNormContext(){return{...normContext(),m
 assert(appSource.includes('refreshPointPresentation();renderRoads()'), 'Punktobjekt ska renderas om även när arbetsområdet använder digitalt läge');
 assert(appSource.includes("map.on('zoom zoomanim'"), 'Punktobjekt ska skalas även under en pågående zoomgest');
 assert(styles.includes('scale(var(--point-zoom-scale,1))'), 'Punktsymbolernas visuella storlek ska följa zoomens mellanlägen');
+assert(styles.includes('.local-map-object .symbol-svg{filter:none}'), 'Manuellt placerade punktsymboler ska inte ha vit skugga');
 for (const versionedModule of ['generated_infrastructure.mjs?v=5','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=2','map_objects.mjs?v=2']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
