@@ -27,7 +27,7 @@ export function landCoverMetaText(data, generatedStatus, centralLayerLabel) {
   return `${counts.water} vatten · ${counts.restricted} st 520${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
 }
 
-export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
+export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
   let layer = null;
   let attributionVisible = false;
   let patternSerial = 0;
@@ -43,7 +43,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
 
   function pointIcon(feature) {
     const symbol = String(feature.properties?.isomSymbol || '303');
-    const rendered = renderer.pointMarkup(symbol, normContext());
+    const rendered = renderer.pointMarkup(symbol, (pointNormContext || normContext)());
     const size = rendered.sizePx;
     return Leaflet.divIcon({className: `omap-water-symbol generated-object map-point-object ${generatedStatus(feature)}`, html: rendered.mapHtml, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
   }

@@ -588,7 +588,7 @@ assert(fieldHtml.includes('styles.css?v=7'));
 assert(fieldHtml.includes('isom_symbols.js?v=11'));
 assert(fieldHtml.includes('isom_renderer.js?v=12'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=20"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=21"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -603,6 +603,8 @@ assert(appSource.includes('map-${geometryCategory(feature)}-object'), 'Genererad
 assert(appSource.includes("workspace?.symbolDisplayMode||'print'"), 'Globalkartan ska använda skalenliga symboler när inget arbetsområde anger digitalt läge');
 assert(appSource.includes("if(symbolDisplayMode()==='print')refreshSymbolPresentation()"), 'Skalenliga punktsymboler ska renderas om efter zoom');
 assert(appSource.includes('local-map-object map-point-object'), 'Lokala punkter ska behålla sin geometri- och opacitetsklass när ikonen renderas om');
-for (const versionedModule of ['generated_infrastructure.mjs?v=4','generated_land_cover.mjs?v=4','local_map_objects.mjs?v=2','map_objects.mjs?v=2']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+assert(appSource.includes("function pointNormContext(){return{...normContext(),mode:'print'}}"), 'Punktobjekt ska alltid använda skalenlig zoomrendering');
+assert(appSource.includes('refreshPointPresentation();renderRoads()'), 'Punktobjekt ska renderas om även när arbetsområdet använder digitalt läge');
+for (const versionedModule of ['generated_infrastructure.mjs?v=5','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=2','map_objects.mjs?v=2']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

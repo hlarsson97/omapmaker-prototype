@@ -22,7 +22,7 @@ export function infrastructureMetaText(data, generatedStatus, centralLayerLabel)
   return `${counts.rail} järnvägar · ${counts.power} ledningar · ${counts.supports} stolpar/master${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
 }
 
-export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement}) {
+export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement}) {
   let layer = null;
   let attributionVisible = false;
 
@@ -42,7 +42,7 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const symbol = String(properties.isomSymbol || '510');
     const large = symbol === '511' && Boolean(properties.largeMast);
     const definition = renderer.definition(symbol);
-    const context = normContext();
+    const context = (pointNormContext || normContext)();
     const unit = renderer.pixelsPerPaperMm(map, context.scale, context.mode);
     const width = renderer.paperMm(large ? definition.largeSupportSizeMm : definition.supportWidthMm, context.scale) * unit;
     const stroke = renderer.paperMm(definition.supportStrokeMm, context.scale) * unit;
