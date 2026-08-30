@@ -34,6 +34,7 @@ header button{pointer-events:auto;background:#fffffff2}
 #modeHint{font-size:7px}
 .omap-symbol{background:transparent!important;border:0!important}
 .symbol-svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px #fff)}
+.map-symbol-svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
 .manual-mode .omap-symbol:not(.feature-selected){filter:none}
 .omap-symbol.feature-selected,.local-map-object.feature-selected{filter:drop-shadow(0 0 4px #286fc0)}
 #sheetOptions .symbol{width:25px;height:25px;vertical-align:middle}
@@ -54,6 +55,7 @@ header button{pointer-events:auto;background:#fffffff2}
 #layersSheet .range-label{display:grid;grid-template-columns:1fr auto;align-items:center}
 #layersSheet .range-label input{grid-column:1/3;width:100%;accent-color:#075b3a}
 #layersSheet output{color:#075b3a}
+.object-opacity-controls{margin-top:4px}.object-opacity-controls .range-label{min-height:0;padding:8px 4px 5px}
 #layerNote{font-size:10px;line-height:1.35;color:#66736b;background:#f1f3ec;padding:10px;border-radius:10px}
 .orientation-base{filter:saturate(.45) brightness(1.2) contrast(.82) sepia(.12)}
 .contour-reference{mix-blend-mode:multiply;filter:sepia(1) saturate(3) hue-rotate(335deg) contrast(1.4)}

@@ -45,7 +45,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     const symbol = String(feature.properties?.isomSymbol || '303');
     const rendered = renderer.pointMarkup(symbol, normContext());
     const size = rendered.sizePx;
-    return Leaflet.divIcon({className: `omap-water-symbol generated-object ${generatedStatus(feature)}`, html: rendered.html, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
+    return Leaflet.divIcon({className: `omap-water-symbol generated-object ${generatedStatus(feature)}`, html: rendered.mapHtml, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
   }
 
   function symbolOptions(feature) {

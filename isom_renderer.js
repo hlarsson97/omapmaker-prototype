@@ -70,8 +70,8 @@
     else if(d?.kind==='double-line-with-supports')body=largeSupport?`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`:`<path d="M${-w/2},0H${w/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
     else body=`<circle cx="0" cy="0" r="${Math.max(.1,w/3)}" fill="${stroke}"/>`;
     if((d?.kind==='line-with-supports'||d?.kind==='double-line-with-supports')&&!largeSupport&&Number.isFinite(Number(properties.angleDegrees)))body=`<g transform="rotate(${90-number(properties.angleDegrees)-number(context.declination)})">${body}</g>`;
-    const unit=pixelsPerPaperMm(context.map,context.scale,context.mode),size=Math.max(8,Math.max(w,h)*unit+4);
-    return{html:`<svg class="symbol-svg" xmlns="${NS}" viewBox="${view}">${body}</svg>`,sizePx:size,widthMm:w,heightMm:h};
+    const unit=pixelsPerPaperMm(context.map,context.scale,context.mode),visualWidth=(w+2*pad)*unit,visualHeight=(h+2*pad)*unit,size=Math.max(8,Math.max(visualWidth,visualHeight)+4),svg=`<svg class="symbol-svg" xmlns="${NS}" viewBox="${view}">${body}</svg>`,mapSvg=`<svg class="symbol-svg map-symbol-svg" xmlns="${NS}" viewBox="${view}" style="width:${visualWidth}px;height:${visualHeight}px">${body}</svg>`;
+    return{html:svg,mapHtml:mapSvg,sizePx:size,visualWidthPx:visualWidth,visualHeightPx:visualHeight,widthMm:w,heightMm:h};
   }
   function localProject(coordinate,center){
     const latitude=center.lat*Math.PI/180;

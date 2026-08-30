@@ -19,6 +19,8 @@ Fatta tekniska beslut själv. Fråga endast när ett verkligt produktbeslut krä
 
 Läs bara det som behövs för uppgiften. Kör relevanta tester efteråt.
 
+När en ändring är färdig och relevanta tester är godkända: versionshantera ändringen och driftsätt den som standard genom att pusha till projektets befintliga `main`-gren. Höj cacheversionerna för ändrade frontendresurser före publicering så att den driftsatta versionen kan testas direkt. Fråga bara före driftsättning om den innebär en ny publik exponeringsyta, ändrad server-/nätverkskonfiguration eller annan särskild risk.
+
 Backendtest:\
 `.venv/bin/python tools/test_height_server.py`
 
@@ -27,7 +29,7 @@ Backendtest:\
 - Versionshantera aldrig hemligheter, `data/lantmateriet/` eller `data/contour-cache/`.
 - Lantmäteriets credentials installeras endast via `install_lantmateriet_oauth.sh`.
 - Backend ska normalt bindas till `127.0.0.1`.
-- Fråga före publik exponering, ändrad nätverks/Tailscale-konfiguration eller andra irreversibla åtgärder.
+- Fråga före ny publik exponering, ändrad nätverks/Tailscale-konfiguration eller andra irreversibla åtgärder. Vanlig publicering till projektets redan etablerade GitHub Pages-miljö är tillåten som standard.
 - Läs `SERVER_SETUP_UBUNTU.md` före ändringar av serverkonfiguration.
 
 ## Kommunikation

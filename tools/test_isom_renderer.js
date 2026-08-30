@@ -62,6 +62,12 @@ assert.strictEqual(registry.renderers['206'].minimumAreaMm2, 0.3);
 assert.strictEqual(registry.renderers['207'].settings.sizePercent.values[1], 120);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
+const printContextAtZoom = zoom => ({scale: 15000, mode: 'print', map: {getCenter: () => ({lat: 59.2}), getZoom: () => zoom}});
+const zoomedOutBoulder = renderer.pointMarkup('204', printContextAtZoom(13));
+const zoomedInBoulder = renderer.pointMarkup('204', printContextAtZoom(17));
+assert(zoomedOutBoulder.sizePx >= 8, 'Punktsymbolens klickyta ska förbli användbar vid utzoomning');
+assert(zoomedOutBoulder.visualWidthPx < zoomedInBoulder.visualWidthPx, 'Själva stenen ska följa kartans zoom även när klickytan har nått sin minimistorlek');
+assert(zoomedOutBoulder.mapHtml.includes(`width:${zoomedOutBoulder.visualWidthPx}px`), 'Kartsymbolen ska använda den normberäknade visuella bredden');
 const pitMarkup = renderer.pointMarkup('112', screenContext).html;
 assert(pitMarkup.includes('M-0.35,-0.4 L0,0.4 L0.35,-0.4'), 'Grop 112 ska vara ett enkelt V utan lodräta ändar');
 assert.strictEqual((renderer.pointMarkup('110', screenContext).html.match(/<ellipse/g) || []).length, 3, 'Långsträckt kulle ska ha tre bruna ovaler');
