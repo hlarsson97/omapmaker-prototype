@@ -34,7 +34,8 @@ header button{pointer-events:auto;background:#fffffff2}
 #modeHint{font-size:7px}
 .omap-symbol{background:transparent!important;border:0!important}
 .symbol-svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px #fff)}
-.map-symbol-svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.map-symbol-svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(var(--point-zoom-scale,1));transform-origin:center}
+.leaflet-zoom-anim .map-symbol-svg{transition:transform .25s cubic-bezier(0,0,.25,1)}
 .manual-mode .omap-symbol:not(.feature-selected){filter:none}
 .omap-symbol.feature-selected,.local-map-object.feature-selected{filter:drop-shadow(0 0 4px #286fc0)}
 #sheetOptions .symbol{width:25px;height:25px;vertical-align:middle}
