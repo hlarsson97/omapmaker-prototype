@@ -588,7 +588,7 @@ assert(fieldHtml.includes('styles.css?v=7'));
 assert(fieldHtml.includes('isom_symbols.js?v=11'));
 assert(fieldHtml.includes('isom_renderer.js?v=12'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=18"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=20"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -600,5 +600,9 @@ assert(styles.includes('/* ===== v14.css ===== */'));
 for (const category of ['point','line','area']) assert(styles.includes(`.map-${category}-object{opacity:var(--${category}-object-opacity,1)!important}`), `${category}-objekt ska styras av sitt globala opacitetsreglage`);
 const appSource = fs.readFileSync(path.join(root, 'app.mjs'), 'utf8');
 assert(appSource.includes('map-${geometryCategory(feature)}-object'), 'Genererade objekt ska få opacitetsklass efter geometri');
+assert(appSource.includes("workspace?.symbolDisplayMode||'print'"), 'Globalkartan ska använda skalenliga symboler när inget arbetsområde anger digitalt läge');
+assert(appSource.includes("if(symbolDisplayMode()==='print')refreshSymbolPresentation()"), 'Skalenliga punktsymboler ska renderas om efter zoom');
+assert(appSource.includes('local-map-object map-point-object'), 'Lokala punkter ska behålla sin geometri- och opacitetsklass när ikonen renderas om');
+for (const versionedModule of ['generated_infrastructure.mjs?v=4','generated_land_cover.mjs?v=4','local_map_objects.mjs?v=2','map_objects.mjs?v=2']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
