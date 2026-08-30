@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=5"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=6"></head>
 <body class="gps-mode">
 <header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><div class="header-actions"><button id="fieldSurveyToggle" type="button">Fältläge</button><button id="export">Exportera</button></div></header>
 <main id="map"></main>
@@ -23,7 +23,8 @@
   <fieldset class="layer-section"><legend>Kartobjekt</legend>
     <div class="layer-card"><label id="globalObjectsLabel"><input id="globalObjectsVisible" type="checkbox" checked><span>Globala kartobjekt<small id="globalObjectsMeta">Kontrollerar servern…</small></span></label></div>
     <div class="layer-card"><label id="evidenceLabel"><input id="evidenceVisible" type="checkbox"><span>Evidenskarta<small id="evidenceMeta">Aggregerade punktobservationer</small></span></label></div>
-    <div class="layer-card local-card"><label id="localDraftsLabel"><input id="objectsVisible" type="checkbox" checked><span>Lokala utkast<small id="localDraftsMeta">0 · endast på denna enhet</small></span></label><button id="reviewSubmissionButton" type="button">Granska och skicka observationer</button><div class="object-opacity-controls" aria-label="Opacitet för lokala kartobjekt"><label class="range-label">Punktobjekt <output id="pointOpacityValue">100 %</output><input id="pointOpacity" type="range" min="10" max="100" value="100"></label><label class="range-label">Linjeobjekt <output id="lineOpacityValue">100 %</output><input id="lineOpacity" type="range" min="10" max="100" value="100"></label><label class="range-label">Ytobjekt <output id="areaOpacityValue">100 %</output><input id="areaOpacity" type="range" min="10" max="100" value="100"></label></div></div>
+    <div class="layer-card local-card"><label id="localDraftsLabel"><input id="objectsVisible" type="checkbox" checked><span>Lokala utkast<small id="localDraftsMeta">0 · endast på denna enhet</small></span></label><button id="reviewSubmissionButton" type="button">Granska och skicka observationer</button></div>
+    <div class="layer-card object-opacity-controls" aria-label="Opacitet för alla kartobjekt"><b>Kartobjektens opacitet</b><small>Gäller lokala, globala och genererade objekt.</small><label class="range-label">Punktobjekt <output id="pointOpacityValue">100 %</output><input id="pointOpacity" type="range" min="10" max="100" value="100"></label><label class="range-label">Linjeobjekt <output id="lineOpacityValue">100 %</output><input id="lineOpacity" type="range" min="10" max="100" value="100"></label><label class="range-label">Ytobjekt <output id="areaOpacityValue">100 %</output><input id="areaOpacity" type="range" min="10" max="100" value="100"></label></div>
   </fieldset>
   <fieldset class="layer-section generated-section"><legend>Genererade kartlager</legend>
     <div class="layer-card generation-card">
@@ -156,4 +157,4 @@
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="printAttribution">Höjddata © Lantmäteriet · övrigt underlag © OpenStreetMap contributors · egen fältdata</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=11"></script><script src="isom_renderer.js?v=12"></script><script type="module" src="app.mjs?v=16"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=11"></script><script src="isom_renderer.js?v=12"></script><script type="module" src="app.mjs?v=17"></script></body></html>
