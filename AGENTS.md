@@ -21,6 +21,10 @@ Läs bara det som behövs för uppgiften. Kör relevanta tester efteråt.
 
 När en ändring är färdig och relevanta tester är godkända: versionshantera ändringen, pusha till projektets befintliga `main`-gren och driftsätt den på den privata servern via `systemadmin@labserver1` i `/home/systemadmin/omapmaker-prototype` med en ren `git pull --ff-only`. Verifiera serverns `/api/health` och den ändrade funktionen efteråt. Statiska frontendfiler kräver ingen tjänsteomstart; starta om `omapmaker.service` när backend eller runtimeberoenden har ändrats. Höj cacheversionerna för ändrade frontendresurser före publicering så att den driftsatta versionen kan testas direkt. Fråga bara före driftsättning om den innebär en ny publik exponeringsyta, ändrad server-/nätverkskonfiguration eller annan särskild risk.
 
+## Publiceringspreferens
+
+Användaren godkänner normalt att testade ändringar pushas till den befintliga `main`-grenen på projektets konfigurerade origin och driftsätts på den befintliga privata servern. Be om nytt godkännande om Git-destination, målgren, server eller exponeringsnivå ändras, eller om arbetsmiljön kräver en uttrycklig säkerhetsbekräftelse.
+
 Backendtest:\
 `.venv/bin/python tools/test_height_server.py`
 
