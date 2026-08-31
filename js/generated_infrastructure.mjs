@@ -1,5 +1,5 @@
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
-import {parallelLineCoordinates} from './symbol_object_settings.mjs?v=4';
+import {parallelLineCoordinates} from './symbol_object_settings.mjs?v=5';
 
 export const INFRASTRUCTURE_TYPES = Object.freeze({
   '509': ['railway', 'Järnväg'],
@@ -44,13 +44,9 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const large = symbol === '511' && Boolean(properties.largeMast);
     const definition = renderer.definition(symbol);
     const context = (pointNormContext || normContext)();
-    if (large) {
-      const rendered = renderer.pointMarkup('524', context, properties);
-      return Leaflet.divIcon({className: `infrastructure-support-icon generated-object map-point-object ${generatedStatus(feature)}`, html: rendered.mapHtml, iconSize: [rendered.sizePx, rendered.sizePx], iconAnchor: [rendered.sizePx / 2, rendered.sizePx / 2]});
-    }
     const unit = renderer.pixelsPerPaperMm(map, context.scale, context.mode);
-    const width = renderer.paperMm(definition.supportWidthMm, context.scale) * unit;
-    const stroke = renderer.paperMm(definition.supportStrokeMm, context.scale) * unit;
+    const width = renderer.paperMm(large ? definition.largeSupportSizeMm : definition.supportWidthMm, context.scale) * unit;
+    const stroke = renderer.paperMm(large ? definition.largeSupportStrokeMm : definition.supportStrokeMm, context.scale) * unit;
     const size = Math.max(18, width + 8);
     const angle = 90 - Number(properties.angleDegrees || 0);
     return Leaflet.divIcon({className: `infrastructure-support-icon generated-object map-point-object ${generatedStatus(feature)}`, html: `<span class="${large ? 'large' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;transform:rotate(${angle}deg)"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
@@ -66,7 +62,7 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const title = properties.name || INFRASTRUCTURE_TYPES[symbol]?.[1] || 'Tekniskt linjeobjekt';
     const object = generatedMapObject('infrastructure', feature, {symbol, statusLabel: generatedStatusLabel(feature), editable: !support});
     const controlsHtml = support ? '' : `<select class="infrastructure-type-select" data-infrastructure-id="${id}">${options}</select><button type="button" data-infrastructure-review="change" data-infrastructure-id="${id}">Ändra typ</button>`;
-    return mapObjectPopup(object, {title: support ? (properties.largeMast ? 'Högt torn' : properties.supportType === 'tower' ? 'Kraftledningsmast' : 'Kraftledningsstolpe') : title, isomClaim, escapeHtml, secondaryDetails: [support ? 'Exakt OSM-position' : `Klassificeringssäkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`], controlsHtml, actionsHtml: generatedActionHtml('infrastructure', feature, {editable: !support})});
+    return mapObjectPopup(object, {title: support ? (properties.largeMast ? 'Stor kraftledningsmast' : properties.supportType === 'tower' ? 'Kraftledningsmast' : 'Kraftledningsstolpe') : title, isomClaim, escapeHtml, secondaryDetails: [support ? 'Exakt OSM-position' : `Klassificeringssäkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`], controlsHtml, actionsHtml: generatedActionHtml('infrastructure', feature, {editable: !support})});
   }
 
   function render() {
