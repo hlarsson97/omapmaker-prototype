@@ -11,6 +11,7 @@ import rasterio
 from contourpy import contour_generator
 from pyproj import Transformer
 from rasterio.windows import from_bounds
+from rasterio.warp import transform_bounds
 
 
 def simplify_line(points, tolerance):
@@ -193,9 +194,7 @@ def main():
         window = None
         if args.bbox:
             west, south, east, north = args.bbox
-            to_source = Transformer.from_crs("EPSG:4326", dataset.crs, always_xy=True)
-            left, bottom = to_source.transform(west, south)
-            right, top = to_source.transform(east, north)
+            left, bottom, right, top = transform_bounds("EPSG:4326", dataset.crs, west, south, east, north, densify_pts=21)
             window = from_bounds(left, bottom, right, top, dataset.transform).round_offsets().round_lengths()
             window = window.intersection(rasterio.windows.Window(0, 0, dataset.width, dataset.height))
         heights = dataset.read(1, window=window, masked=True).filled(np.nan).astype("float32")

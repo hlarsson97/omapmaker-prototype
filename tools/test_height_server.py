@@ -533,6 +533,23 @@ class AutomaticHeightDataTests(unittest.TestCase):
                 self.assertTrue(mosaic.exists());self.assertTrue(server.covers(mosaic,bbox));self.assertTrue(server.height_validation_marker(mosaic).exists());self.assertFalse(mosaic.with_name(mosaic.name+'.part').exists())
             finally:server.CACHE=previous_cache
 
+    def test_rotated_project_footprint_does_not_require_envelope_corner_tile(self):
+        """The 10 km Vega workspace intersects five tiles, not its envelope's sixth tile."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);tiles=[]
+            for name,left,bottom in (
+                ('m655_67.tif',670000,6550000),('m655_68.tif',680000,6550000),
+                ('m656_66.tif',660000,6560000),('m656_67.tif',670000,6560000),
+                ('m656_68.tif',680000,6560000),
+            ):
+                path=root/name
+                profile={'driver':'GTiff','width':10,'height':10,'count':1,'dtype':'float32','crs':'EPSG:5845','transform':from_origin(left,bottom+10000,1000,1000),'nodata':-9999}
+                with rasterio.open(path,'w',**profile) as dataset:dataset.write(np.ones((1,10,10),dtype='float32'))
+                tiles.append(path)
+            bbox=[17.972558878024845,59.10812662210674,18.147754784443816,59.19795773960584]
+            self.assertTrue(server.cached_tiles_cover(tiles,bbox))
+            self.assertFalse(server.cached_tiles_cover(tiles[1:],bbox))
+
     def test_corrupt_automatic_tile_is_discarded(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);data=root/'data';automatic=data/'auto';automatic.mkdir(parents=True);source=automatic/'broken.tif'

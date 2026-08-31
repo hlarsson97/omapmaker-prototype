@@ -866,28 +866,35 @@ node["waterway"="waterfall"]({water_south},{water_west},{water_north},{water_eas
     restricted=osm_restricted_areas(bbox,print_scale);features.extend(restricted.get('features') or [])
     result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'waterSearchBboxWgs84':[water_west,water_south,water_east,water_north],'objectType':'land-cover','importVersion':10,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'waterStrategy':'ISOM 301-313 candidates, including conservative sea polygons derived from directed OSM coastlines and compatible inferred island boundaries; uncertain classifications require review.','seaAreaCount':1 if sea else 0,'restrictedAreaStrategy':'ISOM 520 prefers explicit boundaries, with compact merged building estimates as fallback. Public corridors cut the geometry and apartment areas remain omitted.','restrictedAreaCount':len(restricted.get('features') or []),'printScale':int(print_scale)},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
+def projected_request_polygon(dataset,bbox,segments_per_edge=16):
+    """Project a WGS84 bbox without replacing its rotated footprint by its envelope."""
+    west,south,east,north=bbox
+    corners=((west,south),(east,south),(east,north),(west,north),(west,south))
+    boundary=[]
+    for (x1,y1),(x2,y2) in zip(corners,corners[1:]):
+        for index in range(segments_per_edge):
+            ratio=index/segments_per_edge
+            boundary.append((x1+(x2-x1)*ratio,y1+(y2-y1)*ratio))
+    convert=Transformer.from_crs('EPSG:4326',dataset.crs,always_xy=True)
+    return Polygon([convert.transform(x,y) for x,y in boundary])
+
 def covers(path,bbox):
     try:
         with rasterio.open(path) as ds:
-            convert=Transformer.from_crs('EPSG:4326',ds.crs,always_xy=True)
-            west,south=convert.transform(bbox[0],bbox[1]); east,north=convert.transform(bbox[2],bbox[3]); b=ds.bounds
+            request=projected_request_polygon(ds,bbox);b=ds.bounds
             tolerance_x=abs(ds.transform.a)*1.1;tolerance_y=abs(ds.transform.e)*1.1
-            return b.left-tolerance_x<=west and b.bottom-tolerance_y<=south and b.right+tolerance_x>=east and b.top+tolerance_y>=north
+            return geometry_box(b.left-tolerance_x,b.bottom-tolerance_y,b.right+tolerance_x,b.top+tolerance_y).covers(request)
     except Exception:return False
 
 def intersects(path,bbox):
     try:
         with rasterio.open(path) as ds:
-            convert=Transformer.from_crs('EPSG:4326',ds.crs,always_xy=True)
-            projected=[convert.transform(x,y) for x,y in ((bbox[0],bbox[1]),(bbox[0],bbox[3]),(bbox[2],bbox[1]),(bbox[2],bbox[3]))]
-            west=min(point[0] for point in projected);south=min(point[1] for point in projected);east=max(point[0] for point in projected);north=max(point[1] for point in projected);bounds=ds.bounds
-            return not (bounds.right<west or east<bounds.left or bounds.top<south or north<bounds.bottom)
+            bounds=ds.bounds
+            return geometry_box(bounds.left,bounds.bottom,bounds.right,bounds.top).intersects(projected_request_polygon(ds,bbox))
     except Exception:return False
 
 def projected_request_bounds(dataset,bbox):
-    convert=Transformer.from_crs('EPSG:4326',dataset.crs,always_xy=True)
-    projected=[convert.transform(x,y) for x,y in ((bbox[0],bbox[1]),(bbox[0],bbox[3]),(bbox[2],bbox[1]),(bbox[2],bbox[3]))]
-    return min(point[0] for point in projected),min(point[1] for point in projected),max(point[0] for point in projected),max(point[1] for point in projected)
+    return projected_request_polygon(dataset,bbox).bounds
 
 def height_validation_marker(path):return path.with_name(path.name+'.validated.json')
 
@@ -941,31 +948,20 @@ def validated_height_candidates(bbox):
     return candidates
 
 def cached_tiles_cover(paths,bbox):
-    """Return True when a set of axis-aligned rasters jointly covers bbox."""
+    """Return True when raster footprints jointly cover the projected WGS84 bbox."""
     if not paths:return False
     opened=[]
     try:
         opened=[rasterio.open(path) for path in paths]
         crs=opened[0].crs
         if not crs or any(dataset.crs!=crs for dataset in opened):return False
-        west,south,east,north=projected_request_bounds(opened[0],bbox)
-        rectangles=[]
+        request=projected_request_polygon(opened[0],bbox);rectangles=[]
         for dataset in opened:
             bounds=dataset.bounds
-            left=max(west,bounds.left);right=min(east,bounds.right)
-            bottom=max(south,bounds.bottom);top=min(north,bounds.top)
-            if left<right and bottom<top:rectangles.append((left,bottom,right,top))
+            tile=geometry_box(bounds.left-abs(dataset.transform.a)*1.1,bounds.bottom-abs(dataset.transform.e)*1.1,bounds.right+abs(dataset.transform.a)*1.1,bounds.top+abs(dataset.transform.e)*1.1)
+            if tile.intersects(request):rectangles.append(tile)
         if not rectangles:return False
-        xs=sorted({west,east,*[value for rectangle in rectangles for value in (rectangle[0],rectangle[2])]})
-        ys=sorted({south,north,*[value for rectangle in rectangles for value in (rectangle[1],rectangle[3])]})
-        for x1,x2 in zip(xs,xs[1:]):
-            if x2<=west or x1>=east:continue
-            x=(max(x1,west)+min(x2,east))/2
-            for y1,y2 in zip(ys,ys[1:]):
-                if y2<=south or y1>=north:continue
-                y=(max(y1,south)+min(y2,north))/2
-                if not any(left<=x<=right and bottom<=y<=top for left,bottom,right,top in rectangles):return False
-        return True
+        return unary_union(rectangles).covers(request)
     except Exception:return False
     finally:
         for dataset in opened:dataset.close()
