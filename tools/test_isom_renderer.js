@@ -11,8 +11,8 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 11);
-assert.strictEqual(registry.renderingRevision, 11);
+assert.strictEqual(registry.registryVersion, 12);
+assert.strictEqual(registry.renderingRevision, 12);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -21,8 +21,9 @@ assert(Math.abs(renderer.paperMm(0.14, 10000) - 0.21) < 1e-9);
 assert.strictEqual(registry.technical['601'].spacingGroundMetres * 1000 / 10000, 30);
 assert.strictEqual(registry.technical['601'].preferredColour, 'black');
 assert.deepStrictEqual(registry.renderers['509'].dashMm, [1, 0.5]);
-assert.strictEqual(registry.renderers['511'].supportWidthMm, 0.3);
-assert.strictEqual(registry.renderers['511'].supportStrokeMm, 0.14);
+assert.strictEqual(registry.renderers['511'].supportOverhangMm, 0.3);
+assert.strictEqual(registry.renderers['511'].supportWidthMm, 1.14);
+assert.strictEqual(registry.renderers['511'].supportStrokeMm, 0.2);
 assert.strictEqual(registry.renderers['511'].largeSupportSizeMm, 0.8);
 assert.strictEqual(registry.renderers['511'].largeSupportStrokeMm, 0.2);
 assert.strictEqual(registry.renderers['511'].minimumLengthMm, undefined);
@@ -68,7 +69,9 @@ const powerStyle = renderer.lineStyles('511', {}, screenContext);
 assert.strictEqual(powerStyle.inner, undefined);
 assert.strictEqual(powerStyle.parallelSeparationMm, 0.4);
 const largePowerMastMarkup = renderer.pointMarkup('511', screenContext, {largeMast: true}).html;
-assert(largePowerMastMarkup.includes('<rect') && largePowerMastMarkup.includes('width="0.8"') && largePowerMastMarkup.includes('stroke-width="0.2"'), 'Stor mast på 511 ska vara en 0,8 × 0,8 mm fyrkant med 0,2 mm linjebredd');
+assert(largePowerMastMarkup.includes('M-0.57,0H0.57') && largePowerMastMarkup.includes('<rect') && largePowerMastMarkup.includes('width="0.8"') && largePowerMastMarkup.includes('stroke-width="0.2"'), 'Stor mast på 511 ska ha tvärlinje genom en 0,8 × 0,8 mm kontur');
+const smallPowerMastMarkup = renderer.pointMarkup('511', screenContext, {largeMast: false}).html;
+assert(smallPowerMastMarkup.includes('M-0.57,0H0.57') && smallPowerMastMarkup.includes('stroke-width="0.2"'), 'Liten pylon på 511 ska sticka ut 0,3 mm på vardera sida om dubbelledningens yttermått');
 const printContextAtZoom = zoom => ({scale: 15000, mode: 'print', map: {getCenter: () => ({lat: 59.2}), getZoom: () => zoom}});
 const zoomedOutBoulder = renderer.pointMarkup('204', printContextAtZoom(13));
 const zoomedInBoulder = renderer.pointMarkup('204', printContextAtZoom(17));

@@ -404,6 +404,7 @@ assert.equal(infrastructureMetaText({features: [{properties: {featureKind: 'line
 const infrastructureEvents = [];
 const infrastructureOptions = [];
 let majorPowerLineData = null;
+let infrastructureSupportRenderProperties = null;
 const infrastructureMap = {
   removeLayer: layer => infrastructureEvents.push(['remove', layer]),
   attributionControl: {
@@ -422,7 +423,7 @@ const infrastructureView = createGeneratedInfrastructureLayer({
   renderer: {
     lineStyles: () => ({outer: {color: '#000'}, inner: {color: '#fff'}}),
     definition: () => ({lineCentreGapMm: 0.4, supportWidthMm: 1, supportStrokeMm: 0.2}),
-    pointMarkup: (_symbol, _context, properties) => ({sizePx: 18, mapHtml: `<svg class="map-symbol-svg" data-angle="${properties.angleDegrees}"></svg>`}),
+    pointMarkup: (_symbol, _context, properties) => { infrastructureSupportRenderProperties = properties; return {sizePx: 18, mapHtml: `<svg class="map-symbol-svg" data-angle="${properties.angleDegrees}"></svg>`}; },
     pixelsPerPaperMm: () => 4,
     paperMm: value => value
   },
@@ -453,6 +454,7 @@ assert.equal(supportMarker.options.pane, 'infrastructureMarkerPane');
 assert.equal(supportMarker.options.rotateWithView, undefined);
 assert(supportMarker.options.icon.html.includes('map-symbol-svg'));
 assert(supportMarker.options.icon.className.includes('omap-symbol'));
+assert.equal(infrastructureSupportRenderProperties.largeMast, true, 'OSM-stöd på ISOM 511 ska bli stor mast om inte liten pylon uttryckligen valts');
 assert.deepEqual(infrastructureEvents.at(-1), ['addAttribution', INFRASTRUCTURE_ATTRIBUTION]);
 assert.equal(WATER_SYMBOL_CLASSES['308'], 'marsh_308');
 assert.equal(isWaterFeature({properties: {isomSymbol: '301'}}), true);
@@ -598,11 +600,11 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=14'));
-assert(fieldHtml.includes('isom_symbols.js?v=13'));
-assert(fieldHtml.includes('isom_renderer.js?v=16'));
+assert(fieldHtml.includes('styles.css?v=15'));
+assert(fieldHtml.includes('isom_symbols.js?v=14'));
+assert(fieldHtml.includes('isom_renderer.js?v=17'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=37"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=38"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -621,6 +623,7 @@ assert(appSource.includes("function pointNormContext(){return{...normContext(),m
 assert(appSource.includes('refreshPointPresentation();renderRoads()'), 'Punktobjekt ska renderas om även när arbetsområdet använder digitalt läge');
 assert(appSource.includes("map.on('zoom zoomanim'"), 'Punktobjekt ska skalas även under en pågående zoomgest');
 assert(styles.includes('scale(var(--point-zoom-scale,1))'), 'Punktsymbolernas visuella storlek ska följa zoomens mellanlägen');
+assert(styles.includes('.infrastructure-support-icon .symbol-svg{filter:none}'), 'Kraftledningsmaster ska inte få vit läsbarhetsskugga');
 assert(appSource.includes('return pointIconFromSymbol(symbol,`infrastructure-support-icon'), 'Lokala kraftledningsmaster ska använda samma SVG-rendering som punktsymboler');
 assert(appSource.includes("supportPlacement.largeMast==null&&String(object.symbol)==='511'"), 'Generisk placering ska välja stor mast som standard för ISOM 511');
 assert(styles.includes('.local-map-object .symbol-svg{filter:none}'), 'Manuellt placerade punktsymboler ska inte ha vit skugga');
@@ -633,6 +636,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=10','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=5']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generated_infrastructure.mjs?v=11','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=5']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

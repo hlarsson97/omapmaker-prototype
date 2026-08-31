@@ -42,7 +42,8 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const properties = feature.properties || {};
     const symbol = String(properties.isomSymbol || '510');
     const context = (pointNormContext || normContext)();
-    const rendered = renderer.pointMarkup(symbol, context, properties), size = rendered.sizePx;
+    const renderProperties = {...properties, largeMast: symbol === '511' ? properties.largeMast !== false : false};
+    const rendered = renderer.pointMarkup(symbol, context, renderProperties), size = rendered.sizePx;
     return Leaflet.divIcon({className: `omap-symbol infrastructure-support-icon generated-object map-point-object ${generatedStatus(feature)}`, html: rendered.mapHtml, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
   }
 
@@ -56,7 +57,7 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const title = properties.name || INFRASTRUCTURE_TYPES[symbol]?.[1] || 'Tekniskt linjeobjekt';
     const object = generatedMapObject('infrastructure', feature, {symbol, statusLabel: generatedStatusLabel(feature), editable: !support});
     const controlsHtml = support ? '' : `<select class="infrastructure-type-select" data-infrastructure-id="${id}">${options}</select><button type="button" data-infrastructure-review="change" data-infrastructure-id="${id}">Ändra typ</button>`;
-    return mapObjectPopup(object, {title: support ? (properties.largeMast ? 'Stor kraftledningsmast' : properties.supportType === 'tower' ? 'Kraftledningsmast' : 'Kraftledningsstolpe') : title, isomClaim, escapeHtml, secondaryDetails: [support ? 'Exakt OSM-position' : `Klassificeringssäkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`], controlsHtml, actionsHtml: generatedActionHtml('infrastructure', feature, {editable: !support})});
+    return mapObjectPopup(object, {title: support ? (symbol === '511' && properties.largeMast !== false ? 'Stor kraftledningsmast' : properties.supportType === 'tower' ? 'Kraftledningsmast' : 'Kraftledningsstolpe') : title, isomClaim, escapeHtml, secondaryDetails: [support ? 'Exakt OSM-position' : `Klassificeringssäkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`], controlsHtml, actionsHtml: generatedActionHtml('infrastructure', feature, {editable: !support})});
   }
 
   function render() {

@@ -242,6 +242,7 @@ class InfrastructureTests(unittest.TestCase):
         self.assertEqual(support['geometry']['coordinates'],[18.001,59.0])
         self.assertAlmostEqual(support['properties']['angleDegrees'],0.0)
         self.assertEqual(support['properties']['parentSourceId'],'way/10')
+        self.assertTrue(support['properties']['largeMast'])
 
 
 class PavedAreaTests(unittest.TestCase):

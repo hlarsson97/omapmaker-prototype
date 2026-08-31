@@ -375,6 +375,7 @@ body.field-survey-active #toast{bottom:calc(min(56dvh,470px) + 26px + env(safe-a
 #layersSheet .generated-layer-detail-list .layer-card{background:#fff}
 
 .infrastructure-support-icon{border:0;background:transparent}
+.infrastructure-support-icon .symbol-svg{filter:none}
 .symbol-object-settings{display:grid;gap:5px;margin-top:9px;padding-top:8px;border-top:1px solid #dce3dd}
 .symbol-object-settings>small{margin:0;color:#526159}
 .symbol-setting-options{display:grid;grid-template-columns:1fr 1fr;gap:5px}

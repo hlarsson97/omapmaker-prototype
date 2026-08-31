@@ -6,7 +6,7 @@ import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.
 import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs';
 import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs';
 import {ROAD_TYPES, createGeneratedRoadLayer} from './js/generated_roads.mjs';
-import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/generated_infrastructure.mjs?v=10';
+import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/generated_infrastructure.mjs?v=11';
 import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature} from './js/generated_land_cover.mjs?v=5';
 import {magneticNorthRequestUrl, magneticNorthSummary} from './js/magnetic_north.mjs';
 import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextSupportedMapOrientation} from './js/map_orientation.mjs?v=3';
