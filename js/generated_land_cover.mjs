@@ -27,6 +27,11 @@ export function landCoverMetaText(data, generatedStatus, centralLayerLabel) {
   return `${counts.water} vatten · ${counts.restricted} st 520${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
 }
 
+export function applyLandCoverPattern(path, patternId) {
+  path.style.fill = `url(#${patternId})`;
+  path.style.fillOpacity = '1';
+}
+
 export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
   let layer = null;
   let attributionVisible = false;
@@ -108,7 +113,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
         if (definition.pattern === 'scattered' || definition.pattern === 'cultivated') pattern.innerHTML += `<circle cx="${spacing / 2}" cy="${spacing / 2}" r="${dot / 2}" fill="${ink}"/>`;
         else pattern.innerHTML += `<path d="M0 ${line / 2}H${definition.pattern === 'marsh-dashed' ? Math.max(line, spacing * .75) : spacing}" stroke="${ink}" stroke-width="${line}"/>`;
         defs.append(pattern);
-        items.filter(path => path.classList.contains(`isom-pattern-${symbol}`)).forEach(path => path.style.fill = `url(#${id})`);
+        items.filter(path => path.classList.contains(`isom-pattern-${symbol}`)).forEach(path => applyLandCoverPattern(path, id));
       });
     });
   }

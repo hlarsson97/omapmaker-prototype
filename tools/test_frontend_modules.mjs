@@ -10,7 +10,7 @@ import {BUILDING_ATTRIBUTION, buildingMetaText, createGeneratedBuildingLayer} fr
 import {PAVED_AREA_ATTRIBUTION, createGeneratedPavedAreaLayer, pavedAreaMetaText} from '../js/generated_paved_areas.mjs';
 import {ROAD_ATTRIBUTION, ROAD_TYPES, createGeneratedRoadLayer, roadMetaText} from '../js/generated_roads.mjs';
 import {INFRASTRUCTURE_ATTRIBUTION, INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer, infrastructureMetaText} from '../js/generated_infrastructure.mjs';
-import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature, landCoverMetaText} from '../js/generated_land_cover.mjs';
+import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, applyLandCoverPattern, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature, landCoverMetaText} from '../js/generated_land_cover.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
 import {magneticNorthRequestUrl, magneticNorthSummary} from '../js/magnetic_north.mjs';
@@ -462,6 +462,10 @@ assert.equal(isWaterFeature({properties: {isomSymbol: '401'}}), false);
 assert.equal(isCurrentLandCoverData({properties: {importVersion: 9}}), false);
 assert.equal(isCurrentLandCoverData({properties: {importVersion: 10}}), true);
 assert.equal(landCoverMetaText({properties: {importVersion: 10}, features: [{properties: {isomSymbol: '301'}}, {properties: {isomSymbol: '520'}}]}, () => 'source', () => ''), '1 vatten · 1 st 520');
+const marshPath = {style: {fillOpacity: '0'}};
+applyLandCoverPattern(marshPath, 'marsh-pattern');
+assert.equal(marshPath.style.fill, 'url(#marsh-pattern)');
+assert.equal(marshPath.style.fillOpacity, '1', 'mönsterytor utan grundfärg måste göras synliga');
 
 const landCoverEvents = [];
 const landCoverOptions = [];
@@ -604,7 +608,7 @@ assert(fieldHtml.includes('styles.css?v=15'));
 assert(fieldHtml.includes('isom_symbols.js?v=14'));
 assert(fieldHtml.includes('isom_renderer.js?v=17'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=38"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=39"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -636,6 +640,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=11','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=5']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generated_infrastructure.mjs?v=11','generated_land_cover.mjs?v=6','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=5']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
