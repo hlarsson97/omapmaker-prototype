@@ -49,7 +49,7 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const stroke = renderer.paperMm(large ? definition.largeSupportStrokeMm : definition.supportStrokeMm, context.scale) * unit;
     const size = Math.max(18, width + 8);
     const angle = 90 - Number(properties.angleDegrees || 0);
-    return Leaflet.divIcon({className: `infrastructure-support-icon generated-object map-point-object ${generatedStatus(feature)}`, html: `<span class="${large ? 'large' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;transform:rotate(${angle}deg)"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
+    return Leaflet.divIcon({className: `infrastructure-support-icon generated-object map-point-object ${generatedStatus(feature)}`, html: `<span class="${large ? 'large' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;--support-angle:${angle}deg"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
   }
 
   function popup(feature) {

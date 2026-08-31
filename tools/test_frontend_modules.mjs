@@ -449,7 +449,7 @@ assert.notEqual(majorPowerLineData.features[0].geometry.coordinates[0][1], major
 const supportMarker = infrastructureOptions[3].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
 assert.equal(supportMarker.options.pane, 'infrastructureMarkerPane');
 assert.equal(supportMarker.options.rotateWithView, undefined);
-assert(supportMarker.options.icon.html.includes('rotate(60deg)'));
+assert(supportMarker.options.icon.html.includes('--support-angle:60deg'));
 assert.deepEqual(infrastructureEvents.at(-1), ['addAttribution', INFRASTRUCTURE_ATTRIBUTION]);
 assert.equal(WATER_SYMBOL_CLASSES['308'], 'marsh_308');
 assert.equal(isWaterFeature({properties: {isomSymbol: '301'}}), true);
@@ -595,11 +595,11 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=12'));
+assert(fieldHtml.includes('styles.css?v=13'));
 assert(fieldHtml.includes('isom_symbols.js?v=13'));
 assert(fieldHtml.includes('isom_renderer.js?v=16'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=35"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=36"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -618,6 +618,7 @@ assert(appSource.includes("function pointNormContext(){return{...normContext(),m
 assert(appSource.includes('refreshPointPresentation();renderRoads()'), 'Punktobjekt ska renderas om även när arbetsområdet använder digitalt läge');
 assert(appSource.includes("map.on('zoom zoomanim'"), 'Punktobjekt ska skalas även under en pågående zoomgest');
 assert(styles.includes('scale(var(--point-zoom-scale,1))'), 'Punktsymbolernas visuella storlek ska följa zoomens mellanlägen');
+assert(styles.includes('.infrastructure-support-icon span') && styles.includes('--support-angle'), 'Kraftledningsmaster ska använda samma zoomskalning som punktsymboler');
 assert(styles.includes('.local-map-object .symbol-svg{filter:none}'), 'Manuellt placerade punktsymboler ska inte ha vit skugga');
 assert(styles.includes('grid-template-columns:repeat(3,minmax(0,1fr))'), 'Ritverktygen ska ligga i en kompakt horisontell rad');
 assert(appSource.includes('tool-symbol-preview'), 'Ritverktygen ska visa vald symbol i stället för ett långt objektnamn');
@@ -628,6 +629,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=8','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=5']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generated_infrastructure.mjs?v=9','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=5']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
