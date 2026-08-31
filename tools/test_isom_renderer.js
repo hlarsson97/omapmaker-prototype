@@ -70,6 +70,7 @@ assert.strictEqual(powerStyle.inner, undefined);
 assert.strictEqual(powerStyle.parallelSeparationMm, 0.4);
 const largePowerMastMarkup = renderer.pointMarkup('511', screenContext, {largeMast: true}).html;
 assert(largePowerMastMarkup.includes('M-0.57,0H0.57') && largePowerMastMarkup.includes('<rect') && largePowerMastMarkup.includes('width="0.8"') && largePowerMastMarkup.includes('stroke-width="0.2"'), 'Stor mast på 511 ska ha tvärlinje genom en 0,8 × 0,8 mm kontur');
+assert(renderer.pointMarkup('511', screenContext, {}).html.includes('<rect'), 'Stor mast ska vara standard när äldre 511-data saknar explicit masttyp');
 const smallPowerMastMarkup = renderer.pointMarkup('511', screenContext, {largeMast: false}).html;
 assert(smallPowerMastMarkup.includes('M-0.57,0H0.57') && smallPowerMastMarkup.includes('stroke-width="0.2"'), 'Liten pylon på 511 ska sticka ut 0,3 mm på vardera sida om dubbelledningens yttermått');
 const printContextAtZoom = zoom => ({scale: 15000, mode: 'print', map: {getCenter: () => ({lat: 59.2}), getZoom: () => zoom}});
