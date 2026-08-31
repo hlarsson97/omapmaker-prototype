@@ -19,7 +19,7 @@ import {anchoredMapCenter, anchoredRotationTranslation, createSmoothMapMarkerFac
 import {changeLocalObjectType, localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {popupLayersFromElements, popupStackContent} from '../js/popup_stack.mjs';
-import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
+import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyFix, formatFieldSurveyDuration, headingUpBearing, movementHeading, usableSurveyFix} from '../js/field_survey.mjs';
 import {AccountApiError, createAccountApi, userMapCacheKey, workspaceCacheKey} from '../js/account_api.mjs';
 
@@ -161,6 +161,8 @@ assert(rightSideTags[0][1][1] < rightSideTags[0][0][1], 'Höger sida om en östg
 const snapped = nearestPointOnLine([[18, 59], [18.001, 59]], [18.0004, 59.0002]);
 assert(Math.abs(snapped.coordinate[1] - 59) < 1e-10);
 assert(Math.abs(snapped.angleDegrees) < 1e-8);
+const parallelPowerLines = parallelLineCoordinates([[18, 59], [18.001, 59]], 0.4, 15000);
+assert(Math.abs((parallelPowerLines(1)[0][1] - parallelPowerLines(-1)[0][1]) * 111320 - 6) < 0.02, 'ISOM 511 ska ritas som två parallella linjer med 0,4 mm centrumavstånd');
 const powerObject = applyDefaultSymbolSettings({id: 'power-1', symbol: '511', source: 'manual', coordinates: [[18, 59], [18.001, 59]]}, '511');
 powerObject.supports.push({id: 'mast-1', coordinates: [18.0004, 59.0002], supportType: 'tower', largeMast: true});
 snapPowerSupports(powerObject);
@@ -400,6 +402,7 @@ assert.equal(infrastructureMetaText({features: [{properties: {featureKind: 'line
 
 const infrastructureEvents = [];
 const infrastructureOptions = [];
+let majorPowerLineData = null;
 const infrastructureMap = {
   removeLayer: layer => infrastructureEvents.push(['remove', layer]),
   attributionControl: {
@@ -409,7 +412,7 @@ const infrastructureMap = {
 };
 const infrastructureView = createGeneratedInfrastructureLayer({
   Leaflet: {
-    geoJSON: (_data, options) => { infrastructureOptions.push(options); return {options}; },
+    geoJSON: (data, options) => { if (infrastructureOptions.length === 1) majorPowerLineData = data; infrastructureOptions.push(options); return {options}; },
     layerGroup: layers => ({addTo: target => { infrastructureEvents.push(['addLayerGroup', layers.length, target]); return 'infrastructure-layer'; }}),
     divIcon: options => options,
     marker: (latlng, options) => ({latlng, options})
@@ -417,11 +420,11 @@ const infrastructureView = createGeneratedInfrastructureLayer({
   map: infrastructureMap,
   renderer: {
     lineStyles: () => ({outer: {color: '#000'}, inner: {color: '#fff'}}),
-    definition: () => ({supportWidthMm: 1, supportStrokeMm: 0.2}),
+    definition: () => ({lineCentreGapMm: 0.4, supportWidthMm: 1, supportStrokeMm: 0.2}),
     pixelsPerPaperMm: () => 4,
     paperMm: value => value
   },
-  getData: () => ({features: []}),
+  getData: () => ({features: [{type: 'Feature', id: 'power-511', properties: {featureKind: 'line', isomSymbol: '511'}, geometry: {type: 'LineString', coordinates: [[18, 59], [18.001, 59]]}}]}),
   isVisible: () => true,
   featureIsSelected: () => true,
   generatedStatus: () => 'source',
@@ -437,11 +440,13 @@ const infrastructureView = createGeneratedInfrastructureLayer({
   metaElement: () => ({textContent: ''})
 });
 infrastructureView.render();
-assert.equal(infrastructureOptions.length, 3);
+assert.equal(infrastructureOptions.length, 4);
 assert(infrastructureOptions.every(options => options.pane === 'infrastructurePane'));
-assert.equal(infrastructureOptions[1].interactive, false);
-assert.equal(infrastructureOptions[1].filter({properties: {featureKind: 'line', isomSymbol: '509'}}), true);
-const supportMarker = infrastructureOptions[2].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
+assert.equal(infrastructureOptions[2].interactive, false);
+assert.equal(infrastructureOptions[2].filter({properties: {featureKind: 'line', isomSymbol: '509'}}), true);
+assert.equal(majorPowerLineData.features.length, 2, 'ISOM 511 ska skapa två separata Leaflet-linjer');
+assert.notEqual(majorPowerLineData.features[0].geometry.coordinates[0][1], majorPowerLineData.features[1].geometry.coordinates[0][1]);
+const supportMarker = infrastructureOptions[3].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
 assert.equal(supportMarker.options.pane, 'infrastructureMarkerPane');
 assert.equal(supportMarker.options.rotateWithView, undefined);
 assert(supportMarker.options.icon.html.includes('rotate(60deg)'));
@@ -592,9 +597,9 @@ assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=12'));
 assert(fieldHtml.includes('isom_symbols.js?v=11'));
-assert(fieldHtml.includes('isom_renderer.js?v=13'));
+assert(fieldHtml.includes('isom_renderer.js?v=14'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=31"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=32"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -623,6 +628,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=5','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generated_infrastructure.mjs?v=6','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=3']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

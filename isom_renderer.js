@@ -32,11 +32,7 @@
     }
     if(d.kind==='railway')return{outer:{...base,weight:px(d.widthMm,context),dashArray:null},inner:{...base,color:colour(d.innerColour),weight:px(d.innerWidthMm,context),dashArray:dashPixels(d.dashMm,context),lineCap:'butt'}};
     if(d.kind==='double-line-with-supports'){
-      const total=d.lineCentreGapMm+d.lineWidthMm,inner=Math.max(.01,d.lineCentreGapMm-d.lineWidthMm);
-      // The centre of 511 is an opening, not a white fill.  A white stroke
-      // covered the map below the line and was especially visible over
-      // coloured areas and other map features.
-      return{outer:{...base,weight:px(total,context)},inner:{...base,color:'transparent',opacity:0,weight:px(inner,context)}};
+      return{outer:{...base,weight:px(d.lineWidthMm,context)},parallelSeparationMm:d.lineCentreGapMm};
     }
     if(d.kind==='stairway')return{outer:{...base,weight:px(d.innerWidthMm+2*d.railWidthMm,context)},inner:{...base,color:colour('white'),weight:px(d.innerWidthMm,context)}};
     return{outer:base};
@@ -178,7 +174,13 @@
       const source=Math.max(0,number(feature.properties?.widthMetres||feature.properties?.renderWidthMetres||feature.properties?.estimatedWidthMetres))*1000/context.scale,inner=Math.max(paperMm(d.minimumInnerWidthMm,context.scale),source),outer=inner+2*paperMm(d.outlineWidthMm,context.scale);elements.push({layer:layer(d.outline),markup:`<g data-composite-symbol="${symbol}"><path d="${path}" fill="none" stroke="${stroke(d.outline)}" stroke-width="${outer}" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${stroke(d.fill)}" stroke-width="${inner}" stroke-linejoin="round"/></g>`});return elements;
     }
     if(d.kind==='railway'){elements.push({layer:layer('black'),markup:`<g data-composite-symbol="${symbol}"><path d="${path}" fill="none" stroke="${stroke('black')}" stroke-width="${lineWidth(d.widthMm)}"/><path d="${path}" fill="none" stroke="white" stroke-width="${lineWidth(d.innerWidthMm)}" stroke-dasharray="${d.dashMm.map(v=>lineWidth(v)).join(' ')}"/></g>`});return elements}
-    if(d.kind==='double-line-with-supports'){elements.push({layer:layer('black'),markup:`<g data-composite-symbol="${symbol}"><path d="${path}" fill="none" stroke="${stroke('black')}" stroke-width="${lineWidth(d.lineCentreGapMm+d.lineWidthMm)}"/><path d="${path}" fill="none" stroke="white" stroke-width="${lineWidth(d.lineCentreGapMm-d.lineWidthMm)}"/></g>`});return elements}
+    if(d.kind==='double-line-with-supports'){
+      const offsetPath=direction=>coordinatesForGeometry(feature.geometry).map(line=>{
+        const points=line.map(point=>paperProject(point,context)),offset=lineWidth(d.lineCentreGapMm)/2;
+        return points.map((point,index)=>{const previous=points[Math.max(0,index-1)],next=points[Math.min(points.length-1,index+1)],dx=next.x-previous.x,dy=next.y-previous.y,length=Math.hypot(dx,dy)||1;return `${index?'L':'M'}${point.x-direction*dy/length*offset},${point.y+direction*dx/length*offset}`}).join(' ');
+      }).join(' ');
+      elements.push({layer:layer('black'),markup:`<g data-composite-symbol="${symbol}"><path d="${offsetPath(-1)}" fill="none" stroke="${stroke('black')}" stroke-width="${lineWidth(d.lineWidthMm)}"/><path d="${offsetPath(1)}" fill="none" stroke="${stroke('black')}" stroke-width="${lineWidth(d.lineWidthMm)}"/></g>`});return elements
+    }
     if(d.kind==='stairway'){elements.push({layer:layer('black'),markup:`<g data-composite-symbol="${symbol}"><path d="${path}" fill="none" stroke="${stroke('black')}" stroke-width="${lineWidth(d.innerWidthMm+2*d.railWidthMm)}"/><path d="${path}" fill="none" stroke="white" stroke-width="${lineWidth(d.innerWidthMm)}"/></g>`});for(const line of coordinatesForGeometry(feature.geometry))for(const point of sampleLine(line,context,lineWidth(d.stepSpacingMm),lineWidth(d.stepSpacingMm)/2)){const angle=point.angle+Math.PI/2,len=lineWidth(d.innerWidthMm)/2,dx=Math.cos(angle)*len,dy=Math.sin(angle)*len;elements.push({layer:layer('black'),markup:`<path data-decoration-symbol="${symbol}" d="M${point.x-dx},${point.y-dy}L${point.x+dx},${point.y+dy}" stroke="${stroke('black')}" stroke-width="${lineWidth(d.stepWidthMm)}"/>`})}return elements}
     elements.push({layer:layer(d.colour||'black'),markup:`<path d="${path}" fill="none" stroke="${stroke(d.colour||'black')}" stroke-width="${lineWidth(d.widthMm||d.lineWidthMm||d.dotDiameterMm||.14)}"${dash} stroke-linecap="${d.kind==='dotted-line'?'round':'butt'}" stroke-linejoin="round"/>`});
     if(d.kind==='cliff'&&feature.properties?.downhillSide)for(const line of coordinatesForGeometry(feature.geometry))for(const point of sampleLine(line,context,paperMm(d.tagSpacingMm,context.scale))){const side=String(feature.properties.downhillSide).toLowerCase()==='right'||Number(feature.properties.downhillSide)>0?1:-1,angle=point.angle+side*Math.PI/2,len=lineWidth(d.tagLengthMm),dx=Math.cos(angle)*len,dy=Math.sin(angle)*len;elements.push({layer:layer(d.colour),markup:`<path d="M${point.x},${point.y}L${point.x+dx},${point.y+dy}" stroke="${stroke(d.colour)}" stroke-width="${lineWidth(d.tagWidthMm)}" stroke-linecap="round"/>`})}

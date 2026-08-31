@@ -1,4 +1,5 @@
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+import {parallelLineCoordinates} from './symbol_object_settings.mjs?v=3';
 
 export const INFRASTRUCTURE_TYPES = Object.freeze({
   '509': ['railway', 'Järnväg'],
@@ -74,10 +75,16 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const data = getData();
     if (!data || !isVisible()) return;
     const lineFilter = feature => feature.properties?.featureKind === 'line' && featureIsSelected(feature);
-    const outer = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: lineFilter, style: outerStyle, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
-    const inner = Leaflet.geoJSON(data, {pane: 'infrastructurePane', interactive: false, filter: feature => lineFilter(feature) && ['509', '511'].includes(String(feature.properties?.isomSymbol)) && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: innerStyle});
+    const outer = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => lineFilter(feature) && String(feature.properties?.isomSymbol) !== '511', style: outerStyle, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
+    const majorPowerLines = {type: 'FeatureCollection', features: data.features.filter(feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '511').flatMap(feature => {
+      if (['excluded', 'deleted'].includes(generatedStatus(feature))) return [feature];
+      const definition = renderer.definition('511'), coordinates = feature.geometry?.coordinates || [];
+      return [-1, 1].map(side => ({...feature, id: `${feature.id}:side:${side}`, geometry: {...feature.geometry, coordinates: parallelLineCoordinates(coordinates, definition.lineCentreGapMm, 15000)(side)}}));
+    })};
+    const major = Leaflet.geoJSON(majorPowerLines, {pane: 'infrastructurePane', style: outerStyle, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
+    const inner = Leaflet.geoJSON(data, {pane: 'infrastructurePane', interactive: false, filter: feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '509' && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: innerStyle});
     const supports = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => feature.properties?.featureKind === 'support' && featureIsSelected(feature), pointToLayer: (feature, latlng) => mapMarker(latlng, {pane: 'infrastructureMarkerPane', icon: supportIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 300})});
-    layer = Leaflet.layerGroup([outer, inner, supports]).addTo(map);
+    layer = Leaflet.layerGroup([outer, major, inner, supports]).addTo(map);
     map.attributionControl.addAttribution(INFRASTRUCTURE_ATTRIBUTION);
     attributionVisible = true;
   }

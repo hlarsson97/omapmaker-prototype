@@ -104,6 +104,21 @@ export function nearestPointOnLine(coordinates, coordinate) {
   return best ? {...best, coordinate: project.toCoordinate(best.point)} : null;
 }
 
+export function parallelLineCoordinates(coordinates, separationMm, baseScale = 15000) {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return Array.isArray(coordinates) ? coordinates.slice() : [];
+  const latitude = coordinates.reduce((sum, coordinate) => sum + Number(coordinate[1]), 0) / coordinates.length;
+  const project = projection(latitude);
+  const offset = Number(separationMm || 0) * Number(baseScale || 15000) / 2000;
+  const points = coordinates.map(project.toMetres);
+  const shift = direction => points.map((point, index) => {
+    const previous = points[Math.max(0, index - 1)], next = points[Math.min(points.length - 1, index + 1)];
+    const dx = next.x - previous.x, dy = next.y - previous.y, length = Math.hypot(dx, dy) || 1;
+    const shifted = {x: point.x - direction * dy / length * offset, y: point.y + direction * dx / length * offset};
+    return [...project.toCoordinate(shifted), ...coordinates[index].slice(2)];
+  });
+  return shift;
+}
+
 export function isClosedLineCoordinates(coordinates, toleranceMetres = 0.25) {
   if (!Array.isArray(coordinates) || coordinates.length < 3) return false;
   const first = coordinates[0], last = coordinates.at(-1);
