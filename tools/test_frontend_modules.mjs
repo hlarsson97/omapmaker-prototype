@@ -172,7 +172,7 @@ assert.equal(supportFeatures[0].properties.parentObjectId, 'power-1');
 assert.equal(supportFeatures[0].properties.largeMast, true);
 assert(Math.abs(supportFeatures[0].geometry.coordinates[1] - 59) < 1e-10);
 const powerControls = symbolObjectControlsHtml(powerObject, escapeHtml);
-assert.match(powerControls, /Placera stor kraftledningsmast/);
+assert.match(powerControls, /Placera högt torn \(524\)/);
 assert.match(powerControls, /data-support-large="true"/);
 const fenceObject = applyDefaultSymbolSettings({id: 'fence-1', symbol: '516', coordinates: [[18, 59], [18.001, 59]]}, '516');
 assert.equal(fenceObject.tagSide, 'right');
@@ -596,10 +596,10 @@ assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=12'));
-assert(fieldHtml.includes('isom_symbols.js?v=11'));
-assert(fieldHtml.includes('isom_renderer.js?v=14'));
+assert(fieldHtml.includes('isom_symbols.js?v=12'));
+assert(fieldHtml.includes('isom_renderer.js?v=15'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=32"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=34"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -628,6 +628,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=6','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=3']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generated_infrastructure.mjs?v=7','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=4']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

@@ -173,7 +173,7 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 | 508 Smal gata/linjärt spår | Smal öppning eller tydligt linjärt spår genom terrängen. | Saknas. | **Saknas.** |
 | 509 Järnväg | Normerad svart/vit linje; förbjuden passage/rörelse kräver 520 eller 709/711. | Aktiv/nedlagd OSM-järnväg genereras. Renderingen har en heldragen svart grundlinje med ett streckat vitt inlägg enligt registrets pappersmått. | **Delvis.** Tillträde, minsta längd och korsningslogik saknas. |
 | 510 Kraftledning/kabelbana/skidlift | Enkel linje; tvärstreck visar exakta stöd. Kan utelämnas längs väg/stig utan navigationsvärde. | Kraftledning, mindre ledning, kabelbana och OSM-stöd genereras. | **Delvis.** Utelämningsregel, minsta längd och full geometri behöver verifieras. |
-| 511 Större kraftledning | Dubbel linje, exakta mastlägen; mycket stora master ritas skalenligt eller som torn. | Major power line får dubbel linje och stödmarkeringar. | **Delvis.** Korridor, maststorlek och övergång till 521/524 saknas. |
+| 511 Större kraftledning | Dubbel linje, exakta mastlägen; mycket stora master ritas skalenligt eller som torn. | Major power line får dubbla linjer, tvärstreck vid exakta mastlägen och ISOM 524 för mycket stora master. | **Delvis.** Skalenlig 521-geometri och ledningskorridor saknas. |
 | 512 Bro/tunnel | Ska visa passage och rätt relation över/under andra objekt. | OSM-taggar påverkar vägformen men egen ISOM-symbol/redigeringsmodell saknas. | **Saknas som symbol.** |
 | 513.1 Mur | Betydande mur, normalt minst 1 m, med minsta längd. | Manuellt ”Mur” finns. | **Delvis.** Höjd, längd och mått kontrolleras inte. |
 | 513.2 Stödmur | Mur synlig från en sida; halvpunkter visar lägre sida. | Saknas. | **Saknas.** |

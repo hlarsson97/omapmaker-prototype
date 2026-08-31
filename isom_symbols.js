@@ -1,6 +1,6 @@
 window.OMAPMAKER_ISOM_REGISTRY = {
-  "registryVersion": 9,
-  "renderingRevision": 9,
+  "registryVersion": 10,
+  "renderingRevision": 10,
   "standard": "ISOM 2017-2 Revision 6",
   "measurementBasis": {"unit":"mm","baseScale":15000,"enlargeProportionally":true},
   "colours": {
@@ -81,7 +81,7 @@ window.OMAPMAKER_ISOM_REGISTRY = {
     "507":{"kind":"dashed-line","colour":"black","widthMm":0.18,"dashMm":[1,0.25,1,0.8],"minimumLengthMm":5.3,"minimumDashes":4},
     "509":{"kind":"railway","colour":"black","innerColour":"white","widthMm":0.35,"innerWidthMm":0.1,"dashMm":[1,0.5],"minimumLengthMm":4,"minimumDashes":2},
     "510":{"kind":"line-with-supports","colour":"black","widthMm":0.14,"supportWidthMm":0.3,"supportStrokeMm":0.14,"minimumLengthMm":5,"settings":{"supports":{"type":"line-supports","exactPosition":true,"defaultSupportType":"pole","labelSv":"Stolpar"}}},
-    "511":{"kind":"double-line-with-supports","colour":"black","lineWidthMm":0.14,"lineCentreGapMm":0.4,"supportWidthMm":0.3,"supportStrokeMm":0.2,"largeSupportSizeMm":0.8,"settings":{"supports":{"type":"line-supports","exactPosition":true,"defaultSupportType":"tower","allowLargeMast":true,"labelSv":"Master"}}},
+    "511":{"kind":"double-line-with-supports","colour":"black","lineWidthMm":0.14,"lineCentreGapMm":0.4,"supportWidthMm":0.8,"supportStrokeMm":0.14,"settings":{"supports":{"type":"line-supports","exactPosition":true,"defaultSupportType":"tower","allowLargeMast":true,"labelSv":"Master"}}},
     "513.1":{"kind":"styled-line","style":"dots","colour":"black","widthMm":0.14,"styleDiameterMm":0.4,"styleSpacingMm":2,"endGapMm":0.8,"minimumLengthMm":1.4,"minimumHeightMetres":1},
     "513.2":{"kind":"styled-line","style":"half-dots","colour":"black","widthMm":0.14,"styleDiameterMm":0.4,"styleSpacingMm":1,"styleOffsetMm":0.8,"sideOffsetMm":0.05,"endGapMm":0.6,"minimumLengthMm":1.4,"minimumHeightMetres":0.5,"requiresDirection":true,"directionProperty":"lowerSide","settings":{"lowerSide":{"type":"side","required":true,"values":["left","right"],"default":"right","labelSv":"Lägre sida"}}},
     "514":{"kind":"styled-line","style":"dots","colour":"black","widthMm":0.14,"styleDiameterMm":0.4,"styleSpacingMm":2,"styleOffsetMm":0.825,"dashMm":[1.65,0.35],"minimumLengthMm":3.65,"minimumDashes":2,"minimumHeightMetres":0.5},
