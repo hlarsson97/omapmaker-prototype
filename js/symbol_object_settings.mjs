@@ -52,9 +52,10 @@ export function symbolObjectControlsHtml(object, escapeHtml) {
   }
   if (isPowerLineSymbol(symbol)) {
     const supports = Array.isArray(object.supports) ? object.supports : [];
-    const normalLabel = symbol === '511' ? 'Placera mast' : 'Placera stolpe';
-    const large = symbol === '511' ? `<button type="button" data-symbol-object-action="add-support" data-object-id="${id}" data-support-large="true">Placera stor mast</button>` : '';
-    return `<div class="symbol-object-settings"><small>${supports.length} ${supports.length === 1 ? 'stöd' : 'stöd'} placerade exakt på linjen</small><div class="symbol-setting-options"><button type="button" data-symbol-object-action="add-support" data-object-id="${id}">${normalLabel}</button>${large}</div></div>`;
+    const controls = symbol === '511'
+      ? `<button type="button" data-symbol-object-action="add-support" data-object-id="${id}" data-support-large="true">Placera stor kraftledningsmast</button><button type="button" data-symbol-object-action="add-support" data-object-id="${id}" data-support-large="false">Placera vanlig mast</button>`
+      : `<button type="button" data-symbol-object-action="add-support" data-object-id="${id}">Placera stolpe</button>`;
+    return `<div class="symbol-object-settings"><small>${supports.length} ${supports.length === 1 ? 'stöd' : 'stöd'} placerade exakt på linjen</small><div class="symbol-setting-options">${controls}</div></div>`;
   }
   if (['516', '517', '518'].includes(symbol)) {
     const selected = object.tagSide;

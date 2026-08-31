@@ -33,7 +33,10 @@
     if(d.kind==='railway')return{outer:{...base,weight:px(d.widthMm,context),dashArray:null},inner:{...base,color:colour(d.innerColour),weight:px(d.innerWidthMm,context),dashArray:dashPixels(d.dashMm,context),lineCap:'butt'}};
     if(d.kind==='double-line-with-supports'){
       const total=d.lineCentreGapMm+d.lineWidthMm,inner=Math.max(.01,d.lineCentreGapMm-d.lineWidthMm);
-      return{outer:{...base,weight:px(total,context)},inner:{...base,color:colour('white'),weight:px(inner,context)}};
+      // The centre of 511 is an opening, not a white fill.  A white stroke
+      // covered the map below the line and was especially visible over
+      // coloured areas and other map features.
+      return{outer:{...base,weight:px(total,context)},inner:{...base,color:'transparent',opacity:0,weight:px(inner,context)}};
     }
     if(d.kind==='stairway')return{outer:{...base,weight:px(d.innerWidthMm+2*d.railWidthMm,context)},inner:{...base,color:colour('white'),weight:px(d.innerWidthMm,context)}};
     return{outer:base};

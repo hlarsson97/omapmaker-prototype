@@ -62,6 +62,9 @@ assert.strictEqual(registry.renderers['206'].minimumAreaMm2, 0.3);
 assert.strictEqual(registry.renderers['207'].settings.sizePercent.values[1], 120);
 
 const screenContext = {scale: 15000, mode: 'digital', map: {getCenter: () => ({lat: 59.2}), getZoom: () => 15}};
+const powerStyle = renderer.lineStyles('511', {}, screenContext);
+assert.strictEqual(powerStyle.inner.color, 'transparent');
+assert.strictEqual(powerStyle.inner.opacity, 0);
 const printContextAtZoom = zoom => ({scale: 15000, mode: 'print', map: {getCenter: () => ({lat: 59.2}), getZoom: () => zoom}});
 const zoomedOutBoulder = renderer.pointMarkup('204', printContextAtZoom(13));
 const zoomedInBoulder = renderer.pointMarkup('204', printContextAtZoom(17));
