@@ -375,9 +375,6 @@ body.field-survey-active #toast{bottom:calc(min(56dvh,470px) + 26px + env(safe-a
 #layersSheet .generated-layer-detail-list .layer-card{background:#fff}
 
 .infrastructure-support-icon{border:0;background:transparent}
-.infrastructure-support-icon span{position:absolute;left:calc(50% - var(--support-width)/2);top:calc(50% - var(--support-stroke)/2);display:block;width:var(--support-width);height:var(--support-stroke);background:#111;transform:rotate(var(--support-angle,0deg)) scale(var(--point-zoom-scale,1));transform-origin:center;border-radius:1px}
-.infrastructure-support-icon span.large{border:var(--support-stroke) solid #111;background:transparent;height:var(--support-width);top:calc(50% - var(--support-width)/2)}
-.leaflet-zoom-anim .infrastructure-support-icon span{transition:transform .25s cubic-bezier(0,0,.25,1)}
 .symbol-object-settings{display:grid;gap:5px;margin-top:9px;padding-top:8px;border-top:1px solid #dce3dd}
 .symbol-object-settings>small{margin:0;color:#526159}
 .symbol-setting-options{display:grid;grid-template-columns:1fr 1fr;gap:5px}

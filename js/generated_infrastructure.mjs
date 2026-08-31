@@ -41,15 +41,9 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
   function supportIcon(feature) {
     const properties = feature.properties || {};
     const symbol = String(properties.isomSymbol || '510');
-    const large = symbol === '511' && Boolean(properties.largeMast);
-    const definition = renderer.definition(symbol);
     const context = (pointNormContext || normContext)();
-    const unit = renderer.pixelsPerPaperMm(map, context.scale, context.mode);
-    const width = renderer.paperMm(large ? definition.largeSupportSizeMm : definition.supportWidthMm, context.scale) * unit;
-    const stroke = renderer.paperMm(large ? definition.largeSupportStrokeMm : definition.supportStrokeMm, context.scale) * unit;
-    const size = Math.max(18, width + 8);
-    const angle = 90 - Number(properties.angleDegrees || 0);
-    return Leaflet.divIcon({className: `infrastructure-support-icon generated-object map-point-object ${generatedStatus(feature)}`, html: `<span class="${large ? 'large' : ''}" style="--support-width:${width}px;--support-stroke:${stroke}px;--support-angle:${angle}deg"></span>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
+    const rendered = renderer.pointMarkup(symbol, context, properties), size = rendered.sizePx;
+    return Leaflet.divIcon({className: `omap-symbol infrastructure-support-icon generated-object map-point-object ${generatedStatus(feature)}`, html: rendered.mapHtml, iconSize: [size, size], iconAnchor: [size / 2, size / 2]});
   }
 
   function popup(feature) {
