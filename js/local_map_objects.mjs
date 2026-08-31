@@ -23,7 +23,6 @@ export function localObjectPopup(cat, object, {name, isomClaim, escapeHtml, type
   const details = [category];
   details.push(mapObject.sync.label);
   if (cat === 'point' && Number(object.accuracy) > 0) details.push(`Noggrannhet ±${Math.round(Number(object.accuracy))} m`);
-  if (mapObject.modifiedBy === 'manual') details.push('Objektet är manuellt ändrat');
   const actionsHtml = mapObjectActionHtml(mapObject, {kind: 'local', escapeHtml});
   const options = typeOptions.map(option => `<option value="${escapeHtml(option.id)}" ${String(option.id) === String(object.objectType) ? 'selected' : ''}>${escapeHtml(option.symbol)} ${escapeHtml(option.name)}</option>`).join('');
   const typeControls = options ? `<div class="object-type-control"><label for="local-object-type-${escapeHtml(object.id)}">Objekttyp</label><select id="local-object-type-${escapeHtml(object.id)}" data-local-object-type="${escapeHtml(object.id)}">${options}</select><button type="button" data-local-object-change-type="${escapeHtml(object.id)}">Ändra typ</button></div>` : '';

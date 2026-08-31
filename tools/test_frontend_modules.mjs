@@ -18,6 +18,7 @@ import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextMapO
 import {anchoredMapCenter, anchoredRotationTranslation, createSmoothMapMarkerFactory} from '../js/smooth_rotation.mjs';
 import {changeLocalObjectType, localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from '../js/map_objects.mjs';
+import {popupLayersFromElements, popupStackContent} from '../js/popup_stack.mjs';
 import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyFix, formatFieldSurveyDuration, headingUpBearing, movementHeading, usableSurveyFix} from '../js/field_survey.mjs';
 import {AccountApiError, createAccountApi, userMapCacheKey, workspaceCacheKey} from '../js/account_api.mjs';
@@ -584,11 +585,11 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=9'));
+assert(fieldHtml.includes('styles.css?v=10'));
 assert(fieldHtml.includes('isom_symbols.js?v=11'));
 assert(fieldHtml.includes('isom_renderer.js?v=12'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=22"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=27"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -608,6 +609,14 @@ assert(appSource.includes('refreshPointPresentation();renderRoads()'), 'Punktobj
 assert(appSource.includes("map.on('zoom zoomanim'"), 'Punktobjekt ska skalas även under en pågående zoomgest');
 assert(styles.includes('scale(var(--point-zoom-scale,1))'), 'Punktsymbolernas visuella storlek ska följa zoomens mellanlägen');
 assert(styles.includes('.local-map-object .symbol-svg{filter:none}'), 'Manuellt placerade punktsymboler ska inte ha vit skugga');
-for (const versionedModule of ['generated_infrastructure.mjs?v=5','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=2','map_objects.mjs?v=2']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+assert(styles.includes('grid-template-columns:repeat(3,minmax(0,1fr))'), 'Ritverktygen ska ligga i en kompakt horisontell rad');
+assert(appSource.includes('tool-symbol-preview'), 'Ritverktygen ska visa vald symbol i stället för ett långt objektnamn');
+assert(appSource.includes("map.on('popupopen'"), 'Popupen ska bygga en växlare för överlappande objekt');
+assert(appSource.includes('keepPopupClearOfControls(popup)'), 'Popupen ska hållas fri från de fasta mobilkontrollerna');
+const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={getPopup:()=>({getContent:()=>'<div>B</div>'})},popupContainer={},popupElement={_leaflet_id:12,parentElement:popupContainer},popupMap={_targets:{12:popupLayerB},getContainer:()=>popupContainer};
+assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
+assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
+assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
+for (const versionedModule of ['generated_infrastructure.mjs?v=5','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=3','popup_stack.mjs?v=1']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

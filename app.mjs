@@ -11,8 +11,9 @@ import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverD
 import {magneticNorthRequestUrl, magneticNorthSummary} from './js/magnetic_north.mjs';
 import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextSupportedMapOrientation} from './js/map_orientation.mjs?v=3';
 import {createSmoothMapMarkerFactory, installMiddleButtonRotation} from './js/smooth_rotation.mjs?v=1';
-import {changeLocalObjectType, localObjectPopup} from './js/local_map_objects.mjs?v=2';
-import {ensureLocalOriginal, generatedMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from './js/map_objects.mjs?v=2';
+import {changeLocalObjectType, localObjectPopup} from './js/local_map_objects.mjs?v=3';
+import {ensureLocalOriginal, generatedMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from './js/map_objects.mjs?v=3';
+import {popupLayersFromElements, popupStackContent} from './js/popup_stack.mjs?v=1';
 import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isCliffSymbol, isClosedLineCoordinates, isDecoratedLineSymbol, isPowerLineSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, wallDotCoordinates} from './js/symbol_object_settings.mjs';
 import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyDuration, fieldSurveyFix, fixCoordinate, formatFieldSurveyDuration, headingUpBearing, movementHeading} from './js/field_survey.mjs?v=1';
 import {createAccountApi, userMapCacheKey} from './js/account_api.mjs';
@@ -79,6 +80,11 @@ const queryCenter=urlParams.has('lat')&&urlParams.has('lng')?{lat:Number(urlPara
 const lastCenterKey=workspace?`omapmaker.lastCenter.workspace.${workspace.id}`:'omapmaker.lastCenter.global';
 const initialCenter=workspace?.center||queryCenter||JSON.parse(localStorage.getItem(lastCenterKey)||localStorage.getItem('omapmaker.lastCenter')||'{"lat":59.3293,"lng":18.0686}');
 const {map,baseMaps,contourReference}=createFieldMap({Leaflet:L,initialCenter,hasWorkspace:Boolean(workspace)});
+let popupHitLayers=[],popupStack=null,popupStackSwitching=false;
+function keepPopupClearOfControls(popup){requestAnimationFrame(()=>{const element=popup.getElement?.()||popup._container;if(!element)return;const rect=element.getBoundingClientRect(),safeTop=matchMedia('(max-width: 520px)').matches?170:90,toolbarTop=$('#toolbar')?.classList.contains('collapsed')?innerHeight-12:$('#toolbar')?.getBoundingClientRect().top||innerHeight-12,safeBottom=Math.min(innerHeight-12,toolbarTop-8),offset=rect.top<safeTop?rect.top-safeTop:rect.bottom>safeBottom?rect.bottom-safeBottom:0;if(Math.abs(offset)>1)map.panBy([0,offset],{animate:true,duration:.18})})}
+map.getContainer().addEventListener('pointerdown',event=>{if(event.target.closest?.('.leaflet-popup'))return;popupStack=null;popupHitLayers=popupLayersFromElements(document.elementsFromPoint(event.clientX,event.clientY),map)},true);
+map.on('popupopen',event=>{const popup=event.popup,source=popup._source;if(!source)return;const candidates=popupStackSwitching&&popupStack?.layers.includes(source)?popupStack.layers:popupLayersFromElements([],map,source).concat(popupHitLayers.filter(layer=>layer!==source));if(candidates.length<2){keepPopupClearOfControls(popup);return}const index=Math.max(0,candidates.indexOf(source)),content=popup._omapBaseContent??popup.getContent();if(typeof content!=='string')return;popup._omapBaseContent=content;popup.setContent(popupStackContent(content,index,candidates.length));popupStack={layers:candidates,index,latlng:popup.getLatLng()};keepPopupClearOfControls(popup)});
+document.addEventListener('click',event=>{const button=event.target.closest?.('[data-popup-stack-step]');if(!button||!popupStack)return;event.preventDefault();event.stopPropagation();const total=popupStack.layers.length,index=(popupStack.index+Number(button.dataset.popupStackStep)+total)%total,target=popupStack.layers[index];popupStack.index=index;popupStackSwitching=true;target.openPopup(popupStack.latlng);popupStackSwitching=false},true);
 const mapMarker=createSmoothMapMarkerFactory(L),middleButtonRotation=installMiddleButtonRotation({Leaflet:L,map});
 const mapOrientationKey=`omapmaker.orientation.${workspace?.id||'global'}`;
 const freeRotationSupported=!isAppleTouchDevice(navigator);
@@ -387,14 +393,17 @@ map.on('zoomend',()=>{map.getContainer().style.setProperty('--point-zoom-scale',
 
 function labels(){
   const pointButton=$('#pointAction'), pointActive=recording?.cat==='point';
-  $('#pointLabel').textContent=name('point',pointActive?recording.type:prefs.point);
+  const pointType=pointActive?recording.type:prefs.point,pointName=name('point',pointType);
+  $('#pointLabel').innerHTML=`<span class="tool-symbol-preview">${symbolPreview('point',pointType)}</span><small>${escapeHtml(item('point',pointType)[1])}</small>`;
+  pointButton.setAttribute('aria-label',`${pointActive?'Placera på kartan':'Placera'} ${pointName}`);pointButton.title=pointName;
   pointButton.classList.toggle('active-tool',pointActive);
   pointButton.querySelector('span').textContent=pointActive?'PLACERA PÅ KARTAN':'PLACERA';
   for(const cat of ['line','area']){
-    const button=$(`#${cat}Action`), active=recording?.cat===cat, noun=name(cat,active?recording.type:prefs[cat]);
+    const button=$(`#${cat}Action`), active=recording?.cat===cat,type=active?recording.type:prefs[cat],noun=name(cat,type),symbol=item(cat,type)[1];
     button.classList.toggle('recording',active);
     button.querySelector('span').textContent=active?(recording.mode==='gps'?'MÄTER':'RITAR'):(mode==='gps'?'SPELA IN':'RITA');
-    button.querySelector('b').textContent=active?`■ ${noun}`:noun;
+    button.querySelector('b').innerHTML=`<span class="tool-symbol-preview">${symbolPreview(cat,type)}</span><small>${escapeHtml(symbol)}</small>`;
+    button.setAttribute('aria-label',`${active?(recording.mode==='gps'?'Mäter':'Ritar'):(mode==='gps'?'Spela in':'Rita')} ${noun}`);button.title=noun;
   }
   $('#fieldPointLabel').textContent=name('point',prefs.point);$('#fieldAreaLabel').textContent=name('area',prefs.area);
 }

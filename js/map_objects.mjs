@@ -138,8 +138,8 @@ export function mapObjectActionHtml(object, {kind, layerType = '', escapeHtml}) 
 
 export function mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDetails = [], secondaryDetails = [], controlsHtml = '', actionsHtml = '', className = ''}) {
   const primary = [isomClaim(object.symbol, object.geometryType), object.status.label, ...primaryDetails].filter(Boolean).map(value => escapeHtml(value)).join(' · ');
-  const source = [object.source.label, object.source.id].filter(Boolean).map(value => escapeHtml(value)).join(' · ');
-  const secondary = secondaryDetails.filter(Boolean).map(value => `<small>${escapeHtml(value)}</small>`).join('');
+  const source = [object.source.label, object.source.id].filter(Boolean).join(' · ');
+  const secondary = [source, ...secondaryDetails].filter(Boolean).map(value => escapeHtml(value)).join(' · ');
   const classes = ['map-object-popup', 'generated-object-popup', className].filter(Boolean).join(' ');
-  return `<div class="${escapeHtml(classes)}"><b>${escapeHtml(title)}</b><small>${primary}</small><small>${source}</small>${secondary}${controlsHtml}${actionsHtml}</div>`;
+  return `<div class="${escapeHtml(classes)}"><b>${escapeHtml(title)}</b><small>${primary}</small>${secondary ? `<small>${secondary}</small>` : ''}${controlsHtml}${actionsHtml}</div>`;
 }
