@@ -269,6 +269,9 @@ const sharedPopup = mapObjectPopup(adaptedGenerated, {title: '<Byggnad>', isomCl
 assert.match(sharedPopup, /&lt;Byggnad&gt;/);
 assert.match(sharedPopup, /OpenStreetMap · way\/2/);
 assert.match(sharedPopup, /map-object-popup/);
+assert.match(sharedPopup, /object-popup-info-label">ID och detaljer/);
+assert.match(sharedPopup, /Objekt-ID/);
+assert.match(sharedPopup, /building\/2/);
 const refreshedGenerated = {features: [{id: 'new-id', properties: {sourceId: 'way/2', isomSymbol: '503'}, geometry: {type: 'LineString', coordinates: [[18, 59], [18.1, 59.1]]}}]};
 const previousGenerated = {features: [{id: 'old-id', properties: {sourceId: 'way/2', isomSymbol: '506', status: 'locally-edited'}, geometry: {type: 'LineString', coordinates: [[18, 59], [18.2, 59.2]]}}, {id: 'missing', properties: {sourceId: 'way/missing', status: 'locally-edited'}, geometry: {type: 'Point', coordinates: [18, 59]}}]};
 mergeGeneratedFeatureOverrides(refreshedGenerated, previousGenerated, {status: feature => feature.properties.status === 'locally-edited' ? 'edited' : 'source', propertyNames: ['isomSymbol']});
@@ -585,11 +588,11 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=10'));
+assert(fieldHtml.includes('styles.css?v=12'));
 assert(fieldHtml.includes('isom_symbols.js?v=11'));
 assert(fieldHtml.includes('isom_renderer.js?v=12'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=27"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=30"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -613,10 +616,11 @@ assert(styles.includes('grid-template-columns:repeat(3,minmax(0,1fr))'), 'Ritver
 assert(appSource.includes('tool-symbol-preview'), 'Ritverktygen ska visa vald symbol i stället för ett långt objektnamn');
 assert(appSource.includes("map.on('popupopen'"), 'Popupen ska bygga en växlare för överlappande objekt');
 assert(appSource.includes('keepPopupClearOfControls(popup)'), 'Popupen ska hållas fri från de fasta mobilkontrollerna');
+assert(styles.includes('.object-popup-info'), 'Popupen ska kunna visa unikt ID och tekniska detaljer på begäran');
 const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={getPopup:()=>({getContent:()=>'<div>B</div>'})},popupContainer={},popupElement={_leaflet_id:12,parentElement:popupContainer},popupMap={_targets:{12:popupLayerB},getContainer:()=>popupContainer};
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=5','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=3','popup_stack.mjs?v=1']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generated_infrastructure.mjs?v=5','generated_land_cover.mjs?v=5','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

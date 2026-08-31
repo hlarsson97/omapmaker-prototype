@@ -513,3 +513,18 @@ body.object-placement-active .leaflet-interactive,body.object-placement-active .
 #toolbar:not(.collapsed) .utility-row #objectCount{font-size:8.5px}
 
 @media(max-width:520px){#toolbar:not(.collapsed){width:min(286px,calc(100vw - 74px))!important}.map-object-popup{width:min(204px,calc(100vw - 72px))}}
+
+.generated-object-popup{position:relative}
+.generated-object-popup>b{padding-right:55px}
+.object-popup-info{margin:4px 0 1px;border:1px solid #dde4de;border-radius:7px;background:#f8faf7}
+.object-popup-info summary{display:flex;align-items:center;gap:4px;padding:5px 7px;color:#315b48;font-size:9px;font-weight:850;cursor:pointer;list-style:none}
+.object-popup-info summary::-webkit-details-marker{display:none}
+.object-popup-info:not([open]){position:absolute;top:-3px;right:28px;margin:0;border:0;background:transparent}
+.object-popup-info:not([open]) summary{display:grid;place-items:center;width:25px;height:25px;padding:0;border-radius:7px;background:#edf3ef;font-size:15px}
+.object-popup-info:not([open]) .object-popup-info-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.object-popup-info[open] summary{border-bottom:1px solid #dde4de}
+.object-popup-info dl{display:grid;gap:4px;margin:0;padding:6px 7px}
+.object-popup-info dl>div{display:grid;grid-template-columns:55px minmax(0,1fr);align-items:start;gap:5px}
+.object-popup-info dt{color:#738078;font-size:7.5px;font-weight:850;text-transform:uppercase}
+.object-popup-info dd{min-width:0;margin:0;font-size:8px;line-height:1.25}
+.object-popup-info code{display:block;overflow-wrap:anywhere;color:#263d31;font:8px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;-webkit-user-select:text;user-select:text}

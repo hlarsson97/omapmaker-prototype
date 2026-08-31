@@ -140,6 +140,8 @@ export function mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDet
   const primary = [isomClaim(object.symbol, object.geometryType), object.status.label, ...primaryDetails].filter(Boolean).map(value => escapeHtml(value)).join(' · ');
   const source = [object.source.label, object.source.id].filter(Boolean).join(' · ');
   const secondary = [source, ...secondaryDetails].filter(Boolean).map(value => escapeHtml(value)).join(' · ');
+  const technicalDetails = [['Objekt-ID', object.id], ['Käll-ID', object.source.id], ['Geometri', object.geometryType], ['Kategori', object.category]].filter(([, value]) => value).map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><code>${escapeHtml(value)}</code></dd></div>`).join('');
+  const informationHtml = `<details class="object-popup-info"><summary><span aria-hidden="true">ⓘ</span><span class="object-popup-info-label">ID och detaljer</span></summary><dl>${technicalDetails}</dl></details>`;
   const classes = ['map-object-popup', 'generated-object-popup', className].filter(Boolean).join(' ');
-  return `<div class="${escapeHtml(classes)}"><b>${escapeHtml(title)}</b><small>${primary}</small>${secondary ? `<small>${secondary}</small>` : ''}${controlsHtml}${actionsHtml}</div>`;
+  return `<div class="${escapeHtml(classes)}"><b>${escapeHtml(title)}</b><small>${primary}</small>${secondary ? `<small>${secondary}</small>` : ''}${informationHtml}${controlsHtml}${actionsHtml}</div>`;
 }
