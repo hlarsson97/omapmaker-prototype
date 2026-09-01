@@ -13,6 +13,7 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     pavedAreaPane: 310,
     restrictedAreaPane: 320,
     contourPane: 340,
+    propertyBoundaryPane: 350,
     northLinePane: 360,
     foundationPane: 380,
     infrastructurePane: 385,

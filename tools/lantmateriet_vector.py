@@ -17,10 +17,12 @@ from lantmateriet_height import ApiError, VECTOR_API_ROOT, api_json, request
 
 BUILDING_COLLECTION_WORDS = ("byggnad", "building")
 BUILDING_LAYER_WORDS = ("byggnad", "building")
+PROPERTY_COLLECTION_WORDS = ("fastighetsindelning", "property")
 VECTOR_ATTRIBUTION = "Byggnad Nedladdning, vektor © Lantmäteriet. Informationen har bearbetats av OMapMaker. CC BY 4.0."
+PROPERTY_ATTRIBUTION = "Fastighetsindelning Nedladdning, vektor © Lantmäteriet. Informationen har bearbetats av OMapMaker. CC BY 4.0."
 
 
-def choose_collection(collections, words=BUILDING_COLLECTION_WORDS):
+def choose_collection(collections, words=BUILDING_COLLECTION_WORDS, product="Byggnad Nedladdning, vektor"):
     matches = []
     for collection in collections:
         text = " ".join(str(collection.get(key, "")) for key in ("id", "title", "description")).lower()
@@ -28,8 +30,8 @@ def choose_collection(collections, words=BUILDING_COLLECTION_WORDS):
             matches.append(collection)
     if not matches:
         available = ", ".join(str(item.get("id")) for item in collections if item.get("id"))
-        raise ApiError("STAC-vektor saknar en samling för Byggnad Nedladdning, vektor. Tillgängliga samlingar: " + available)
-    matches.sort(key=lambda item: ("byggnad" not in str(item.get("id", "")).lower(), str(item.get("id", ""))))
+        raise ApiError(f"STAC-vektor saknar en samling för {product}. Tillgängliga samlingar: " + available)
+    matches.sort(key=lambda item: (not any(word in str(item.get("id", "")).lower() for word in words), str(item.get("id", ""))))
     return str(matches[0]["id"])
 
 
@@ -168,6 +170,66 @@ def read_buildings(paths, bbox_wgs84):
     return features
 
 
+def _property_layer_kind(layer):
+    name = layer.lower().replace("_", "")
+    if "fastighetsgrans" in name or "registerenhetsomradeslinj" in name:
+        return "boundary"
+    if "registerenhetyta" in name or "registerenhetsomradesyt" in name:
+        return "parcel-area"
+    if "granspunkt" in name:
+        return "boundary-point"
+    return None
+
+
+def read_property_boundaries(paths, bbox_wgs84):
+    try:
+        import fiona
+    except ImportError as exc:
+        raise RuntimeError("Servern saknar GeoPackage-stöd (Fiona). Installera requirements-server.txt.") from exc
+
+    clip_wgs84 = box(*bbox_wgs84)
+    features = []
+    seen = set()
+    for path in paths:
+        for layer in fiona.listlayers(path):
+            reference_kind = _property_layer_kind(layer)
+            if not reference_kind:
+                continue
+            with fiona.open(path, layer=layer) as source:
+                source_crs = CRS.from_user_input(source.crs_wkt or source.crs or "EPSG:3006")
+                to_source = Transformer.from_crs("EPSG:4326", source_crs, always_xy=True).transform
+                to_wgs84 = Transformer.from_crs(source_crs, "EPSG:4326", always_xy=True).transform
+                source_bbox = transform(to_source, clip_wgs84).bounds
+                for item in source.filter(bbox=source_bbox):
+                    if not item.geometry:
+                        continue
+                    geometry = transform(to_wgs84, shape(item.geometry)).intersection(clip_wgs84)
+                    if geometry.is_empty:
+                        continue
+                    properties = dict(item.properties)
+                    object_id = str(_property(properties, "objektidentitet", "objektid", "objectid", "id") or item.id)
+                    feature_id = f"lantmateriet-property/{layer}/{object_id}"
+                    if feature_id in seen:
+                        continue
+                    seen.add(feature_id)
+                    features.append({
+                        "type": "Feature",
+                        "id": feature_id,
+                        "properties": {
+                            "source": "Lantmäteriet",
+                            "sourceType": "lantmateriet",
+                            "sourceId": feature_id,
+                            "sourceLayer": layer,
+                            "referenceKind": reference_kind,
+                            "detailType": _property(properties, "detaljtyp", "objekttyp"),
+                            "positionalUncertainty": _property(properties, "xyfel", "medelfel"),
+                            "license": "CC BY 4.0",
+                        },
+                        "geometry": mapping(geometry),
+                    })
+    return features
+
+
 def lantmateriet_buildings(bbox, bearer_token):
     collections = api_json(VECTOR_API_ROOT, "/collections", bearer_token=bearer_token).get("collections", [])
     collection_id = choose_collection(collections)
@@ -189,6 +251,33 @@ def lantmateriet_buildings(bbox, bearer_token):
             "attribution": VECTOR_ATTRIBUTION,
             "bboxWgs84": bbox,
             "objectType": "buildings",
+            "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        },
+        "features": features,
+    }
+
+
+def lantmateriet_property_boundaries(bbox, bearer_token):
+    collections = api_json(VECTOR_API_ROOT, "/collections", bearer_token=bearer_token).get("collections", [])
+    collection_id = choose_collection(collections, PROPERTY_COLLECTION_WORDS, "Fastighetsindelning Nedladdning, vektor")
+    payload = {"collections": [collection_id], "bbox": bbox, "limit": 100}
+    with request(VECTOR_API_ROOT + "/search", bearer_token=bearer_token, payload=payload) as response:
+        search_result = json.load(response)
+    with tempfile.TemporaryDirectory(prefix="omapmaker-lm-properties-") as temporary:
+        temporary_path = Path(temporary)
+        deliveries = download_vector_assets(search_result, temporary_path, bearer_token)
+        features = read_property_boundaries(_geopackages(deliveries, temporary_path), bbox)
+    return {
+        "type": "FeatureCollection",
+        "properties": {
+            "source": "Lantmäteriet",
+            "sourceType": "lantmateriet",
+            "product": "Fastighetsindelning Nedladdning, vektor",
+            "collection": collection_id,
+            "license": "CC BY 4.0",
+            "attribution": PROPERTY_ATTRIBUTION,
+            "bboxWgs84": bbox,
+            "objectType": "property-boundaries",
             "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         },
         "features": features,

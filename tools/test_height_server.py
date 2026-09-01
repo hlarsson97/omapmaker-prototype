@@ -31,6 +31,10 @@ class LantmaterietVectorTests(unittest.TestCase):
         collections=[{'id':'topografi-10','title':'Topografi 10'},{'id':'byggnader','title':'Byggnad Nedladdning, vektor'}]
         self.assertEqual(lm_vector.choose_collection(collections),'byggnader')
 
+    def test_property_collection_is_selected_by_product_metadata(self):
+        collections=[{'id':'byggnader','title':'Byggnad'},{'id':'fastighetsindelning','title':'Fastighetsindelning Nedladdning, vektor'}]
+        self.assertEqual(lm_vector.choose_collection(collections,lm_vector.PROPERTY_COLLECTION_WORDS,'Fastighetsindelning Nedladdning, vektor'),'fastighetsindelning')
+
     def test_only_geopackage_or_zip_assets_are_selected(self):
         result={'features':[{'id':'tile-1','assets':{
             'data':{'href':'https://example.test/buildings.gpkg','type':'application/geopackage+sqlite3'},
@@ -61,6 +65,27 @@ class LantmaterietVectorTests(unittest.TestCase):
         self.assertEqual(features[0]['properties']['name'],'Klubbhus')
         self.assertLessEqual(max(point[0] for point in features[0]['geometry']['coordinates'][0]),18.0005)
 
+    def test_property_reference_layers_are_filtered_and_do_not_retain_designations(self):
+        import fiona
+        from pyproj import Transformer
+        transformer=Transformer.from_crs('EPSG:4326','EPSG:3006',always_xy=True)
+        line=[transformer.transform(lon,lat) for lon,lat in [(18.0,59.0),(18.001,59.001)]]
+        polygon=[transformer.transform(lon,lat) for lon,lat in [(18.0,59.0),(18.001,59.0),(18.001,59.001),(18.0,59.001),(18.0,59.0)]]
+        point=transformer.transform(18.0005,59.0005)
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'properties.gpkg'
+            common={'properties':{'objektidentitet':'str','detaljtyp':'str','fastighet':'str'}}
+            with fiona.open(path,'w',driver='GPKG',layer='fastighetsgrans',crs='EPSG:3006',schema={'geometry':'LineString',**common}) as target:
+                target.write({'geometry':{'type':'LineString','coordinates':line},'properties':{'objektidentitet':'line-1','detaljtyp':'Gällande','fastighet':'Hemlig 1:2'}})
+            with fiona.open(path,'w',driver='GPKG',layer='registerenhet_yta',crs='EPSG:3006',schema={'geometry':'Polygon',**common},append_subdataset=True) as target:
+                target.write({'geometry':{'type':'Polygon','coordinates':[polygon]},'properties':{'objektidentitet':'area-1','detaljtyp':'Område','fastighet':'Hemlig 1:2'}})
+            with fiona.open(path,'w',driver='GPKG',layer='granspunkt',crs='EPSG:3006',schema={'geometry':'Point',**common},append_subdataset=True) as target:
+                target.write({'geometry':{'type':'Point','coordinates':point},'properties':{'objektidentitet':'point-1','detaljtyp':'Markerad','fastighet':'Hemlig 1:2'}})
+            features=lm_vector.read_property_boundaries([path],[17.9995,58.9995,18.0015,59.0015])
+        self.assertEqual({feature['properties']['referenceKind'] for feature in features},{'boundary','parcel-area','boundary-point'})
+        self.assertTrue(all('fastighet' not in feature['properties'] for feature in features))
+        self.assertTrue(all(feature['id'].startswith('lantmateriet-property/') for feature in features))
+
 
 class QuietHandler(server.Handler):
     def log_message(self, *_):pass
@@ -78,6 +103,14 @@ class CentralStorageApiTests(unittest.TestCase):
         data=json.dumps(payload).encode() if payload is not None else None;headers={'Content-Type':'application/json'}
         if device:headers['X-OMapMaker-Device']=device
         with urllib.request.urlopen(urllib.request.Request(self.base+path,data=data,headers=headers),timeout=3) as response:return response.status,json.load(response)
+
+    def test_property_boundary_endpoint_uses_lantmateriet_and_central_storage(self):
+        collection={'type':'FeatureCollection','properties':{'source':'Lantmäteriet'},'features':[]}
+        with patch.object(server,'lantmateriet_bearer_token',return_value='secret-token'),patch.object(server,'lantmateriet_property_boundaries',return_value=collection) as fetch:
+            status,result=self.request('/api/property-boundaries',{'bbox':[18,59,18.01,59.01]})
+        self.assertEqual(status,200)
+        self.assertTrue(result['properties']['centralStorage'])
+        fetch.assert_called_once_with([18.0,59.0,18.01,59.01],'secret-token')
 
     def test_submission_endpoint_creates_scored_global_candidate(self):
         device=str(uuid.uuid4());observation=str(uuid.uuid4());submission=str(uuid.uuid4())

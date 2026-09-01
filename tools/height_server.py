@@ -12,7 +12,7 @@ from rasterio.merge import merge as merge_rasters
 from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polygon, box as geometry_box, mapping as geometry_mapping
 from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
-from lantmateriet_vector import lantmateriet_buildings
+from lantmateriet_vector import lantmateriet_buildings, lantmateriet_property_boundaries
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -29,7 +29,7 @@ LOGIN_LOCK=threading.Lock();LOGIN_FAILURES={}
 
 OAUTH_CLIENT_ID_CREDENTIAL='lantmateriet_oauth_client_id'
 OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
-CENTRAL_LAYER_TYPES={'contours','buildings','roads','infrastructure','paved-areas','land-cover'}
+CENTRAL_LAYER_TYPES={'contours','buildings','roads','infrastructure','paved-areas','land-cover','property-boundaries'}
 
 class LantmaterietCredentialsRequired(RuntimeError):pass
 class ContourJobCancelled(RuntimeError):pass
@@ -1444,7 +1444,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(200,USER_STORE.sync_user_data(session['user']['id'],request.get('mutationId'),request.get('objects'),request.get('fieldSurveys'),request.get('layerOverrides')))
             except SyncConflict as exc:return self.send_json(409,{'error':str(exc),'code':'sync_conflict','current':exc.current})
             except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
-        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/property-boundaries','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=self.read_json()
             if path=='/api/submissions':return self.send_json(201,MAP_STORE.submit(self.device_id(),request.get('clientSubmissionId'),request.get('features')))
@@ -1468,6 +1468,7 @@ class Handler(SimpleHTTPRequestHandler):
             if path=='/api/buildings':
                 requested_source=str(request.get('source') or 'automatic').lower();source=building_source(request)
                 return self.send_json(200,centralize_layer('buildings',bbox,generated_buildings(bbox,source),{'importVersion':4,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/property-boundaries':return self.send_json(200,centralize_layer('property-boundaries',bbox,lantmateriet_property_boundaries(bbox,lantmateriet_bearer_token()),{'importVersion':1}))
             if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':4,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/infrastructure':return self.send_json(200,centralize_layer('infrastructure',bbox,osm_infrastructure(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))

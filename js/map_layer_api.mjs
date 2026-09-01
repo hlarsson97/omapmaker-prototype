@@ -5,12 +5,13 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
     roads: () => ({importVersion: 4, symbolRegistryVersion}),
     infrastructure: () => ({importVersion: 1, symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
-    'land-cover': () => ({importVersion: 10, printScale: Number(workspace?.scale || 10000), symbolRegistryVersion})
+    'land-cover': () => ({importVersion: 10, printScale: Number(workspace?.scale || 10000), symbolRegistryVersion}),
+    'property-boundaries': () => ({importVersion: 1})
   };
   return parameters[layerType]();
 }
 
-export const CENTRAL_LAYER_TYPES = Object.freeze(['contours', 'buildings', 'roads', 'infrastructure', 'paved-areas', 'land-cover']);
+export const CENTRAL_LAYER_TYPES = Object.freeze(['contours', 'buildings', 'roads', 'infrastructure', 'paved-areas', 'land-cover', 'property-boundaries']);
 
 export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = location.hostname}) {
   const postJson = async (endpoint, payload) => jsonResponse(await fetchImpl(endpoint, {

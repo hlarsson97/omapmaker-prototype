@@ -580,6 +580,8 @@ assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTI
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 10, printScale: 15000, symbolRegistryVersion: 6});
 assert.deepEqual(centralLayerParameters('roads', {workspace: {scale: 15000}, symbolRegistryVersion: 13}), {importVersion: 4, symbolRegistryVersion: 13});
 assert.deepEqual(centralLayerParameters('buildings', {symbolRegistryVersion: 13, sources: {buildings: 'lantmateriet'}}), {importVersion: 4, source: 'lantmateriet', symbolRegistryVersion: 13});
+assert.deepEqual(centralLayerParameters('property-boundaries', {symbolRegistryVersion: 13}), {importVersion: 1});
+assert(CENTRAL_LAYER_TYPES.includes('property-boundaries'));
 
 const apiCalls = [];
 const mapLayerApi = createMapLayerApi({
@@ -659,6 +661,7 @@ assert.equal(fakeMap.touchGestures.disabled, true);
 assert.equal(fakeMap.touchZoom.enabled, true);
 assert.equal(panes.get('contourPane').style.zIndex, 340);
 assert.equal(panes.get('northLinePane').style.zIndex, 360);
+assert.equal(panes.get('propertyBoundaryPane').style.zIndex, 350);
 assert.equal(panes.get('gpsPane').style.zIndex, 650);
 assert.equal(panes.get('gpsPane').style.pointerEvents, 'none');
 assert.equal(paneParents.get('buildingPane'),rotatingPane);
@@ -675,8 +678,8 @@ assert(fieldHtml.includes('styles.css?v=16'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=20'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=44"'));
-for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree']) assert(fieldHtml.includes(`id="${fieldControl}"`));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=45"'));
+for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }
@@ -707,6 +710,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['map_layer_api.mjs?v=2','generated_buildings.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=14','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['map_layer_api.mjs?v=3','map_setup.mjs?v=5','generated_buildings.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=14','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
