@@ -22,7 +22,7 @@ export function roadMetaText(data, generatedStatus, centralLayerLabel) {
   return `${data.features.length} automatiska · ${counts.wide} st 502${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
 }
 
-export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, featureIsVisible, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, lineStyles, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement}) {
+export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, featureIsVisible, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, lineStyles, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, onRoadClick = null}) {
   let layer = null;
   let attributionVisible = false;
 
@@ -52,7 +52,7 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
     }
     const data = getData();
     if (!data || !isVisible()) return;
-    const outer = Leaflet.geoJSON(data, {pane: 'foundationPane', filter: featureIsVisible, style, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
+    const outer = Leaflet.geoJSON(data, {pane: 'foundationPane', filter: featureIsVisible, style, onEachFeature: (feature, featureLayer) => {featureLayer.bindPopup(popup(feature), {maxWidth: 320});if(onRoadClick)featureLayer.on('click', event => onRoadClick(feature, event, featureLayer))}});
     const inner = Leaflet.geoJSON(data, {pane: 'foundationPane', interactive: false, filter: feature => featureIsVisible(feature) && String(feature.properties?.isomSymbol) === '502' && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: feature => ({...lineStyles('502', feature.properties || {}, normContext()).inner, className: 'osm-road-fill'})});
     layer = Leaflet.layerGroup([outer, inner]).addTo(map);
     map.attributionControl.addAttribution(ROAD_ATTRIBUTION);

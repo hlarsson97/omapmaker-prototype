@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=15"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=16"></head>
 <body class="gps-mode">
 <header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><div class="header-actions"><button id="fieldSurveyToggle" type="button">Fältläge</button><button id="export">Exportera</button></div></header>
 <main id="map"></main>
@@ -85,6 +85,8 @@
     <label><input id="linePaths" type="checkbox"><span><b>Stigar och gångstråk</b><small>ISOM 505–506</small></span></label>
     <label><input id="lineFaintPaths" type="checkbox"><span><b>Otydliga stigar</b><small>ISOM 507 · ingår i Detaljerad</small></span></label>
     <label><input id="lineWatercourses" type="checkbox"><span><b>Vattendrag och diken</b><small>ISOM 304–306 och 309</small></span></label>
+    <label><input id="lineBridges" type="checkbox"><span><b>Karterade broar och tunnlar</b><small>ISOM 512 · säkra OSM-taggar</small></span></label>
+    <label><input id="lineInferredBridges" type="checkbox"><span><b>Möjliga broar och tunnlar</b><small>ISOM 512 · riskvillig tolkning av korsande vägar · kräver granskning</small></span></label>
     <label><input id="lineRailways" type="checkbox"><span><b>Järnvägar</b><small>ISOM 509 · aktiva synliga spår</small></span></label>
     <label><input id="lineDisusedRailways" type="checkbox"><span><b>Nedlagda spår med räls kvar</b><small>ISOM 509 · lägre säkerhet · Detaljerad</small></span></label>
     <label><input id="linePowerLines" type="checkbox"><span><b>Kraftledningar</b><small>ISOM 510–511 · kända stolpar och master</small></span></label>
@@ -152,10 +154,11 @@
   <div class="utility-row"><span id="objectCount">0 objekt</span><div><button id="trashButton" type="button">Papperskorg <span id="trashCount">0</span></button><button id="collapseToolbar" type="button" aria-expanded="true">Dölj verktyg</button></div></div>
 </section>
 <dialog id="objectSheet"><form method="dialog"><div class="sheet-head"><div><small id="sheetCategory"></small><h2 id="sheetTitle">Välj objekt</h2></div><button value="cancel">×</button></div><div id="sheetOptions"></div></form></dialog>
+<dialog id="bridgeTunnelSheet"><form method="dialog"><div class="sheet-head"><div><small>ISOM 512</small><h2>Placera bro/tunnel</h2></div><button value="cancel" aria-label="Stäng">×</button></div><p class="bridge-placement-intro">Välj hur symbolens baslinje ska skapas. Efteråt kan ändpunkterna dras för att täcka en lång viadukt, flera körbanor eller en gemensam tunnelmynning.</p><div class="bridge-placement-options"><button id="bridgeSelectRoads" type="button"><b>Välj två vägar</b><small>Tryck först på vägen som går på bron eller genom tunneln, sedan på den korsade vägen. Storlek och riktning beräknas.</small></button><button id="bridgeDrawFree" type="button"><b>Rita fritt</b><small>Dra med finger eller mus från symbolens ena ände till den andra. Ingen vägkoppling krävs.</small></button></div></form></dialog>
 <div id="vectorPrintMap" aria-label="Normstyrd vektorkarta"></div><section id="printInformation" aria-label="Kartinformation"><h2 id="printMapTitle"></h2><dl id="printMetadata"></dl></section>
 <section id="printAreaPicker" hidden aria-label="Välj utskriftsområde"><div><small>UTSKRIFTSOMRÅDE</small><h2>Flytta kartan under ramen</h2><p id="printAreaPickerSummary">–</p></div><div><button id="centerPrintOnWorkspace" type="button">Centrera arbetsområdet</button><button id="cancelPrintArea" type="button">Avbryt</button><button id="confirmPrintArea" type="button">Använd området</button></div></section>
 <div id="printScaleCheck"><span>50 mm kontrollmått · skriv ut i 100 %</span></div>
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="printAttribution">Höjddata © Lantmäteriet · övrigt underlag © OpenStreetMap contributors · egen fältdata</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=15"></script><script src="isom_renderer.js?v=18"></script><script type="module" src="app.mjs?v=40"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=15"></script><script src="isom_renderer.js?v=18"></script><script type="module" src="app.mjs?v=41"></script></body></html>

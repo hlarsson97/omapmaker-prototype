@@ -180,6 +180,18 @@ class RoadClassificationTests(unittest.TestCase):
         self.assertEqual(server.classify_osm_road({'highway': 'path'})[0], '506')
         self.assertEqual(server.classify_osm_road({'highway': 'path', 'trail_visibility': 'bad'})[0], '507')
 
+    def test_bridge_and_tunnel_tags_are_preserved_for_isom_512_generation(self):
+        raw={'elements':[{'type':'way','id':42,'tags':{'highway':'primary','bridge':'yes','layer':'1','width':'7'},'geometry':[{'lon':18.0,'lat':59.0},{'lon':18.001,'lat':59.0}]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            previous_cache=server.CACHE;server.CACHE=Path(directory)
+            try:
+                with patch.object(server,'overpass_json',return_value=(raw,'test-overpass')),patch.object(server,'osm_paved_areas',return_value={'type':'FeatureCollection','features':[]}):result=server.osm_roads([17.99,58.99,18.01,59.01])
+            finally:server.CACHE=previous_cache
+        properties=result['features'][0]['properties']
+        self.assertEqual(properties['bridge'],'yes')
+        self.assertEqual(properties['layer'],'1')
+        self.assertEqual(result['properties']['importVersion'],4)
+
     def test_major_roundabout_inherits_wide_road(self):
         result = server.classify_osm_road({'highway': 'primary', 'junction': 'roundabout'})
         self.assertEqual(result, ('502', 'wide_road', 'medium', 'junction-inherited'))

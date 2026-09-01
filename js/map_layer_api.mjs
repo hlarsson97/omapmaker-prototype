@@ -2,7 +2,7 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
   const parameters = {
     contours: () => ({interval: Number(workspace?.contourInterval || 5), generalization: 'detailed', baseElevation: 0, verticalDatum: 'RH 2000', symbolRegistryVersion}),
     buildings: () => ({importVersion: 3, symbolRegistryVersion}),
-    roads: () => ({importVersion: 3, symbolRegistryVersion}),
+    roads: () => ({importVersion: 4, symbolRegistryVersion}),
     infrastructure: () => ({importVersion: 1, symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
     'land-cover': () => ({importVersion: 10, printScale: Number(workspace?.scale || 10000), symbolRegistryVersion})

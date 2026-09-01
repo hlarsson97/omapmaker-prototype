@@ -14,9 +14,9 @@ export const generationPresets = {
     detailed: {buildings: true, water: true, land: true, paved: true, restricted: true, restrictedMode: 'detailed'}
   },
   line: {
-    quick: {roads: true, paths: true, faintPaths: false, watercourses: false, railways: false, disusedRailways: false, powerLines: false, aerialways: false},
-    standard: {roads: true, paths: true, faintPaths: false, watercourses: true, railways: true, disusedRailways: false, powerLines: true, aerialways: false},
-    detailed: {roads: true, paths: true, faintPaths: true, watercourses: true, railways: true, disusedRailways: true, powerLines: true, aerialways: true}
+    quick: {roads: true, paths: true, faintPaths: false, watercourses: false, bridges: true, inferredBridges: false, railways: false, disusedRailways: false, powerLines: false, aerialways: false},
+    standard: {roads: true, paths: true, faintPaths: false, watercourses: true, bridges: true, inferredBridges: false, railways: true, disusedRailways: false, powerLines: true, aerialways: false},
+    detailed: {roads: true, paths: true, faintPaths: true, watercourses: true, bridges: true, inferredBridges: true, railways: true, disusedRailways: true, powerLines: true, aerialways: true}
   }
 };
 
@@ -42,7 +42,7 @@ export function generationSummary(settings, category) {
   const selected = settings[category];
   const fields = category === 'surface'
     ? ['buildings', 'water', 'land', 'paved', 'restricted']
-    : ['roads', 'paths', 'faintPaths', 'watercourses', 'railways', 'disusedRailways', 'powerLines', 'aerialways'];
+    : ['roads', 'paths', 'faintPaths', 'watercourses', 'bridges', 'inferredBridges', 'railways', 'disusedRailways', 'powerLines', 'aerialways'];
   const count = fields.filter(key => selected[key]).length;
   return `${generationProfileLabels[selected.profile] || 'Eget urval'} · ${count} kategorier`;
 }

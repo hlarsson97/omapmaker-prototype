@@ -284,7 +284,7 @@ def apply_paved_area_rules(features,paved_areas):
             properties.update({'suppressed':True,'suppressionReason':'inside-paved-area'})
 
 def osm_roads(bbox):
-    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-roads-v3',bbox],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-roads.geojson')
+    CACHE.mkdir(parents=True,exist_ok=True);signature=json.dumps(['osm-roads-v4',bbox],separators=(',',':'));target=CACHE/(hashlib.sha256(signature.encode()).hexdigest()[:20]+'-roads.geojson')
     if target.exists() and time.time()-target.stat().st_mtime<86400:return json.loads(target.read_text(encoding='utf-8'))
     west,south,east,north=bbox;query=f'[out:json][timeout:25];way["highway"]({south},{west},{north},{east});out tags geom;';raw,endpoint=overpass_json(query);features=[]
     ignored={'construction','proposed','raceway','platform','corridor','steps','elevator'}
@@ -294,10 +294,10 @@ def osm_roads(bbox):
         coordinates=[[point['lon'],point['lat']] for point in element.get('geometry') or []]
         if len(coordinates)<2:continue
         symbol,omap_type,confidence,reason=classify_osm_road(tags);render_width,width_source,width_confidence=estimated_road_width(tags)
-        features.append({'type':'Feature','id':f"osm-way-{element['id']}",'properties':{'source':'OpenStreetMap','sourceId':f"way/{element['id']}",'status':'automatic-unverified','license':'ODbL','isomSymbol':symbol,'omapType':omap_type,'automaticIsomSymbol':symbol,'automaticOmapType':omap_type,'classificationConfidence':confidence,'classificationReason':reason,'highway':highway,'junction':tags.get('junction'),'oneway':tags.get('oneway'),'name':tags.get('name'),'ref':tags.get('ref'),'surface':tags.get('surface'),'tracktype':tags.get('tracktype'),'width':tags.get('width'),'estWidth':tags.get('est_width'),'lanes':tags.get('lanes'),'renderWidthMetres':render_width,'widthSource':width_source,'widthConfidence':width_confidence,'service':tags.get('service'),'footway':tags.get('footway'),'cycleway':tags.get('cycleway'),'sidewalk':tags.get('sidewalk'),'isSidepath':tags.get('is_sidepath'),'shoulder':tags.get('shoulder'),'trailVisibility':tags.get('trail_visibility'),'smoothness':tags.get('smoothness'),'access':tags.get('access')},'geometry':{'type':'LineString','coordinates':coordinates}})
+        features.append({'type':'Feature','id':f"osm-way-{element['id']}",'properties':{'source':'OpenStreetMap','sourceId':f"way/{element['id']}",'status':'automatic-unverified','license':'ODbL','isomSymbol':symbol,'omapType':omap_type,'automaticIsomSymbol':symbol,'automaticOmapType':omap_type,'classificationConfidence':confidence,'classificationReason':reason,'highway':highway,'junction':tags.get('junction'),'oneway':tags.get('oneway'),'name':tags.get('name'),'ref':tags.get('ref'),'surface':tags.get('surface'),'tracktype':tags.get('tracktype'),'width':tags.get('width'),'estWidth':tags.get('est_width'),'lanes':tags.get('lanes'),'renderWidthMetres':render_width,'widthSource':width_source,'widthConfidence':width_confidence,'service':tags.get('service'),'footway':tags.get('footway'),'cycleway':tags.get('cycleway'),'sidewalk':tags.get('sidewalk'),'isSidepath':tags.get('is_sidepath'),'shoulder':tags.get('shoulder'),'trailVisibility':tags.get('trail_visibility'),'smoothness':tags.get('smoothness'),'access':tags.get('access'),'bridge':tags.get('bridge'),'tunnel':tags.get('tunnel'),'covered':tags.get('covered'),'location':tags.get('location'),'layer':tags.get('layer')},'geometry':{'type':'LineString','coordinates':coordinates}})
     apply_paired_oneway_rules(features)
     apply_roundabout_rules(features);apply_short_continuity_rules(features);apply_sidepath_rules(features);apply_paved_area_rules(features,osm_paved_areas(bbox))
-    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'© OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'roads','importVersion':3,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
+    result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'© OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'roads','importVersion':4,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
 ACTIVE_RAILWAYS={'rail','light_rail','narrow_gauge','tram'}
 AERIALWAYS={'cable_car','gondola','chair_lift','mixed_lift','drag_lift','t-bar','j-bar','platter','rope_tow','magic_carpet'}
@@ -1455,7 +1455,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(parameters,dict):raise ValueError('Lagrets parametrar är ogiltiga')
                 return self.send_json(200,MAP_STORE.mosaic_layer(layer_type,bbox,parameters))
             if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3,'symbolRegistryVersion':REGISTRY_VERSION}))
-            if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':3,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':4,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/infrastructure':return self.send_json(200,centralize_layer('infrastructure',bbox,osm_infrastructure(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/land-cover':

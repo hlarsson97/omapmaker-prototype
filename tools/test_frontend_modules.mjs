@@ -10,6 +10,7 @@ import {BUILDING_ATTRIBUTION, buildingMetaText, createGeneratedBuildingLayer} fr
 import {PAVED_AREA_ATTRIBUTION, createGeneratedPavedAreaLayer, pavedAreaMetaText} from '../js/generated_paved_areas.mjs';
 import {ROAD_ATTRIBUTION, ROAD_TYPES, createGeneratedRoadLayer, roadMetaText} from '../js/generated_roads.mjs';
 import {INFRASTRUCTURE_ATTRIBUTION, INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer, infrastructureMetaText} from '../js/generated_infrastructure.mjs';
+import {bridgeTunnelGeometryFromRoads, ensureBridgeTunnelMinimum, generateBridgeTunnelFeatures, isRoadLikeFeature} from '../js/bridge_tunnel.mjs';
 import {LAND_COVER_ATTRIBUTION, WATER_SYMBOL_CLASSES, applyLandCoverPattern, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature, landCoverMetaText} from '../js/generated_land_cover.mjs';
 import {CENTRAL_LAYER_TYPES, centralLayerParameters, createCentralLayerRestorer, createMapLayerApi} from '../js/map_layer_api.mjs';
 import {cloneJson, escapeHtml, formatBytes, uuidPattern} from '../js/utils.mjs';
@@ -414,7 +415,31 @@ assert.equal(roadGeoJsonOptions[1].interactive, false);
 assert.equal(roadGeoJsonOptions[1].filter({properties: {isomSymbol: '502'}}), true);
 assert.deepEqual(roadEvents.at(-1), ['addAttribution', ROAD_ATTRIBUTION]);
 assert.equal(INFRASTRUCTURE_TYPES['509'][1], 'Järnväg');
-assert.equal(infrastructureMetaText({features: [{properties: {featureKind: 'line', isomSymbol: '509'}}, {properties: {featureKind: 'line', isomSymbol: '510'}}, {properties: {featureKind: 'support'}}]}, () => 'source', () => ''), '1 järnvägar · 1 ledningar · 1 stolpar/master');
+assert.equal(INFRASTRUCTURE_TYPES['512'][1], 'Bro/tunnel');
+assert.equal(infrastructureMetaText({features: [{properties: {featureKind: 'line', isomSymbol: '509'}}, {properties: {featureKind: 'line', isomSymbol: '510'}}, {properties: {featureKind: 'line', isomSymbol: '512'}}, {properties: {featureKind: 'support'}}]}, () => 'source', () => ''), '1 järnvägar · 1 ledningar · 1 bro/tunnel · 1 stolpar/master');
+
+const bridgeRoad={type:'Feature',id:'bridge-road',properties:{sourceId:'way/1',isomSymbol:'503',highway:'primary',bridge:'yes',renderWidthMetres:7},geometry:{type:'LineString',coordinates:[[18,59],[18.002,59]]}};
+const crossedRoad={type:'Feature',id:'crossed-road',properties:{sourceId:'way/2',isomSymbol:'504',highway:'service',renderWidthMetres:4},geometry:{type:'LineString',coordinates:[[18.001,58.9995],[18.001,59.0005]]}};
+const assistedBridge=bridgeTunnelGeometryFromRoads(bridgeRoad,crossedRoad,{minimumLengthMetres:6});
+assert(assistedBridge);
+assert.equal(assistedBridge.coordinates.length,2);
+assert(assistedBridge.lengthMetres>=8);
+assert.equal(isRoadLikeFeature(bridgeRoad),true);
+assert.equal(generateBridgeTunnelFeatures({features:[bridgeRoad,crossedRoad]}).length,1);
+assert.equal(generateBridgeTunnelFeatures({features:[bridgeRoad,crossedRoad]})[0].properties.classificationReason,'mapped-bridge');
+const inferredStructure={...bridgeRoad,id:'upper',properties:{...bridgeRoad.properties,sourceId:'way/3',bridge:null}};
+const inferred=generateBridgeTunnelFeatures({features:[inferredStructure,crossedRoad]},{includeInferred:true});
+assert.equal(inferred.length,1);
+assert.equal(inferred[0].properties.generationMethod,'road-overlap');
+assert.equal(inferred[0].properties.reviewRequired,true);
+const parallelCrossing={...crossedRoad,id:'crossed-road-2',properties:{...crossedRoad.properties,sourceId:'way/4'},geometry:{type:'LineString',coordinates:[[18.00135,58.9995],[18.00135,59.0005]]}};
+const grouped=generateBridgeTunnelFeatures({features:[inferredStructure,crossedRoad,parallelCrossing]},{includeInferred:true});
+assert.equal(grouped.length,1,'När flera parallella vägar går under samma viadukt ska en sammanhängande lång 512 skapas');
+assert(grouped[0].geometry.coordinates[1][0]-grouped[0].geometry.coordinates[0][0]>.00035);
+const atGrade={...crossedRoad,id:'at-grade',properties:{...crossedRoad.properties,sourceId:'way/5'},geometry:{type:'LineString',coordinates:[[18.001,58.9995],[18.001,59],[18.001,59.0005]]}};
+const joinedStructure={...inferredStructure,geometry:{type:'LineString',coordinates:[[18,59],[18.001,59],[18.002,59]]}};
+assert.equal(generateBridgeTunnelFeatures({features:[joinedStructure,atGrade]},{includeInferred:true}).length,0,'En vanlig OSM-korsning med gemensam nod ska inte bli broförslag');
+assert.equal(ensureBridgeTunnelMinimum([[18,59],[18.00001,59]],6).length,2);
 
 const infrastructureEvents = [];
 const infrastructureOptions = [];
@@ -534,6 +559,7 @@ assert.equal(waterMarker.options.rotateWithView, undefined);
 assert.equal(typeof scheduledPatternInstall, 'function');
 assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTION]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 10, printScale: 15000, symbolRegistryVersion: 6});
+assert.deepEqual(centralLayerParameters('roads', {workspace: {scale: 15000}, symbolRegistryVersion: 13}), {importVersion: 4, symbolRegistryVersion: 13});
 
 const apiCalls = [];
 const mapLayerApi = createMapLayerApi({
@@ -577,8 +603,10 @@ assert.equal(generation.surface.paved, false);
 assert.deepEqual(generation.sources, {buildings: 'automatic', roads: 'automatic'});
 applyGenerationProfile(generation, 'line', 'detailed');
 assert.equal(generation.line.aerialways, true);
+assert.equal(generation.line.bridges, true);
+assert.equal(generation.line.inferredBridges, true);
 assert.equal(generation.sources.buildings, 'automatic');
-assert.equal(generationSummary(generation, 'line'), 'Detaljerad · 8 kategorier');
+assert.equal(generationSummary(generation, 'line'), 'Detaljerad · 10 kategorier');
 
 const panes = new Map();
 const rotatingPane = {className: 'leaflet-rotate-pane'};
@@ -619,12 +647,12 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=15'));
+assert(fieldHtml.includes('styles.css?v=16'));
 assert(fieldHtml.includes('isom_symbols.js?v=15'));
 assert(fieldHtml.includes('isom_renderer.js?v=18'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=40"'));
-for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=41"'));
+for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
 }
@@ -655,6 +683,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=11','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=6']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['map_layer_api.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=12','bridge_tunnel.mjs?v=1','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=7']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
