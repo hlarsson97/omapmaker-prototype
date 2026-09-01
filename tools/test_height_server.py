@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import height_server as server
 import lantmateriet_height as lm_height
 import lantmateriet_vector as lm_vector
+import geotorget_download as geotorget
 import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
 from magnetic_north import calculate_magnetic_north
@@ -85,6 +86,27 @@ class LantmaterietVectorTests(unittest.TestCase):
         self.assertEqual({feature['properties']['referenceKind'] for feature in features},{'boundary','parcel-area','boundary-point'})
         self.assertTrue(all('fastighet' not in feature['properties'] for feature in features))
         self.assertTrue(all(feature['id'].startswith('lantmateriet-property/') for feature in features))
+
+
+class GeotorgetDownloadTests(unittest.TestCase):
+    def test_delivery_manifest_recurses_and_sums_files_without_changing_paths(self):
+        responses={
+            '':{'produktnamn':'Topografi 10 Nedladdning, vektor','status':'AKTIV','abonnemang':True},
+            '/leverans/latest':{'objektidentitet':'delivery-1','status':'LYCKAD','uppdaterad':'2026-09-01'},
+            '/leverans/latest/files':[{'type':'application/json','path':'/leverans/latest/files/root?q=signed'}],
+            '/leverans/latest/files/root?q=signed':[
+                {'type':'application/octet-stream','path':'/leverans/latest/files/root/kommunikation.zip?q=secret','title':'kommunikation.zip','length':120},
+                {'type':'application/octet-stream','path':'/leverans/latest/files/root/hydrografi.zip?q=secret','title':'hydrografi.zip','length':80},
+            ],
+        }
+        with patch.object(geotorget,'api_json',side_effect=lambda order,path,token:responses[path]):
+            manifest=geotorget.delivery_manifest('cc4cbb38-d8c6-4859-b271-592a7477e374','token')
+        self.assertEqual(manifest['product'],'Topografi 10 Nedladdning, vektor')
+        self.assertEqual(manifest['totalBytes'],200)
+        self.assertEqual([item['title'] for item in manifest['files']],['kommunikation.zip','hydrografi.zip'])
+
+    def test_invalid_order_id_is_rejected_before_request(self):
+        with self.assertRaisesRegex(ValueError,'UUID'):geotorget._url('not-an-order','')
 
 
 class QuietHandler(server.Handler):
