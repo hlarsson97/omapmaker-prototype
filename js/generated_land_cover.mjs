@@ -1,6 +1,11 @@
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
 
 export const LAND_COVER_ATTRIBUTION = 'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors';
+export const LANTMATERIET_LAND_COVER_ATTRIBUTION = 'Marktäcke Nedladdning, vektor © Lantmäteriet · bearbetad av OMapMaker · CC BY 4.0 · kompletterande underlag © OpenStreetMap contributors';
+
+export function landCoverAttribution(data) {
+  return String(data?.properties?.sourceType || '').startsWith('lantmateriet') ? LANTMATERIET_LAND_COVER_ATTRIBUTION : LAND_COVER_ATTRIBUTION;
+}
 
 export const WATER_SYMBOL_CLASSES = Object.freeze({'301': 'water_301', '302': 'water_302', '303': 'water_303', '304': 'watercourse_304', '305': 'watercourse_305', '306': 'watercourse_306', '307': 'marsh_307', '308': 'marsh_308', '309': 'marsh_309', '310': 'marsh_310', '311': 'water_311', '312': 'water_312', '313': 'water_313'});
 export const WATER_SYMBOL_NAMES = Object.freeze({'301': 'Ej passerbar vattenyta', '302': 'Grund vattenyta', '303': 'Vattenhål', '304': 'Passerbart vattendrag', '305': 'Mindre vattendrag', '306': 'Mindre eller periodiskt vattenflöde', '307': 'Ej passerbar sankmark', '308': 'Sankmark', '309': 'Smal sankmark', '310': 'Otydlig sankmark', '311': 'Brunn, fontän eller vattentank', '312': 'Källa', '313': 'Framträdande vattenobjekt'});
@@ -34,7 +39,7 @@ export function applyLandCoverPattern(path, patternId) {
 
 export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
   let layer = null;
-  let attributionVisible = false;
+  let visibleAttribution = '';
   let patternSerial = 0;
 
   function style(feature) {
@@ -69,9 +74,11 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     const title = properties.name || (water ? WATER_SYMBOL_NAMES[String(properties.isomSymbol)] : names[properties.mapClass]) || 'Markyta';
     const id = escapeHtml(feature.id);
     const select = water ? `<select class="land-cover-type-select" data-land-cover-id="${id}">${symbolOptions(feature).map(symbol => `<option value="${symbol}" ${String(properties.isomSymbol) === symbol ? 'selected' : ''}>${symbol} ${WATER_SYMBOL_NAMES[symbol]}</option>`).join('')}</select><button type="button" data-land-cover-review="change" data-land-cover-id="${id}">Ändra typ</button>` : '';
-    const object = generatedMapObject('land-cover', feature, {statusLabel: generatedStatusLabel(feature)});
-    const osmType = properties.boundaryEvidence || properties.building || properties.barrier || properties.natural || properties.wetland || properties.water || properties.waterway || properties.landuse || 'okänd typ';
-    return mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDetails: properties.reviewRequired ? [`säkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`] : [], secondaryDetails: [`OSM-typ: ${osmType}`], controlsHtml: select, actionsHtml: generatedActionHtml('land-cover', feature), className: 'land-cover-popup'});
+    const sourceType = properties.sourceType || 'osm';
+    const object = generatedMapObject('land-cover', feature, {statusLabel: generatedStatusLabel(feature), source: sourceType});
+    const sourceClassification = properties.objectType || properties.boundaryEvidence || properties.building || properties.barrier || properties.natural || properties.wetland || properties.water || properties.waterway || properties.landuse || 'okänd typ';
+    const sourceLabel = sourceType === 'lantmateriet' ? 'Lantmäteriet-typ' : 'OSM-typ';
+    return mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDetails: properties.reviewRequired ? [`säkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`] : [], secondaryDetails: [`${sourceLabel}: ${sourceClassification}`], controlsHtml: select, actionsHtml: generatedActionHtml('land-cover', feature), className: 'land-cover-popup'});
   }
 
   function installPatterns() {
@@ -126,9 +133,9 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
   function render() {
     if (layer) map.removeLayer(layer);
     layer = null;
-    if (attributionVisible) {
-      map.attributionControl.removeAttribution(LAND_COVER_ATTRIBUTION);
-      attributionVisible = false;
+    if (visibleAttribution) {
+      map.attributionControl.removeAttribution(visibleAttribution);
+      visibleAttribution = '';
     }
     const data = getData();
     if (!data || !isVisible()) return;
@@ -136,8 +143,8 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     const restricted = Leaflet.geoJSON(data, {pane: 'restrictedAreaPane', filter: feature => isCurrentLandCoverData(data) && String(feature.properties?.isomSymbol) === '520' && featureIsSelected(feature), style, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
     layer = Leaflet.layerGroup([base, restricted]).addTo(map);
     schedule(installPatterns);
-    map.attributionControl.addAttribution(LAND_COVER_ATTRIBUTION);
-    attributionVisible = true;
+    visibleAttribution = landCoverAttribution(data);
+    map.attributionControl.addAttribution(visibleAttribution);
   }
 
   function refreshMeta() {

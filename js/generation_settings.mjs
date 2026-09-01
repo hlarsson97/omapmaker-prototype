@@ -5,7 +5,7 @@ export const generationProfileLabels = {
   custom: 'Eget urval'
 };
 
-export const defaultGenerationSources = Object.freeze({buildings: 'automatic', roads: 'automatic'});
+export const defaultGenerationSources = Object.freeze({buildings: 'automatic', landCover: 'automatic', roads: 'automatic'});
 
 export const generationPresets = {
   surface: {

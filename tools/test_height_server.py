@@ -45,6 +45,12 @@ class LantmaterietVectorTests(unittest.TestCase):
         with patch.object(server,'lantmateriet_auth_mode',return_value='not-configured'):
             self.assertEqual(server.building_source({'source':'automatic'}),'osm')
 
+    def test_land_cover_classification_maps_relevant_types(self):
+        self.assertEqual(lm_vector.classify_land_cover('marktacke',{'objekttyp':'Sjö'}),('water_301','301','water-area'))
+        self.assertEqual(lm_vector.classify_land_cover('marktacke',{'objekttyp':'Åker'}),('cultivated_land','412','cultivated-land'))
+        self.assertEqual(lm_vector.classify_land_cover('sankmark',{'objekttyp':'Sankmark, våt'}),('marsh_307','307','wet-marsh'))
+        self.assertIsNone(lm_vector.classify_land_cover('marktacke',{'objekttyp':'Skog'}))
+
     def test_geopackage_building_is_clipped_and_reprojected(self):
         import fiona
         from pyproj import Transformer
@@ -60,6 +66,21 @@ class LantmaterietVectorTests(unittest.TestCase):
         self.assertEqual(features[0]['id'],'lantmateriet-building/lm-42')
         self.assertEqual(features[0]['properties']['name'],'Klubbhus')
         self.assertLessEqual(max(point[0] for point in features[0]['geometry']['coordinates'][0]),18.0005)
+
+    def test_geopackage_land_cover_maps_water_and_marsh_layers(self):
+        import fiona
+        from pyproj import Transformer
+        transformer=Transformer.from_crs('EPSG:4326','EPSG:3006',always_xy=True)
+        coordinates=[transformer.transform(lon,lat) for lon,lat in [(18.0,59.0),(18.001,59.0),(18.001,59.001),(18.0,59.001),(18.0,59.0)]]
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'land-cover.gpkg';schema={'geometry':'Polygon','properties':{'objektidentitet':'str','objekttyp':'str'}}
+            with fiona.open(path,'w',driver='GPKG',layer='marktacke',crs='EPSG:3006',schema=schema) as target:
+                target.write({'geometry':{'type':'Polygon','coordinates':[coordinates]},'properties':{'objektidentitet':'water-1','objekttyp':'Sjö'}})
+            with fiona.open(path,'w',driver='GPKG',layer='sankmark',crs='EPSG:3006',schema=schema) as target:
+                target.write({'geometry':{'type':'Polygon','coordinates':[coordinates]},'properties':{'objektidentitet':'marsh-1','objekttyp':'Sankmark, våt'}})
+            features=lm_vector.read_land_cover([path],[17.9995,58.9995,18.0015,59.0015])
+        self.assertEqual({feature['properties']['isomSymbol'] for feature in features},{'301','307'})
+        self.assertTrue(all(feature['properties']['sourceType']=='lantmateriet' for feature in features))
 
 
 class QuietHandler(server.Handler):

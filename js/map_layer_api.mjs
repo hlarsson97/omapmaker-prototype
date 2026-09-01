@@ -5,7 +5,7 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
     roads: () => ({importVersion: 4, symbolRegistryVersion}),
     infrastructure: () => ({importVersion: 1, symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
-    'land-cover': () => ({importVersion: 10, printScale: Number(workspace?.scale || 10000), symbolRegistryVersion})
+    'land-cover': () => ({importVersion: 11, source: sources.landCover || 'automatic', printScale: Number(workspace?.scale || 10000), symbolRegistryVersion})
   };
   return parameters[layerType]();
 }
@@ -38,7 +38,7 @@ export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = l
     if (central) return {data: central.layer, reused: true};
     const payload = {bbox};
     if (layerType === 'buildings') payload.source = sources?.buildings || 'automatic';
-    if (layerType === 'land-cover') payload.printScale = Number(workspace?.scale || 10000);
+    if (layerType === 'land-cover') { payload.source = sources?.landCover || 'automatic'; payload.printScale = Number(workspace?.scale || 10000); }
     return {data: await postJson(endpoint, payload), reused: false};
   }
 

@@ -12,7 +12,7 @@ from rasterio.merge import merge as merge_rasters
 from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polygon, box as geometry_box, mapping as geometry_mapping
 from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
-from lantmateriet_vector import lantmateriet_buildings
+from lantmateriet_vector import lantmateriet_buildings, lantmateriet_land_cover
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -71,6 +71,12 @@ def building_source(request):
 def generated_buildings(bbox,source):
     if source=='lantmateriet':return lantmateriet_buildings(bbox,lantmateriet_bearer_token())
     return osm_buildings(bbox)
+
+def generated_source(request,label):
+    requested=str(request.get('source') or 'automatic').lower()
+    if requested not in {'automatic','osm','lantmateriet'}:raise ValueError(f'Ogiltig datakälla för {label}')
+    if requested=='automatic':return 'lantmateriet' if lantmateriet_auth_mode()=='oauth2' else 'osm'
+    return requested
 
 def number_tag(value):
     if value is None:return None
@@ -877,6 +883,14 @@ node["waterway"="waterfall"]({water_south},{water_west},{water_north},{water_eas
     restricted=osm_restricted_areas(bbox,print_scale);features.extend(restricted.get('features') or [])
     result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors','bboxWgs84':bbox,'waterSearchBboxWgs84':[water_west,water_south,water_east,water_north],'objectType':'land-cover','importVersion':10,'fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint,'waterStrategy':'ISOM 301-313 candidates, including conservative sea polygons derived from directed OSM coastlines and compatible inferred island boundaries; uncertain classifications require review.','seaAreaCount':1 if sea else 0,'restrictedAreaStrategy':'ISOM 520 prefers explicit boundaries, with compact merged building estimates as fallback. Public corridors cut the geometry and apartment areas remain omitted.','restrictedAreaCount':len(restricted.get('features') or []),'printScale':int(print_scale)},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
 
+def generated_land_cover(bbox,print_scale,source):
+    if source=='osm':return osm_land_cover(bbox,print_scale)
+    result=lantmateriet_land_cover(bbox,lantmateriet_bearer_token());osm=osm_land_cover(bbox,print_scale)
+    supplemental=[feature for feature in osm.get('features',[]) if str(feature.get('properties',{}).get('isomSymbol',''))=='520' or feature.get('geometry',{}).get('type') in {'Point','MultiPoint','LineString','MultiLineString'}]
+    result['features'].extend(supplemental)
+    result['properties'].update({'source':'Lantmäteriet + OpenStreetMap','sourceType':'lantmateriet+osm','attribution':'Marktäcke Nedladdning, vektor © Lantmäteriet, bearbetad av OMapMaker, CC BY 4.0 · kompletterande vattenlinjer, vattenpunkter och ISOM 520-underlag © OpenStreetMap contributors','printScale':int(print_scale),'importVersion':11})
+    return result
+
 def projected_request_polygon(dataset,bbox,segments_per_edge=16):
     """Project a WGS84 bbox without replacing its rotated footprint by its envelope."""
     west,south,east,north=bbox
@@ -1474,7 +1488,8 @@ class Handler(SimpleHTTPRequestHandler):
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)
                 if print_scale not in {7500,10000,15000}:raise ValueError('Ogiltig utskriftsskala')
-                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':10,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
+                requested_source=str(request.get('source') or 'automatic').lower();source=generated_source(request,'mark och vatten')
+                return self.send_json(200,centralize_layer('land-cover',bbox,generated_land_cover(bbox,print_scale,source),{'importVersion':11,'source':requested_source,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})
