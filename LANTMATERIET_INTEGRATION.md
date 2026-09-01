@@ -13,6 +13,14 @@ API-applikationen har `STAC-vektor`, `STAC-hojd` och `GeodatakatalogNedladdning`
 
 Genereringsinställningarna lagrar datakälla per arbetsområde för byggnader samt vägar och stigar. Värdena är `automatic`, `osm` och `lantmateriet`. Byggnadsimporten är ansluten; `automatic` föredrar Lantmäteriet när serverns OAuth-applikation är konfigurerad och använder annars OSM. Topografi 10 är fortfarande avstängd i klienten.
 
+För privatpersonskonton använder Geotorget Nedladdning Basic-autentisering. Den
+privata appen har därför ett sessionsflöde under Kartlager → Datakällor. Det
+kräver en inloggad OMapMaker-användare och CSRF-skydd, verifierar att OrderID:t
+avser en aktiv Topografi 10-order med lyckad leverans och behåller uppgifterna
+endast i serverprocessens minne. Användarnamn, lösenord och signerade fillänkar
+skrivs aldrig till databasen, webbläsarlagring, loggar eller Git och försvinner
+vid tjänsteomstart.
+
 ## Nästa implementation
 
 Byggnader hämtas via STAC-vektor till en temporär katalog. GeoPackage-lagret klipps omedelbart till arbetsområdets bbox och råleveransen tas bort när anropet är klart. Endast geometri, tekniskt käll-ID, namn och ändamål behålls. Källan ingår i central-lagrets parametrar så OSM och Lantmäteriet inte blandas.

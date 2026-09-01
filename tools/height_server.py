@@ -13,6 +13,7 @@ from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polyg
 from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from lantmateriet_vector import lantmateriet_buildings, lantmateriet_property_boundaries
+from geotorget_download import delivery_manifest as geotorget_delivery_manifest
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -22,7 +23,7 @@ ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') i
 LEVELS={'detailed':2,'normal':5,'soft':10}
 HEIGHT_VALIDATION_VERSION=1
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
-HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':''}
+HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':'','orderId':'','manifest':None}
 OAUTH_LOCK=threading.Lock();OAUTH_STATE={'accessToken':'','expiresAt':0.0}
 JOBS_LOCK=threading.Lock();JOBS={};JOB_CANCEL_EVENTS={};JOB_EXECUTOR=ThreadPoolExecutor(max_workers=2,thread_name_prefix='omapmaker-contours')
 LOGIN_LOCK=threading.Lock();LOGIN_FAILURES={}
@@ -1045,6 +1046,29 @@ def set_lantmateriet_credentials(username,password):
     with LM_SESSION_LOCK:LM_SESSION.update({'username':username,'password':password})
     return {'ok':True,'collection':'dtm-cog','username':username}
 
+def public_geotorget_manifest(manifest):
+    if not manifest:return None
+    return {**{key:value for key,value in manifest.items() if key!='files'},'files':[{key:value for key,value in item.items() if key!='path'} for item in manifest.get('files',[])]}
+
+def geotorget_session_status():
+    with LM_SESSION_LOCK:
+        manifest=LM_SESSION.get('manifest')
+        return {'connected':bool(LM_SESSION.get('username') and LM_SESSION.get('password') and manifest),'manifest':public_geotorget_manifest(manifest)}
+
+def set_geotorget_credentials(username,password,order_id):
+    username=str(username or '').strip();password=str(password or '');order_id=str(order_id or '').strip()
+    if not username or not password or not order_id:raise ValueError('Användarnamn, lösenord och OrderID krävs')
+    manifest=geotorget_delivery_manifest(order_id,username=username,password=password)
+    if 'topografi 10' not in str(manifest.get('product') or '').lower():raise ValueError('OrderID:t avser inte Topografi 10 Nedladdning, vektor')
+    if manifest.get('orderStatus')!='AKTIV':raise ValueError('Topografi 10-ordern är inte aktiv')
+    if manifest.get('deliveryStatus')!='LYCKAD':raise ValueError('Den senaste Topografi 10-leveransen är inte klar')
+    with LM_SESSION_LOCK:LM_SESSION.update({'username':username,'password':password,'orderId':order_id,'manifest':manifest})
+    return {'connected':True,'manifest':public_geotorget_manifest(manifest)}
+
+def clear_geotorget_credentials():
+    with LM_SESSION_LOCK:LM_SESSION.update({'username':'','password':'','orderId':'','manifest':None})
+    return {'connected':False,'manifest':None}
+
 def expected_height_files(search_result):
     files=[]
     for feature in search_result.get('features',[]):
@@ -1331,6 +1355,10 @@ class Handler(SimpleHTTPRequestHandler):
             session=USER_STORE.session(self.session_token())
             if not session:return self.send_json(200,{'authenticated':False},headers={'Set-Cookie':self.session_cookie('',0)})
             return self.send_json(200,{'authenticated':True,'user':session['user'],'csrfToken':session['csrfToken'],'expiresAt':session['expiresAt']})
+        if path=='/api/lantmateriet-session':
+            session=self.require_session()
+            if not session:return
+            return self.send_json(200,geotorget_session_status())
         if path=='/api/workspaces':
             session=self.require_session()
             if not session:return
@@ -1386,6 +1414,10 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
     def do_DELETE(self):
         path=urllib.parse.urlparse(self.path).path
+        if path=='/api/lantmateriet-session':
+            session=self.require_session(csrf=True)
+            if not session:return
+            return self.send_json(200,clear_geotorget_credentials())
         if path.startswith('/api/workspaces/'):
             session=self.require_session(csrf=True)
             if not session:return
@@ -1417,6 +1449,14 @@ class Handler(SimpleHTTPRequestHandler):
             if not session:return
             USER_STORE.logout(self.session_token())
             return self.send_json(200,{'authenticated':False},headers={'Set-Cookie':self.session_cookie('',0)})
+        if path=='/api/lantmateriet-session':
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:
+                request=self.read_json(64_000)
+                return self.send_json(200,set_geotorget_credentials(request.get('username'),request.get('password'),request.get('orderId')))
+            except LantmaterietApiError as exc:return self.send_json(401,{'error':str(exc),'code':'lantmateriet_credentials_rejected'})
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/workspaces':
             session=self.require_session(csrf=True)
             if not session:return

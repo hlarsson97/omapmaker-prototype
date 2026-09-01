@@ -99,7 +99,7 @@ class GeotorgetDownloadTests(unittest.TestCase):
                 {'type':'application/octet-stream','path':'/leverans/latest/files/root/hydrografi.zip?q=secret','title':'hydrografi.zip','length':80},
             ],
         }
-        with patch.object(geotorget,'api_json',side_effect=lambda order,path,token:responses[path]):
+        with patch.object(geotorget,'api_json',side_effect=lambda order,path,*args:responses[path]):
             manifest=geotorget.delivery_manifest('cc4cbb38-d8c6-4859-b271-592a7477e374','token')
         self.assertEqual(manifest['product'],'Topografi 10 Nedladdning, vektor')
         self.assertEqual(manifest['totalBytes'],200)
@@ -107,6 +107,15 @@ class GeotorgetDownloadTests(unittest.TestCase):
 
     def test_invalid_order_id_is_rejected_before_request(self):
         with self.assertRaisesRegex(ValueError,'UUID'):geotorget._url('not-an-order','')
+
+    def test_basic_authentication_is_encoded_in_request_header(self):
+        captured={}
+        class Response:pass
+        def open_request(request,timeout):captured['request']=request;return Response()
+        with patch('urllib.request.urlopen',open_request):
+            geotorget.api_response('cc4cbb38-d8c6-4859-b271-592a7477e374','',username='herman',password='hemligt')
+        self.assertEqual(captured['request'].get_header('Authorization'),'Basic aGVybWFuOmhlbWxpZ3Q=')
+        self.assertNotIn('hemligt',captured['request'].full_url)
 
 
 class QuietHandler(server.Handler):
@@ -221,6 +230,18 @@ class UserWorkspaceApiTests(unittest.TestCase):
         status,session,_=self.request('/api/auth/session',headers={'Cookie':cookie});self.assertEqual(status,200);self.assertTrue(session['authenticated'])
         status,_,_=self.request('/api/auth/logout',{},headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf});self.assertEqual(status,200)
         _,session,_=self.request('/api/auth/session',headers={'Cookie':cookie});self.assertFalse(session['authenticated'])
+
+    def test_geotorget_credentials_require_login_and_csrf_and_stay_out_of_response(self):
+        payload={'username':'geotorget-user','password':'geotorget-secret','orderId':'cc4cbb38-d8c6-4859-b271-592a7477e374'}
+        manifest={'orderId':payload['orderId'],'product':'Topografi 10 Nedladdning, vektor','orderStatus':'AKTIV','deliveryStatus':'LYCKAD','deliveryUpdated':'2026-09-01','totalBytes':42,'files':[{'title':'ledningar.zip','length':42,'path':'/signed?q=secret'}]}
+        server.clear_geotorget_credentials()
+        status,result,_=self.request('/api/lantmateriet-session',payload);self.assertEqual(status,401);self.assertEqual(result['code'],'authentication_required')
+        cookie,csrf,_=self.login();status,result,_=self.request('/api/lantmateriet-session',payload,headers={'Cookie':cookie});self.assertEqual(status,403);self.assertEqual(result['code'],'csrf_failed')
+        with patch.object(server,'geotorget_delivery_manifest',return_value=manifest) as verify:
+            status,result,_=self.request('/api/lantmateriet-session',payload,headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf})
+        self.assertEqual(status,200);self.assertTrue(result['connected']);self.assertNotIn('password',json.dumps(result));self.assertNotIn('/signed',json.dumps(result));verify.assert_called_once_with(payload['orderId'],username=payload['username'],password=payload['password'])
+        _,current,_=self.request('/api/lantmateriet-session',headers={'Cookie':cookie});self.assertTrue(current['connected'])
+        _,cleared,_=self.request('/api/lantmateriet-session',method='DELETE',headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf});self.assertFalse(cleared['connected']);self.assertEqual(server.LM_SESSION['password'],'')
 
     def test_workspaces_require_authentication_and_are_isolated(self):
         workspace=self.workspace()

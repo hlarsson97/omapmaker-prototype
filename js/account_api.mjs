@@ -111,5 +111,17 @@ export function createAccountApi({fetchImpl = globalThis.fetch, storage = global
     return request('/api/user-data/import', {method: 'POST', body: {migrationId, objects, fieldSurveys, layerOverrides}, csrf: true});
   }
 
-  return {session, login, logout, listWorkspaces, createWorkspace, updateWorkspace, importWorkspaces, userData, syncUserData, importUserData, cachedUser, cachedWorkspaces, cacheWorkspaces};
+  async function lantmaterietSession() {
+    return request('/api/lantmateriet-session');
+  }
+
+  async function connectLantmateriet(username, password, orderId) {
+    return request('/api/lantmateriet-session', {method: 'POST', body: {username, password, orderId}, csrf: true});
+  }
+
+  async function disconnectLantmateriet() {
+    return request('/api/lantmateriet-session', {method: 'DELETE', csrf: true});
+  }
+
+  return {session, login, logout, listWorkspaces, createWorkspace, updateWorkspace, importWorkspaces, userData, syncUserData, importUserData, lantmaterietSession, connectLantmateriet, disconnectLantmateriet, cachedUser, cachedWorkspaces, cacheWorkspaces};
 }

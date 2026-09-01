@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -25,10 +26,16 @@ def _url(order_id, path=""):
     return f"{API_ROOT}/{order_id}{path}"
 
 
-def api_response(order_id, path, bearer_token):
+def api_response(order_id, path, bearer_token="", username="", password=""):
+    if bearer_token:
+        authorization = "Bearer " + bearer_token
+    elif username and password:
+        authorization = "Basic " + base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+    else:
+        raise ApiError("Autentisering saknas för Geotorget Nedladdning.")
     request = urllib.request.Request(
         _url(order_id, path),
-        headers={"Accept": "application/json", "Authorization": "Bearer " + bearer_token, "User-Agent": "OMapMaker-topografi10/0.1"},
+        headers={"Accept": "application/json", "Authorization": authorization, "User-Agent": "OMapMaker-topografi10/0.1"},
     )
     try:
         return urllib.request.urlopen(request, timeout=60)
@@ -41,12 +48,12 @@ def api_response(order_id, path, bearer_token):
         raise ApiError(f"Kunde inte nå Geotorget Nedladdning: {exc.reason}") from exc
 
 
-def api_json(order_id, path, bearer_token):
-    with api_response(order_id, path, bearer_token) as response:
+def api_json(order_id, path, bearer_token="", username="", password=""):
+    with api_response(order_id, path, bearer_token, username, password) as response:
         return json.load(response)
 
 
-def delivery_files(order_id, bearer_token):
+def delivery_files(order_id, bearer_token="", username="", password=""):
     files = []
     visited = set()
 
@@ -54,7 +61,7 @@ def delivery_files(order_id, bearer_token):
         if path in visited:
             return
         visited.add(path)
-        entries = api_json(order_id, path, bearer_token)
+        entries = api_json(order_id, path, bearer_token, username, password)
         if not isinstance(entries, list):
             raise ApiError("Geotorgets fillista hade oväntat format.")
         for entry in entries:
@@ -74,10 +81,10 @@ def delivery_files(order_id, bearer_token):
     return files
 
 
-def delivery_manifest(order_id, bearer_token):
-    order = api_json(order_id, "", bearer_token)
-    latest = api_json(order_id, "/leverans/latest", bearer_token)
-    files = delivery_files(order_id, bearer_token) if latest.get("status") == "LYCKAD" else []
+def delivery_manifest(order_id, bearer_token="", username="", password=""):
+    order = api_json(order_id, "", bearer_token, username, password)
+    latest = api_json(order_id, "/leverans/latest", bearer_token, username, password)
+    files = delivery_files(order_id, bearer_token, username, password) if latest.get("status") == "LYCKAD" else []
     return {
         "orderId": order_id,
         "product": str(order.get("produktnamn") or ""),
