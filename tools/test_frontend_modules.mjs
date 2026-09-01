@@ -219,7 +219,9 @@ assert.equal(isDecoratedLineSymbol('106'), true);
 assert.equal(isDecoratedLineSymbol('512'), true);
 assert.equal(isDecoratedLineSymbol('711'), true);
 assert.equal(courseCrossSegments([[18,59],[18.01,59]], {styleSpacingMm:5,styleWidthMm:3,styleHeightMm:3}, 15000).length >= 2, true);
-assert.equal(bridgeTunnelCurveSegments([[18,59],[18.001,59]], {tagLengthMm:.5,tagSpacingMm:.4}, 15000).length, 4);
+const bridgeWings = bridgeTunnelCurveSegments([[18,59],[18.001,59]], {tagLengthMm:.5,tagAngleDeg:60}, 15000);
+assert.equal(bridgeWings.length, 2, 'ISOM 512 ska ha en rak vinge vid vardera baslinjeänden');
+assert(bridgeWings.flat().every(point => point[1] >= 59), 'Båda ändvingarna ska ligga på samma sida om baslinjen');
 assert.match(symbolObjectControlsHtml({id:'vineyard-1',symbol:'414',orientationDegrees:30,background:'yellow50'}, escapeHtml), /data-symbol-value-property="orientationDegrees"/);
 assert.match(symbolObjectControlsHtml({id:'vineyard-1',symbol:'414',orientationDegrees:30,background:'yellow50'}, escapeHtml), /data-symbol-setting-property="background"/);
 assert.match(symbolObjectControlsHtml({id:'boundary-1',symbol:'416',variant:'black-dots'}, escapeHtml), /data-symbol-setting-property="variant"/);
@@ -648,10 +650,10 @@ assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=16'));
-assert(fieldHtml.includes('isom_symbols.js?v=15'));
-assert(fieldHtml.includes('isom_renderer.js?v=18'));
+assert(fieldHtml.includes('isom_symbols.js?v=16'));
+assert(fieldHtml.includes('isom_renderer.js?v=19'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=41"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=42"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -683,6 +685,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['map_layer_api.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=12','bridge_tunnel.mjs?v=1','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=7']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['map_layer_api.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=13','bridge_tunnel.mjs?v=1','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=8']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

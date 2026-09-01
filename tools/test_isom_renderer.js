@@ -61,6 +61,8 @@ assert.strictEqual(registry.renderers['517'].minimumLengthMm, 3.65);
 assert.strictEqual(registry.renderers['518'].groupSpacingMm, 2.5);
 assert.strictEqual(registry.renderers['519'].barSpacingMm, 0.6);
 assert.strictEqual(registry.renderers['519'].settings.breakBarrier.default, true);
+assert.strictEqual(registry.renderers['512'].tagWidthMm, 0.18);
+assert.strictEqual(registry.renderers['512'].tagAngleDeg, 60);
 assert.deepStrictEqual(registry.renderers['522'].minimumBoxMm, [0.6, 0.6]);
 assert.deepStrictEqual(registry.renderers['523'].dashMm, [0.5, 0.25]);
 assert.strictEqual(registry.renderers['524'].innerDiameterMm, 0.3);

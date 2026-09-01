@@ -6,7 +6,7 @@ import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.
 import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs';
 import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs';
 import {ROAD_TYPES, createGeneratedRoadLayer} from './js/generated_roads.mjs?v=1';
-import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/generated_infrastructure.mjs?v=12';
+import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/generated_infrastructure.mjs?v=13';
 import {bridgeTunnelGeometryFromRoads, ensureBridgeTunnelMinimum, generateBridgeTunnelFeatures, isRoadLikeFeature} from './js/bridge_tunnel.mjs?v=1';
 import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature} from './js/generated_land_cover.mjs?v=7';
 import {magneticNorthRequestUrl, magneticNorthSummary} from './js/magnetic_north.mjs';
@@ -15,7 +15,7 @@ import {createSmoothMapMarkerFactory, installMiddleButtonRotation} from './js/sm
 import {changeLocalObjectType, localObjectPopup} from './js/local_map_objects.mjs?v=3';
 import {ensureLocalOriginal, generatedMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from './js/map_objects.mjs?v=4';
 import {popupLayersFromElements, popupStackContent} from './js/popup_stack.mjs?v=1';
-import {applyDefaultSymbolSettings, bridgeTunnelCurveSegments, cliffTagSegments, closeLineCoordinates, courseCrossSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isCliffSymbol, isClosedLineCoordinates, isDecoratedLineSymbol, isPowerLineSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, wallDotCoordinates} from './js/symbol_object_settings.mjs?v=7';
+import {applyDefaultSymbolSettings, bridgeTunnelCurveSegments, cliffTagSegments, closeLineCoordinates, courseCrossSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isCliffSymbol, isClosedLineCoordinates, isDecoratedLineSymbol, isPowerLineSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, wallDotCoordinates} from './js/symbol_object_settings.mjs?v=8';
 import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyDuration, fieldSurveyFix, fixCoordinate, formatFieldSurveyDuration, headingUpBearing, movementHeading} from './js/field_survey.mjs?v=1';
 import {createAccountApi, userMapCacheKey} from './js/account_api.mjs';
 

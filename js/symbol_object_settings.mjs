@@ -352,15 +352,20 @@ export function bridgeTunnelCurveSegments(coordinates, definition, baseScale = 1
   if (!Array.isArray(coordinates) || coordinates.length < 2) return [];
   const latitude = coordinates.reduce((sum, coordinate) => sum + Number(coordinate[1]), 0) / coordinates.length;
   const project = projection(latitude), points = coordinates.map(project.toMetres), scale = Number(baseScale) / 1000;
-  const halfTag = Number(definition?.tagLengthMm || .5) * scale / 2, reach = Number(definition?.tagSpacingMm || .4) * scale;
-  return [[points[0], points[1]], [points.at(-1), points.at(-2)]].flatMap(([end, inside]) => {
-    const dx = end.x - inside.x, dy = end.y - inside.y, length = Math.hypot(dx, dy) || 1, tangent = {x: dx / length, y: dy / length}, normal = {x: -tangent.y, y: tangent.x};
-    return [-1, 1].map(side => [
-      project.toCoordinate({x: end.x + normal.x * side * halfTag, y: end.y + normal.y * side * halfTag}),
-      project.toCoordinate({x: end.x + tangent.x * reach * .55 + normal.x * side * halfTag * .75, y: end.y + tangent.y * reach * .55 + normal.y * side * halfTag * .75}),
-      project.toCoordinate({x: end.x + tangent.x * reach, y: end.y + tangent.y * reach})
-    ]);
-  });
+  const tagLength = Number(definition?.tagLengthMm || .5) * scale;
+  const angle = Number(definition?.tagAngleDeg || 60) * Math.PI / 180;
+  const along = Math.cos(angle) * tagLength, across = Math.sin(angle) * tagLength;
+  const wing = (end, inside, isStart) => {
+    const dx = isStart ? inside.x - end.x : end.x - inside.x;
+    const dy = isStart ? inside.y - end.y : end.y - inside.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const axis = {x: dx / length, y: dy / length}, normal = {x: -axis.y, y: axis.x};
+    const outward = isStart ? -1 : 1;
+    const outer = project.toCoordinate({x: end.x + axis.x * outward * along + normal.x * across, y: end.y + axis.y * outward * along + normal.y * across});
+    const endpoint = project.toCoordinate(end);
+    return isStart ? [outer, endpoint] : [endpoint, outer];
+  };
+  return [wing(points[0], points[1], true), wing(points.at(-1), points.at(-2), false)];
 }
 
 export function powerSupportFeatures(object, symbol) {

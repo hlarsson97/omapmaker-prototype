@@ -1,5 +1,5 @@
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
-import {bridgeTunnelCurveSegments, parallelLineCoordinates} from './symbol_object_settings.mjs?v=7';
+import {bridgeTunnelCurveSegments, parallelLineCoordinates} from './symbol_object_settings.mjs?v=8';
 
 export const INFRASTRUCTURE_TYPES = Object.freeze({
   '509': ['railway', 'Järnväg'],
