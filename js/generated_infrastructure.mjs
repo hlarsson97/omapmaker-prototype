@@ -1,5 +1,5 @@
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
-import {bridgeTunnelCurveSegments, parallelLineCoordinates} from './symbol_object_settings.mjs?v=8';
+import {bridgeTunnelCurveSegments, parallelLineCoordinates} from './symbol_object_settings.mjs?v=9';
 
 export const INFRASTRUCTURE_TYPES = Object.freeze({
   '509': ['railway', 'Järnväg'],
@@ -81,7 +81,7 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     })};
     const major = Leaflet.geoJSON(majorPowerLines, {pane: 'infrastructurePane', style: outerStyle, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
     const inner = Leaflet.geoJSON(data, {pane: 'infrastructurePane', interactive: false, filter: feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '509' && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: innerStyle});
-    const bridgeDecorations = data.features.filter(feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '512' && !['excluded', 'deleted'].includes(generatedStatus(feature))).flatMap(feature => bridgeTunnelCurveSegments(feature.geometry?.coordinates || [], renderer.definition('512'), 15000).map(segment => Leaflet.polyline(segment.map(coordinate => [coordinate[1], coordinate[0]]), {pane: 'infrastructurePane', interactive: false, ...renderer.lineStyles('512', feature.properties || {}, normContext()).outer, className: generatedClass(feature, 'osm-infrastructure infrastructure-512 bridge-decoration')})));
+    const bridgeDecorations = data.features.filter(feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '512' && !['excluded', 'deleted'].includes(generatedStatus(feature))).flatMap(feature => bridgeTunnelCurveSegments(feature.geometry?.coordinates || [], renderer.definition('512'), 15000).map(segment => Leaflet.polyline(segment.map(coordinate => [coordinate[1], coordinate[0]]), {pane: 'infrastructurePane', interactive: false, ...renderer.lineStyles('512', feature.properties || {}, normContext()).outer, lineJoin: 'miter', className: generatedClass(feature, 'osm-infrastructure infrastructure-512 bridge-decoration')})));
     const supports = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => feature.properties?.featureKind === 'support' && featureIsSelected(feature), pointToLayer: (feature, latlng) => mapMarker(latlng, {pane: 'infrastructureMarkerPane', icon: supportIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 300})});
     layer = Leaflet.layerGroup([outer, major, inner, ...bridgeDecorations, supports]).addTo(map);
     map.attributionControl.addAttribution(INFRASTRUCTURE_ATTRIBUTION);

@@ -355,17 +355,15 @@ export function bridgeTunnelCurveSegments(coordinates, definition, baseScale = 1
   const tagLength = Number(definition?.tagLengthMm || .5) * scale;
   const angle = Number(definition?.tagAngleDeg || 60) * Math.PI / 180;
   const along = Math.cos(angle) * tagLength, across = Math.sin(angle) * tagLength;
-  const wing = (end, inside, isStart) => {
+  const outerPoint = (end, inside, isStart) => {
     const dx = isStart ? inside.x - end.x : end.x - inside.x;
     const dy = isStart ? inside.y - end.y : end.y - inside.y;
     const length = Math.hypot(dx, dy) || 1;
     const axis = {x: dx / length, y: dy / length}, normal = {x: -axis.y, y: axis.x};
     const outward = isStart ? -1 : 1;
-    const outer = project.toCoordinate({x: end.x + axis.x * outward * along + normal.x * across, y: end.y + axis.y * outward * along + normal.y * across});
-    const endpoint = project.toCoordinate(end);
-    return isStart ? [outer, endpoint] : [endpoint, outer];
+    return project.toCoordinate({x: end.x + axis.x * outward * along + normal.x * across, y: end.y + axis.y * outward * along + normal.y * across});
   };
-  return [wing(points[0], points[1], true), wing(points.at(-1), points.at(-2), false)];
+  return [[outerPoint(points[0], points[1], true), ...coordinates.map(coordinate => coordinate.slice(0, 2)), outerPoint(points.at(-1), points.at(-2), false)]];
 }
 
 export function powerSupportFeatures(object, symbol) {
