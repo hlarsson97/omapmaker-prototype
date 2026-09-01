@@ -17,12 +17,49 @@ from rasterio.transform import from_origin
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import height_server as server
 import lantmateriet_height as lm_height
+import lantmateriet_vector as lm_vector
 import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
 from magnetic_north import calculate_magnetic_north
 from test_map_store import CentralMapStoreTests
 from map_store import MapStore
 from user_store import UserStore
+
+
+class LantmaterietVectorTests(unittest.TestCase):
+    def test_building_collection_is_selected_by_product_metadata(self):
+        collections=[{'id':'topografi-10','title':'Topografi 10'},{'id':'byggnader','title':'Byggnad Nedladdning, vektor'}]
+        self.assertEqual(lm_vector.choose_collection(collections),'byggnader')
+
+    def test_only_geopackage_or_zip_assets_are_selected(self):
+        result={'features':[{'id':'tile-1','assets':{
+            'data':{'href':'https://example.test/buildings.gpkg','type':'application/geopackage+sqlite3'},
+            'metadata':{'href':'https://example.test/metadata.json','type':'application/json'},
+            'archive':{'href':'https://example.test/buildings.zip','type':'application/zip'},
+        }}]}
+        self.assertEqual([item[1] for item in lm_vector.vector_asset_candidates(result)],['data','archive'])
+
+    def test_automatic_building_source_prefers_configured_oauth(self):
+        with patch.object(server,'lantmateriet_auth_mode',return_value='oauth2'):
+            self.assertEqual(server.building_source({'source':'automatic'}),'lantmateriet')
+        with patch.object(server,'lantmateriet_auth_mode',return_value='not-configured'):
+            self.assertEqual(server.building_source({'source':'automatic'}),'osm')
+
+    def test_geopackage_building_is_clipped_and_reprojected(self):
+        import fiona
+        from pyproj import Transformer
+        transformer=Transformer.from_crs('EPSG:4326','EPSG:3006',always_xy=True)
+        coordinates=[transformer.transform(lon,lat) for lon,lat in [(18.0,59.0),(18.001,59.0),(18.001,59.001),(18.0,59.001),(18.0,59.0)]]
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'buildings.gpkg'
+            schema={'geometry':'Polygon','properties':{'objektidentitet':'str','namn':'str','andamal':'str'}}
+            with fiona.open(path,'w',driver='GPKG',layer='byggnader',crs='EPSG:3006',schema=schema) as target:
+                target.write({'geometry':{'type':'Polygon','coordinates':[coordinates]},'properties':{'objektidentitet':'lm-42','namn':'Klubbhus','andamal':'Samhällsfunktion'}})
+            features=lm_vector.read_buildings([path],[17.9995,58.9995,18.0005,59.0005])
+        self.assertEqual(len(features),1)
+        self.assertEqual(features[0]['id'],'lantmateriet-building/lm-42')
+        self.assertEqual(features[0]['properties']['name'],'Klubbhus')
+        self.assertLessEqual(max(point[0] for point in features[0]['geometry']['coordinates'][0]),18.0005)
 
 
 class QuietHandler(server.Handler):

@@ -12,6 +12,7 @@ from rasterio.merge import merge as merge_rasters
 from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polygon, box as geometry_box, mapping as geometry_mapping
 from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
+from lantmateriet_vector import lantmateriet_buildings
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -60,6 +61,16 @@ def osm_buildings(bbox):
         if coordinates[0]!=coordinates[-1]:coordinates.append(coordinates[0])
         tags=element.get('tags',{});features.append({'type':'Feature','id':f"osm-way-{element['id']}",'properties':{'source':'OpenStreetMap','sourceId':f"way/{element['id']}",'building':tags.get('building','yes'),'name':tags.get('name'),'status':'automatic-unverified','license':'ODbL'},'geometry':{'type':'Polygon','coordinates':[coordinates]}})
     result={'type':'FeatureCollection','properties':{'source':'OpenStreetMap','license':'ODbL','attribution':'© OpenStreetMap contributors','bboxWgs84':bbox,'objectType':'buildings','fetchedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'endpoint':endpoint},'features':features};target.write_text(json.dumps(result,separators=(',',':')),encoding='utf-8');return result
+
+def building_source(request):
+    requested=str(request.get('source') or 'automatic').lower()
+    if requested not in {'automatic','osm','lantmateriet'}:raise ValueError('Ogiltig datakälla för byggnader')
+    if requested=='automatic':return 'lantmateriet' if lantmateriet_auth_mode()=='oauth2' else 'osm'
+    return requested
+
+def generated_buildings(bbox,source):
+    if source=='lantmateriet':return lantmateriet_buildings(bbox,lantmateriet_bearer_token())
+    return osm_buildings(bbox)
 
 def number_tag(value):
     if value is None:return None
@@ -1454,7 +1465,9 @@ class Handler(SimpleHTTPRequestHandler):
                 parameters=request.get('parameters') or {}
                 if not isinstance(parameters,dict):raise ValueError('Lagrets parametrar är ogiltiga')
                 return self.send_json(200,MAP_STORE.mosaic_layer(layer_type,bbox,parameters))
-            if path=='/api/buildings':return self.send_json(200,centralize_layer('buildings',bbox,osm_buildings(bbox),{'importVersion':3,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/buildings':
+                requested_source=str(request.get('source') or 'automatic').lower();source=building_source(request)
+                return self.send_json(200,centralize_layer('buildings',bbox,generated_buildings(bbox,source),{'importVersion':4,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':4,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/infrastructure':return self.send_json(200,centralize_layer('infrastructure',bbox,osm_infrastructure(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))

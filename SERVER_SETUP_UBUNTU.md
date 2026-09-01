@@ -44,7 +44,7 @@ men iPhone-GPS fungerar normalt inte över vanlig HTTP. Nästa rekommenderade st
 ## Automatisk höjddata via OAuth2
 
 Skapa först en separat applikation i Lantmäteriets API-portal, exempelvis
-`OMapMaker labserver1`. Lägg till API:t `STAC-hojd`, välj Client Credentials och
+`OMapMaker labserver1`. Lägg till API:erna `STAC-hojd` och `STAC-vektor`, välj Client Credentials och
 generera Consumer Key och Consumer Secret. Kör sedan detta som den vanliga
 serveranvändaren:
 

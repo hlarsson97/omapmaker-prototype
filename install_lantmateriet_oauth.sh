@@ -14,7 +14,7 @@ trap 'rm -rf -- "$temporary_dir"; unset client_id client_secret' EXIT
 chmod 700 "$temporary_dir"
 
 echo "Konfigurerar automatisk Lantmäteriet-anslutning för OMapMaker."
-echo "Nycklarna ska komma från en separat applikation med åtkomst till STAC-hojd."
+echo "Nycklarna ska komma från en separat applikation med åtkomst till STAC-hojd och STAC-vektor."
 read -r -p "Consumer Key: " client_id
 read -r -s -p "Consumer Secret (visas inte): " client_secret
 echo

@@ -11,16 +11,13 @@ API-applikationen har `STAC-vektor`, `STAC-hojd` och `GeodatakatalogNedladdning`
 
 ## Förberett i klienten
 
-Genereringsinställningarna lagrar datakälla per arbetsområde för byggnader samt vägar och stigar. Värdena är `automatic`, `osm` och `lantmateriet`. Lantmäteriet-valen är avstängda tills importen är verifierad. `automatic` använder tills vidare OSM.
+Genereringsinställningarna lagrar datakälla per arbetsområde för byggnader samt vägar och stigar. Värdena är `automatic`, `osm` och `lantmateriet`. Byggnadsimporten är ansluten; `automatic` föredrar Lantmäteriet när serverns OAuth-applikation är konfigurerad och använder annars OSM. Topografi 10 är fortfarande avstängd i klienten.
 
 ## Nästa implementation
 
-1. Verifiera att respektive produktfil kan hämtas med serverns OAuth-applikation.
-2. Lägg till en GeoPackage-läsare i `requirements-server.txt`.
-3. Hämta leveransen temporärt, läs endast nödvändiga skikt och klipp direkt till arbetsområdets bbox.
-4. Radera ZIP och GeoPackage efter klippning. Spara endast geometri, tekniskt käll-ID och nödvändig klassificering.
-5. Låt källan ingå i cache-nyckeln så att OSM och Lantmäteriet aldrig blandas oavsiktligt.
-6. Aktivera UI-valen och testa samma arbetsområde mot båda källorna.
+Byggnader hämtas via STAC-vektor till en temporär katalog. GeoPackage-lagret klipps omedelbart till arbetsområdets bbox och råleveransen tas bort när anropet är klart. Endast geometri, tekniskt käll-ID, namn och ändamål behålls. Källan ingår i central-lagrets parametrar så OSM och Lantmäteriet inte blandas.
+
+Nästa steg är motsvarande import för Topografi 10 samt därefter Fastighetsindelning.
 
 ## Villkor och attribution
 

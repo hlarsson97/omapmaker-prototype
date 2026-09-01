@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from '../js/generation_settings.mjs';
 import {createIndexedDbStore} from '../js/indexeddb_store.mjs';
 import {createFieldMap} from '../js/map_setup.mjs';
-import {BUILDING_ATTRIBUTION, buildingMetaText, createGeneratedBuildingLayer} from '../js/generated_buildings.mjs';
+import {BUILDING_ATTRIBUTION, LANTMATERIET_BUILDING_ATTRIBUTION, buildingAttribution, buildingMetaText, createGeneratedBuildingLayer} from '../js/generated_buildings.mjs';
 import {PAVED_AREA_ATTRIBUTION, createGeneratedPavedAreaLayer, pavedAreaMetaText} from '../js/generated_paved_areas.mjs';
 import {ROAD_ATTRIBUTION, ROAD_TYPES, createGeneratedRoadLayer, roadMetaText} from '../js/generated_roads.mjs';
 import {INFRASTRUCTURE_ATTRIBUTION, INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer, infrastructureMetaText} from '../js/generated_infrastructure.mjs';
@@ -337,6 +337,7 @@ const buildingView = createGeneratedBuildingLayer({
 buildingView.render();
 assert.equal(buildingOptions.pane, 'buildingPane');
 assert.deepEqual(buildingEvents.at(-1), ['addAttribution', BUILDING_ATTRIBUTION]);
+assert.equal(buildingAttribution({properties: {sourceType: 'lantmateriet'}}), LANTMATERIET_BUILDING_ATTRIBUTION);
 buildingsVisible = false;
 buildingView.render();
 assert.deepEqual(buildingEvents.slice(-2), [['remove', 'building-layer'], ['removeAttribution', BUILDING_ATTRIBUTION]]);
@@ -578,6 +579,7 @@ assert.equal(typeof scheduledPatternInstall, 'function');
 assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTION]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6}), {importVersion: 10, printScale: 15000, symbolRegistryVersion: 6});
 assert.deepEqual(centralLayerParameters('roads', {workspace: {scale: 15000}, symbolRegistryVersion: 13}), {importVersion: 4, symbolRegistryVersion: 13});
+assert.deepEqual(centralLayerParameters('buildings', {symbolRegistryVersion: 13, sources: {buildings: 'lantmateriet'}}), {importVersion: 4, source: 'lantmateriet', symbolRegistryVersion: 13});
 
 const apiCalls = [];
 const mapLayerApi = createMapLayerApi({
@@ -593,6 +595,10 @@ assert.equal(sourceLayer.reused, false);
 assert.equal(apiCalls[0].endpoint, '/api/map-layers/resolve');
 assert.equal(JSON.parse(apiCalls[0].options.body).maxAgeSeconds, 86400);
 assert.deepEqual(JSON.parse(apiCalls[1].options.body), {bbox: [18, 59, 19, 60], printScale: 15000});
+apiCalls.length = 0;
+await mapLayerApi.centralOrSource('buildings', '/api/buildings', {bbox: [18, 59, 19, 60], symbolRegistryVersion: 6, sources: {buildings: 'lantmateriet'}});
+assert.equal(JSON.parse(apiCalls[0].options.body).parameters.source, 'lantmateriet');
+assert.deepEqual(JSON.parse(apiCalls[1].options.body), {bbox: [18, 59, 19, 60], source: 'lantmateriet'});
 const staticApi = createMapLayerApi({hostname: 'hlarsson97.github.io', fetchImpl: () => { throw new Error('fetch ska inte anropas'); }, jsonResponse: async response => response.json()});
 assert.equal(await staticApi.resolveCentralLayer('roads', {bbox: [18, 59, 19, 60], symbolRegistryVersion: 6}), null);
 
@@ -669,7 +675,7 @@ assert(fieldHtml.includes('styles.css?v=16'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=20'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=43"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=44"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -701,6 +707,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['map_layer_api.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=14','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['map_layer_api.mjs?v=2','generated_buildings.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=14','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

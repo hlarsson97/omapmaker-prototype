@@ -2,8 +2,8 @@ import {$, cloneJson, escapeHtml, formatBytes, jsonResponse, uuidPattern, wait} 
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from './js/generation_settings.mjs';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 import {createFieldMap} from './js/map_setup.mjs?v=4';
-import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs?v=1';
-import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs';
+import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs?v=2';
+import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs?v=1';
 import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs';
 import {ROAD_TYPES, createGeneratedRoadLayer} from './js/generated_roads.mjs?v=1';
 import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/generated_infrastructure.mjs?v=14';
@@ -145,9 +145,9 @@ async function storeGlobalObjectOverrides(data){for(const feature of data?.featu
 async function storeContourData(data){await mapDataStore.put(contourStorageKey,data);localStorage.removeItem(contourStorageKey)}
 async function loadStoredContours(){return await mapDataStore.get(contourStorageKey)}
 async function deleteStoredContours(){await mapDataStore.delete(contourStorageKey);localStorage.removeItem(contourStorageKey)}
-const buildingStorageKey=privateLayerCacheKey('omapmaker.buildings');let osmBuildingData=null;
-async function storeBuildings(data){await mapDataStore.put(buildingStorageKey,data)}
-async function loadBuildings(){await layerOverrideStateReady;return applyAccountLayerOverrides('buildings',await mapDataStore.get(buildingStorageKey))}
+const buildingStorageKey=source=>privateLayerCacheKey(`omapmaker.buildings.${source||generationSettings.sources.buildings||'automatic'}`);let osmBuildingData=null;
+async function storeBuildings(data,source){await mapDataStore.put(buildingStorageKey(source),data)}
+async function loadBuildings(source){await layerOverrideStateReady;return applyAccountLayerOverrides('buildings',await mapDataStore.get(buildingStorageKey(source)))}
 function symbolDisplayMode(){return workspace?.symbolDisplayMode||'print'}
 function normContext(){return{map,scale:Number(workspace?.scale)||10000,mode:symbolDisplayMode()}}
 function pointNormContext(){return{...normContext(),mode:'print'}}
@@ -163,7 +163,7 @@ function excludedStyle(scale=1){return{color:'#a13d38',weight:1.5*scale,fillColo
 function isomAreaStyle(symbol,properties={}){return normRenderer.areaStyle(String(symbol||''),properties,normContext())}
 function centralLayerLabel(data){const revision=data?.properties?.centralLayerRevision;return data?.properties?.centralStorage?` · server${revision?` v${revision}`:''}`:''}
 const buildingLayer=createGeneratedBuildingLayer({Leaflet:L,map,getData:()=>osmBuildingData,isVisible:()=>layerPrefs.generatedSurfaces&&layerPrefs.buildings&&generationSettings.surface.buildings,generatedStatus,generatedStatusLabel,generatedClass,generatedActionHtml,excludedStyle,symbolScale,isomAreaStyle,isomClaim,escapeHtml,centralLayerLabel,metaElement:()=>$('#osmBuildingsMeta')});
-function renderBuildings(){buildingLayer.render()}
+function renderBuildings(){buildingLayer.render();const source=osmBuildingData?.properties?.sourceType;$('#printAttribution').textContent=source==='lantmateriet'?'Höjddata © Lantmäteriet · Byggnad Nedladdning, vektor © Lantmäteriet, bearbetad av OMapMaker · övrigt underlag © OpenStreetMap contributors · egen fältdata':'Höjddata © Lantmäteriet · övrigt underlag © OpenStreetMap contributors · egen fältdata'}
 function refreshBuildingMeta(){buildingLayer.refreshMeta()}
 function mergeBuildingReviews(next,previous){return applyAccountLayerOverrides('buildings',applyGeneratedOverrides(next,previous))}
 const landCoverStorageKey=privateLayerCacheKey('omapmaker.land-cover.v2');let osmLandCoverData=null;
@@ -207,9 +207,9 @@ async function syncBridgeTunnelCandidates(){if(!osmRoadData)return;const previou
 function renderProjectContours(){if(projectContourLayer)map.removeLayer(projectContourLayer);projectContourLayer=null;if(!projectContourData||!layerPrefs.projectContours)return;projectContourLayer=L.geoJSON(projectContourData,{pane:'contourPane',style:f=>({...normRenderer.lineStyles(f.properties?.indexContour?'102':'101',f.properties||{},normContext()).outer,className:`project-contour map-line-object ${f.properties?.indexContour?'index':'normal'}`}),onEachFeature:(f,l)=>l.bindTooltip(`${f.properties?.elevation} m`,{sticky:true})}).addTo(map)}
 function refreshContourMeta(){const n=projectContourData?.features?.length||0;const interval=n?(projectContourData?.properties?.interval||projectContourData?.features?.[0]?.properties?.interval||workspace?.contourInterval||5):(workspace?.contourInterval||5);$('#projectContoursMeta').textContent=n?`${n} linjer · ${interval} m${centralLayerLabel(projectContourData)}`:'Inte genererade'}
 const mapLayerApi=createMapLayerApi({jsonResponse});
-async function resolveCentralLayer(layerType,options={}){return mapLayerApi.resolveCentralLayer(layerType,{bbox:workspaceBbox(),workspace,symbolRegistryVersion,...options})}
+async function resolveCentralLayer(layerType,options={}){return mapLayerApi.resolveCentralLayer(layerType,{bbox:workspaceBbox(),workspace,symbolRegistryVersion,sources:generationSettings.sources,...options})}
 async function applyCentralLayer(layerType,data){if(!data?.layer)return false;const layer=data.layer;if(layerType==='contours'){projectContourData=layer;await storeContourData(layer);renderProjectContours();refreshContourMeta()}else if(layerType==='buildings'){osmBuildingData=mergeBuildingReviews(layer,osmBuildingData);await storeBuildings(osmBuildingData);renderBuildings();refreshBuildingMeta()}else if(layerType==='land-cover'){osmLandCoverData=mergeLandCoverReviews(layer,osmLandCoverData);await storeLandCover(osmLandCoverData);renderLandCover();refreshLandCoverMeta()}else if(layerType==='paved-areas'){osmPavedAreaData=mergePavedAreaReviews(layer,osmPavedAreaData);await storePavedAreas(osmPavedAreaData);renderPavedAreas();refreshPavedAreaMeta()}else if(layerType==='roads'){osmRoadData=mergeRoadReviews(layer,osmRoadData);await storeRoads(osmRoadData);renderRoads();refreshRoadMeta()}else if(layerType==='infrastructure'){osmInfrastructureData=mergeInfrastructureReviews(layer,osmInfrastructureData);await storeInfrastructure(osmInfrastructureData);renderInfrastructure();refreshInfrastructureMeta()}return true}
-async function centralOrSource(layerType,endpoint,bbox){return mapLayerApi.centralOrSource(layerType,endpoint,{bbox,workspace,symbolRegistryVersion})}
+async function centralOrSource(layerType,endpoint,bbox){return mapLayerApi.centralOrSource(layerType,endpoint,{bbox,workspace,symbolRegistryVersion,sources:generationSettings.sources})}
 renderProjectContours();
 const localMapDataReady=Promise.all([
   layerOverrideStateReady,
@@ -563,7 +563,7 @@ $('#osmPavedAreasVisible').checked=layerPrefs.pavedAreas;$('#osmPavedAreasVisibl
 $('#osmRoadsVisible').checked=layerPrefs.roads;$('#osmRoadsVisible').onchange=e=>{layerPrefs.roads=e.target.checked;saveLayerPrefs();renderRoads()};
 $('#osmInfrastructureVisible').checked=layerPrefs.infrastructure;$('#osmInfrastructureVisible').onchange=e=>{layerPrefs.infrastructure=e.target.checked;saveLayerPrefs();renderInfrastructure()};
 async function fetchGeneratedLandCover(){const bbox=workspaceBbox(),result=await centralOrSource('land-cover','/api/land-cover',bbox),data=result.data;osmLandCoverData=mergeLandCoverReviews(data,osmLandCoverData);await storeLandCover(osmLandCoverData);layerPrefs.landCover=true;$('#osmLandCoverVisible').checked=true;saveLayerPrefs();renderLandCover();refreshLandCoverMeta();return`${data.features.length} mark- och vattenobjekt${result.reused?' återanvända':' hämtade'}`}
-async function fetchGeneratedBuildings(){const bbox=workspaceBbox(),result=await centralOrSource('buildings','/api/buildings',bbox),data=result.data;osmBuildingData=mergeBuildingReviews(data,osmBuildingData);await storeBuildings(osmBuildingData);layerPrefs.buildings=true;$('#osmBuildingsVisible').checked=true;saveLayerPrefs();renderBuildings();refreshBuildingMeta();return`${data.features.length} byggnader${result.reused?' återanvända':' hämtade'}`}
+async function fetchGeneratedBuildings(){const source=generationSettings.sources.buildings||'automatic',previous=await loadBuildings(source),bbox=workspaceBbox(),result=await centralOrSource('buildings','/api/buildings',bbox),data=result.data;osmBuildingData=mergeBuildingReviews(data,previous);await storeBuildings(osmBuildingData,source);layerPrefs.buildings=true;$('#osmBuildingsVisible').checked=true;saveLayerPrefs();renderBuildings();refreshBuildingMeta();return`${data.features.length} byggnader från ${data.properties?.source||'vald källa'}${result.reused?' återanvända':' hämtade'}`}
 async function fetchGeneratedPavedAreas(){const bbox=workspaceBbox(),result=await centralOrSource('paved-areas','/api/paved-areas',bbox),data=result.data;osmPavedAreaData=mergePavedAreaReviews(data,osmPavedAreaData);await storePavedAreas(osmPavedAreaData);layerPrefs.pavedAreas=true;$('#osmPavedAreasVisible').checked=true;saveLayerPrefs();renderPavedAreas();refreshPavedAreaMeta();return`${data.features.length} hårdgjorda ytor${result.reused?' återanvända':' hämtade'}`}
 async function fetchGeneratedRoads(){const bbox=workspaceBbox(),result=await centralOrSource('roads','/api/roads',bbox),data=result.data;osmRoadData=mergeRoadReviews(data,osmRoadData);await storeRoads(osmRoadData);layerPrefs.roads=true;$('#osmRoadsVisible').checked=true;saveLayerPrefs();renderRoads();refreshRoadMeta();if(generationSettings.line.bridges||generationSettings.line.inferredBridges){layerPrefs.infrastructure=true;$('#osmInfrastructureVisible').checked=true;await syncBridgeTunnelCandidates();saveLayerPrefs()}return`${data.features.length} vägar och stigar${result.reused?' återanvända':' hämtade'}`}
 async function fetchGeneratedInfrastructure(){const bbox=workspaceBbox(),result=await centralOrSource('infrastructure','/api/infrastructure',bbox),data=result.data;osmInfrastructureData=mergeInfrastructureReviews(data,osmInfrastructureData);await storeInfrastructure(osmInfrastructureData);if(osmRoadData&&(generationSettings.line.bridges||generationSettings.line.inferredBridges))await syncBridgeTunnelCandidates();layerPrefs.infrastructure=true;$('#osmInfrastructureVisible').checked=true;saveLayerPrefs();renderInfrastructure();refreshInfrastructureMeta();return`${data.features.length} järnvägs-, lednings- och bro/tunnelobjekt${result.reused?' återanvända':' hämtade'}`}
