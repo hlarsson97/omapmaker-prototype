@@ -21,12 +21,12 @@ OMapMaker har en stark teknisk grund: georefererade arbetsområden, generering a
 De största hindren är:
 
 1. flera manuella objekt är kopplade till fel symbolnummer;
-2. merparten av symbolbiblioteket i kapitel 3 saknas;
+2. hela symbolbiblioteket i kapitel 3 är registrerat och renderas, men flera symboler behöver fortfarande kartografisk fältverifiering och produktionsprovtryck;
 3. exakta mått, raster, streckmönster, minsta avstånd och ritningsordning kontrolleras inte helt i tryckt skala;
 4. automatisk deklination, textplacering och avbrott i nordlinjer återstår;
 5. automatisk generalisering, kollisionshantering och kartografiskt urval är begränsade;
 6. färghanterad PDF, övertryck och verifierad tryckfärgsordning saknas;
-7. banläggningssymbolerna i avsnitt 3.7 saknas.
+7. banpåtryckssymbolerna i avsnitt 3.7 finns, men en sammanhållen banläggningsmodell och automatisk avbrottshantering återstår.
 
 ## Kritiska symbolfel i nuvarande manuella katalog
 
@@ -59,7 +59,7 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 |---|---|---|---|
 | 2.1 Orientering och kartan | Kartan ska vara läsbar, korrekt, aktuell och rättvis. | Källor, tidsstämplar, observationer och kvalitetsstatus finns. Automatgenererade objekt är normalt synliga men inte kartkontrollerade. | **Delvis.** Kartversion, karteringsdatum, historik och aktualitetsvarningar per objekt/område. |
 | 2.2 Innehåll | Relevant terräng, framkomlighet och navigationsobjekt ska väljas. Normens färgspråk ska användas. Nordlinjer ska vara magnetiska; text normalt norriktad. | Kanoniskt symbolregister, normfärger och registerstyrda magnetiska nordlinjer finns. Fullt symbolurval och en komplett textmotor saknas. | **Delvis.** Automatisk deklination, textplacering och kartografiskt urval återstår. |
-| 2.3 Framkomlighet | Löpbarhet ska beskrivas i fem klasser och väga samman vegetation, underlag och lutning. | 401, 403, 408 och 410 kan förekomma, men ingen sammanhängande femklassmodell finns. | **Saknas som modell.** Implementera vit skog och alla gröna löpbarhetsklasser med konsekvent raster. |
+| 2.3 Framkomlighet | Löpbarhet ska beskrivas i fem klasser och väga samman vegetation, underlag och lutning. | Vit skog och samtliga gröna löpbarhetsklasser finns med normerade färger/raster; automatisk klassning väger ännu inte samman vegetation, underlag och lutning. | **Delvis.** Symbolmodellen är komplett men automatisk terrängklassning och fältkalibrering återstår. |
 | 2.4 Barriärer | Barriärer/faror ska vara tydliga. Ej passerbar betyder inte i sig förbjuden; förbud anges särskilt. | 201, 301, 509, 515, 518 och 520 hanteras delvis. | **Delvis.** Egenskaper för `crossability`, `danger` och `access` samt banöverlägg 708–711. |
 | 2.5 Kartläsning | Läsbarhet och grafiska minimimått går före verklighetstrogen detalj. | Kartan kan bli mycket detaljrik. Heltäckande läsbarhetskontroll saknas. | **Saknas som kontroll.** Preflight för täthet, kollisioner och minimimått. |
 | 2.6 Generalisering | Urval, förenkling, förstoring och förskjutning ska vara konsekventa. | Kurvutjämning, viss linjeförenkling och OSM-heuristik finns. | **Delvis.** Regelbaserad generalisering per symbol/skala och kontrollerad förskjutning. |
@@ -82,41 +82,41 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 |---:|---|---|---|
 | 101 Kontur | Brun höjdkurva, normalt 5/2,5 m; korrekt form, mjuka kurvor och föreskrivna minsta radier. | Genereras från DTM, utjämnas och fogas med överlapp mellan datarutor. | **Delvis.** Minimiradier, generalisering, negativa former och kollisioner verifieras inte. |
 | 102 Indexkurva | Var femte kurva ska vara tjockare; höjdsiffra får placeras norrätt med höga sidan upp. | Var femte kurva markeras tjockare. Höjd visas bara interaktivt. | **Delvis.** Tryckta höjdsiffror och placering saknas. |
-| 103 Hjälpkurva | Bara där formen inte kan visas med ordinarie kurvor; inte en godtycklig mellankurva. | Saknas. | **Saknas.** |
-| 104 Jordbank | Distinkt jordbank enligt minsta höjd/längd och riktade taggar. | Saknas. | **Saknas.** |
-| 105.1 Jordvall | Distinkt jordvall, minst 1 m hög och med minsta trycklängd. | Saknas. | **Saknas.** |
-| 105.2 Stödkant av jord | Brant nivåskillnad som tydligt är en jordstödkant. | Saknas. | **Saknas.** |
-| 106 Raserad jordvall | Raserad men tydlig jordvall med normerat streckmönster. | Saknas. | **Saknas.** |
-| 107 Erosionsravin | Ravin för bred för 108, med riktade sidstreck. | Saknas. | **Saknas.** |
-| 108 Litet erosionsdike | Smalt torrt dike/ravin; minsta djup och längd ska följas. | Manuellt ”Dike” finns men är kopplat till 307. | **Felkopplad.** Skapa 108 och skilj från vattenförande 306. |
+| 103 Hjälpkurva | Bara där formen inte kan visas med ordinarie kurvor; inte en godtycklig mellankurva. | Streckad brun linje, minsta två streck och svensk symbolpost finns. | **Implementerad som manuell symbol; kartografiskt urval krävs.** |
+| 104 Skärning | Distinkt skärning enligt minsta höjd/längd och riktade taggar. | Brun 0,25 mm baslinje, riktade 0,14 × 0,4 mm taggar och minimilängd finns. | **Implementerad.** |
+| 105.1 Jordvall | Distinkt jordvall, minst 1 m hög och med minsta trycklängd. | Brun linje med 0,45 mm punkter och 1,4 mm minimilängd finns. | **Implementerad.** |
+| 105.2 Stödmur av jord | Brant nivåskillnad som tydligt är en jordstödkant. | Ensidiga halvpunkter, valbar lägre sida och 1,4 mm minimilängd finns. | **Implementerad.** |
+| 106 Otydlig jordvall | Raserad men tydlig jordvall med normerat streckmönster. | Brun streckad linje med punktdekoration och 3,65 mm minimilängd finns. | **Implementerad.** |
+| 107 Erosionsfåra | Fåra för bred för 108. | Brun 0,25 mm linje och 1,15 mm minimilängd finns. | **Implementerad.** |
+| 108 Liten fåra eller torrt dike | Smalt torrt dike/ravin; minsta djup och längd ska följas. | Egen brun streckad linje, 1,25 mm minimilängd och separat manuell symbol finns. | **Implementerad.** |
 | 109 Liten kulle | Distinkt liten kulle som inte kan visas skalenligt. | Manuellt ”Punkthöjd” använder 109. | **Delvis.** Byt namn och verifiera storlek. |
-| 110 Avlång liten kulle | Distinkt avlång kulle, orienterad efter formen. | Saknas. | **Saknas.** |
-| 111 Liten sänka | Liten sänka med symbolen orienterad mot magnetisk nord. | Saknas. | **Saknas.** |
-| 112 Grop | Distinkt grop som inte kan visas skalenligt. | ”Grop” finns men använder 202. | **Felkopplad.** |
-| 113 Ojämn mark | Område med hålig/ojämn mark och begränsad löpbarhet. | Saknas. | **Saknas.** |
-| 114 Mycket ojämn mark | Kraftigare raster för mycket ojämn mark. | Saknas. | **Saknas.** |
-| 115 Särskilt terrängobjekt | Särskilt objekt vars betydelse måste förklaras på kartan. | Används som generell ”Rotvälta”. | **Felkopplad.** |
+| 110 Avlång liten kulle | Distinkt avlång kulle, orienterad efter formen. | Normerad brun 0,8 × 0,4 mm punktsymbol finns. | **Implementerad.** |
+| 111 Liten sänka | Liten sänka med symbolen orienterad mot magnetisk nord. | Normerad brun bågsymbol finns och hålls norriktad. | **Implementerad.** |
+| 112 Liten grop | Distinkt grop som inte kan visas skalenligt. | Egen brun v-formad punktsymbol med korrekt symbolnummer finns. | **Implementerad.** |
+| 113 Småkuperad terräng | Område med små gropar/höjder och liten påverkan på löpbarheten. | Oregelbundet brunt punktraster med 0,2 mm punkter och minsta tre punkter finns. | **Implementerad.** |
+| 114 Mycket småkuperad terräng | Tätare raster där småkuperingen påverkar löpbarheten. | Tätare oregelbundet brunt punktraster och minsta tre punkter finns. | **Implementerad.** |
+| 115 Tydligt terrängföremål | Särskilt objekt vars betydelse måste förklaras på kartan. | Brun stjärnsymbol och obligatorisk text för teckenförklaringen finns; preflight blockerar odefinierade objekt. | **Implementerad.** |
 
 ## Kapitel 3.2 – berg och sten
 
 | Symbol | Krav i korthet | OMapMaker | Status |
 |---:|---|---|---|
 | 201 Ej passerbar brant | Farlig/omöjlig brant; heldragen svart linje och fallstreck vid behov. | Manuellt ”Brant” och linjerendering finns. | **Delvis.** Separera från 202 och verifiera mått/fallstreck. |
-| 202 Brant | Passerbar brant med normerat streckmönster och minsta längd. | Numret används för grop. | **Felkopplad/saknas som brant.** |
-| 203.1 Berggrop eller grotta | Berggrop/grotta med orienterad symbol; öppning ska visas. | Saknas. | **Saknas.** |
-| 203.2 Farlig grop | Farlig grop, tydligt skild från vanlig grop. | Saknas. | **Saknas.** |
-| 204 Sten | Distinkt sten, normalt över 1 m; punkt 0,4 mm. | ”Stor sten” använder 204 och ”Sten” använder 206. | **Felkopplad.** |
-| 205 Stor sten | Särskilt stor/prominent sten, normalt över 2 m; punkt 0,6 mm. | Ingen korrekt koppling. | **Felkopplad/saknas.** |
-| 206 Gigantisk sten/bergpelare | Ska ritas skalenligt som svart yta, inte punkt. | Används som punkt för vanlig sten. | **Felkopplad.** |
-| 207 Stenkluster | Liten grupp stenar som inte kan ritas individuellt. | Saknas. | **Saknas.** |
-| 208 Stenfält | Område av stenar; löpbarhet anges av täthet. | Saknas. | **Saknas.** |
-| 209 Tätt stenfält | Tätare/svårframkomligt stenfält. | Saknas. | **Saknas.** |
-| 210 Stenig mark, långsam löpning | Stenig mark som sänker löphastigheten. | Saknas. | **Saknas.** |
-| 211 Stenig mark, gång | Tätare stenig mark som normalt bara kan passeras gående. | Saknas. | **Saknas.** |
-| 212 Stenig mark, mycket svår | Mycket tät stenig mark med kraftigt begränsad framkomlighet. | Saknas. | **Saknas.** |
-| 213 Sandmark | Sandigt underlag, kombinerbart med öppenhet/löpbarhet. | Saknas. | **Saknas.** |
-| 214 Berghäll | Bar bergyta, kombinerbar med vegetation. | Saknas. | **Saknas.** |
-| 215 Skyttegrav | Tydlig sten-/jordskyttegrav med normerad linje. | Saknas. | **Saknas.** |
+| 202 Passerbar brant | Passerbar brant med normerat streckmönster och minsta längd. | Egen svart streckad brantlinje och korrekt manuell symbolpost finns. | **Implementerad.** |
+| 203.1 Stenig grop eller grotta | Stenig grop/grotta med orienterad symbol; öppning ska visas. | Riktad 0,7 × 0,8 mm symbol och riktningsinställning finns. | **Implementerad.** |
+| 203.2 Farlig grop | Farlig grop, tydligt skild från vanlig grop. | Svart 0,9 mm cirkel med vitt 0,35 mm centrum finns. | **Implementerad.** |
+| 204 Sten | Distinkt sten, normalt över 1 m; punkt 0,4 mm. | Svart 0,4 mm punkt och korrekt manuell symbolpost finns. | **Implementerad.** |
+| 205 Stor sten | Särskilt stor/prominent sten, normalt över 2 m; punkt 0,6 mm. | Svart 0,6 mm punkt och korrekt manuell symbolpost finns. | **Implementerad.** |
+| 206 Gigantisk sten eller stenpelare | Ska ritas skalenligt som svart yta, inte punkt. | Egen skalenlig svart ytsymbol och korrekt manuell symbolpost finns. | **Implementerad.** |
+| 207 Grupp av stenar | Liten grupp stenar som inte kan ritas individuellt. | Svart triangelsymbol 0,8 mm, norriktning och tillåten 120 % förstoring finns. | **Implementerad.** |
+| 208 Blockterräng | Område av block; löpbarhet anges av täthet. | Oregelbundna trianglar med 8:6:5-proportion och minsta två symboler finns. | **Implementerad.** |
+| 209 Tät blockterräng | Tätare blockterräng med nedsatt löpbarhet. | Tätare triangelmönster och minsta två symboler finns. | **Implementerad.** |
+| 210 Stenig mark, löphindrande | Stenig mark som sänker löphastigheten till 60–80 %. | 0,2 mm svart punktraster i normerad täthetsklass finns. | **Implementerad.** |
+| 211 Stenig mark, svårlöpt | Tätare stenig mark med 20–60 % löphastighet. | Tätare 0,2 mm svart punktraster finns. | **Implementerad.** |
+| 212 Stenig mark, svårframkomlig | Mycket tät stenig mark under 20 % löphastighet. | Mycket tätt 0,2 mm svart punktraster finns. | **Implementerad.** |
+| 213 Sandområde | Mjukt sandigt underlag med nedsatt löpbarhet. | Gul 50 % med norriktade 0,16 mm svarta punkter och minsta 1 × 1 mm finns. | **Implementerad.** |
+| 214 Berg i dagen | Bar löpbar bergyta. | Svart 35 % fyllning och minsta 1 × 1 mm finns. | **Implementerad.** |
+| 215 Värn | Bergsskreva eller konstgjort värn. | Dubbel 0,10 mm svart linje med 0,10 mm mellanrum och 1 mm minimilängd finns. | **Implementerad.** |
 
 ## Kapitel 3.3 – vatten och sankmark
 
@@ -144,20 +144,20 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 | 402 Öppen mark med spridda träd | 401 kombinerad med normerat mönster. | Manuellt val finns. | **Delvis.** Raster och trädtäthet ej verifierade. |
 | 403 Ojämn öppen mark | Öppen mark med sämre löpbarhet. | OSM grassland kan genereras som 403. | **Delvis.** Grov kandidatklassning. |
 | 404 Ojämn öppen mark med spridda träd | 403 med spridda träd/rätt raster. | Manuellt ”Hygge” använder 404. | **Delvis/fel generalisering.** |
-| 405 Skog | Normalt löpbar skog, vit färg. | Blank orienteringsbakgrund är vit men explicit 405-geometri saknas. | **Saknas som kartobjekt.** |
-| 406 Vegetation, långsam löpning | Grönt raster för reducerad löphastighet. | Saknas. | **Saknas.** |
-| 407 Vegetation, långsam med god sikt | Reducerad löphastighet men god sikt, med eget normerat raster. | Saknas. | **Saknas.** |
+| 405 Skog | Normalt löpbar skog, vit färg. | Explicit vit 405-geometri och minsta yta finns. | **Implementerad.** |
+| 406 Skog, löphindrande | Grönt 30 % för 60–80 % löphastighet. | Grön 30 %, 0,4 mm minimibredd och 1 × 1 mm minsta yta finns. | **Implementerad.** |
+| 407 Undervegetation, löphindrande, god sikt | Reducerad löphastighet men god sikt, med eget normerat raster. | Norriktade 0,12 mm gröna linjer med 0,84 mm avstånd finns. | **Implementerad.** |
 | 408 Vegetation, gång | Vegetation som normalt bara kan passeras gående. | Manuellt ”Tät skog” finns. | **Delvis.** Raster, gräns och fältkalibrering behöver verifieras. |
-| 409 Vegetation, gång med god sikt | Gånghastighet men god sikt, med eget normerat raster. | Saknas. | **Saknas.** |
+| 409 Undervegetation, svårlöpt, god sikt | Gånghastighet men god sikt, med eget normerat raster. | Norriktade 0,14 mm gröna linjer med 0,42 mm avstånd finns. | **Implementerad.** |
 | 410 Vegetation, mycket svår | Mycket tät vegetation med 0–20 % av normal löphastighet. | Manuellt ”Mycket tät skog” finns. | **Delvis.** Exakt fyllning och fältkalibrering behöver verifieras. |
 | 412 Odlad mark | Odlad mark med normens gula/rasterbehandling. Tillträde hanteras separat. | OSM farmland genereras som 412. | **Delvis.** Tillträde och grödtyp kan inte antas. |
-| 413 Fruktodling | Regelbundet planterade träd med orienterat mönster. | Saknas. | **Saknas.** |
-| 414 Vingård eller liknande | Regelbundna rader med orienterat mönster. | Saknas. | **Saknas.** |
-| 415 Tydlig odlingsgräns | Distinkt gräns som inte visas med annan linje. | Saknas. | **Saknas.** |
-| 416 Tydlig vegetationsgräns | Tydlig gräns mellan vegetationstyper. | Saknas. | **Saknas.** |
-| 417 Särskilt stort träd | Prominent stort träd. | Saknas. | **Saknas.** |
-| 418 Särskild buske/träd | Distinkt buske eller mindre träd. | Saknas. | **Saknas.** |
-| 419 Särskilt vegetationsobjekt | Lokalt särskilt objekt vars betydelse ska beskrivas. | Saknas. | **Saknas.** |
+| 413 Fruktodling | Regelbundet planterade träd med orienterat mönster. | Grönt 0,45 mm punktmönster med 0,8 mm avstånd, valbar gul bakgrund och minsta 2 × 2 mm finns. | **Implementerad.** |
+| 414 Vingård eller liknande | Regelbundna rader med orienterat mönster. | Gröna 0,2 mm plantrader med 0,85 mm avstånd, valbar gul bakgrund och minsta 2 × 2 mm finns. | **Implementerad.** |
+| 415 Exakt begränsningslinje | Distinkt gräns för odlad mark som inte visas med annan linje. | Svart 0,10 mm linje och 2 mm minimilängd finns. | **Implementerad.** |
+| 416 Tydlig beståndsgräns | Tydlig gräns mellan vegetationstyper. | Både streckad mörkgrön linje och svart punktvariant med respektive minimilängd finns. | **Implementerad.** |
+| 417 Tydligt stort träd | Mycket stort enskilt träd. | Grön 0,9 mm ring med vit 1,1 mm läsbarhetsmask finns. | **Implementerad.** |
+| 418 Tydligt träd eller buske | Distinkt buske eller enskilt träd. | Grön/vit 0,6 mm punktsymbol finns. | **Implementerad.** |
+| 419 Tydligt vegetationsföremål | Lokalt särskilt objekt vars betydelse ska beskrivas. | Grönt 0,9 mm kryss med vit mask och krav på teckenförklaring finns. | **Implementerad.** |
 
 ## Kapitel 3.5 – byggda objekt
 
@@ -170,65 +170,65 @@ Dessa fel bör rättas innan fler användarobservationer publiceras till den glo
 | 505 Stig | Tydlig stig med normerad heldragen linje. | Manuellt ”Bred stig” och OSM-stigar. | **Delvis.** Namn/klassning och linjemått behöver justeras. |
 | 506 Liten stig | Mindre men tydlig stig med streckad linje. | Manuellt ”Stig” och OSM-stigar. | **Delvis.** Streckplacering/korsningar ej normverifierade. |
 | 507 Otydlig liten stig | Svårföljd stig med glesare streckning. | Manuellt ”Svag stig” och OSM-kandidater. | **Delvis.** OSM saknar ofta säker synlighetsklass. |
-| 508 Smal gata/linjärt spår | Smal öppning eller tydligt linjärt spår genom terrängen. | Saknas. | **Saknas.** |
+| 508 Rågång, drivningsväg eller annan smal öppning | Smal öppning eller tydligt linjärt spår genom terrängen. | Svart 0,14 mm linje med 2,0/0,25 mm streck och valbar 0,45 mm löpbarhetsbakgrund finns. | **Implementerad.** |
 | 509 Järnväg | Normerad svart/vit linje; förbjuden passage/rörelse kräver 520 eller 709/711. | Aktiv/nedlagd OSM-järnväg genereras. Renderingen har en heldragen svart grundlinje med ett streckat vitt inlägg enligt registrets pappersmått. | **Delvis.** Tillträde, minsta längd och korsningslogik saknas. |
 | 510 Kraftledning/kabelbana/skidlift | Enkel linje; tvärstreck visar exakta stöd. Kan utelämnas längs väg/stig utan navigationsvärde. | Kraftledning, mindre ledning, kabelbana och OSM-stöd genereras. | **Delvis.** Utelämningsregel, minsta längd och full geometri behöver verifieras. |
 | 511 Större kraftledning | Dubbel linje, exakta mastlägen; mycket stora master ritas skalenligt eller som torn. | Major power line får dubbla linjer, tvärstreck vid exakta mastlägen och 0,8 × 0,8 mm markering för stor mast. ISOM 524 finns som separat punktobjekt för mycket stora master. | **Delvis.** Skalenlig 521-geometri och ledningskorridor saknas. |
-| 512 Bro/tunnel | Ska visa passage och rätt relation över/under andra objekt. | OSM-taggar påverkar vägformen men egen ISOM-symbol/redigeringsmodell saknas. | **Saknas som symbol.** |
+| 512 Bro/tunnel | Ska visa passage och rätt relation över/under andra objekt. | Egen 0,18 mm baslinje med böjda ändmarkeringar och 0,4 mm minimilängd finns. | **Implementerad som symbol; topologisk över/under-koppling återstår.** |
 | 513.1 Mur | Betydande mur, normalt minst 1 m, med minsta längd. | Manuellt ”Mur” finns. | **Delvis.** Höjd, längd och mått kontrolleras inte. |
-| 513.2 Stödmur | Mur synlig från en sida; halvpunkter visar lägre sida. | Saknas. | **Saknas.** |
-| 514 Raserad mur | Raserad men tydlig mur med streckmönster. | Saknas. | **Saknas.** |
-| 515 Ej passerbar mur | Ej passerbar mur med normens tjocka linje. | Stilfunktion kan förekomma men manuellt val och komplett generering saknas. | **Delvis/saknas i arbetsflödet.** |
+| 513.2 Stödmur | Mur synlig från en sida; halvpunkter visar lägre sida. | Ensidiga halvpunkter och valbar lägre sida finns. | **Implementerad.** |
+| 514 Otydlig mur | Raserad eller mindre tydlig mur med streckmönster. | Normerad streckad linje och punktdekoration finns. | **Implementerad.** |
+| 515 Opasserbar mur | Opasserbar mur med normens tjocka linje. | Normerad svart linje, tvärmarkeringar, minimilängd och manuell symbolpost finns. | **Implementerad.** |
 | 516 Staket | Betydande passerbart staket. | Manuellt val finns. | **Delvis.** Typ, minsta längd och mått kontrolleras inte. |
-| 517 Raserat staket | Raserat men tydligt staket. | Saknas. | **Saknas.** |
-| 518 Ej passerbart staket | Ej passerbart staket med normerad tjock linje. | Stilfunktion kan förekomma men manuellt val och komplett generering saknas. | **Delvis/saknas i arbetsflödet.** |
-| 519 Passage | Tydlig passage genom mur/staket/annan linje. | Saknas som egen punkt. | **Saknas.** |
+| 517 Raserat stängsel | Raserat men tydligt stängsel. | Normerad streckad linje, riktade taggar och minimilängd finns. | **Implementerad.** |
+| 518 Opasserbart stängsel | Opasserbart stängsel med normerad tjock linje. | Normerad svart linje, dubbla tvärmarkeringar, minimilängd och manuell symbolpost finns. | **Implementerad.** |
+| 519 Genomgång | Tydlig passage genom mur/stängsel/annan linje. | Egen punkt, barriärkoppling och valbart automatiskt linjeavbrott finns. | **Implementerad.** |
 | 520 Område som inte får beträdas | Privat tomt, trädgård, industri m.m.; bara kurvor och framträdande objekt visas inuti. Tydlig gräns får svart kant. Stig bryter ytan med 0,15 mm vitt överlapp. Minst 1 × 1 mm. | Konservativ OSM-motor för industri/bostad och uppskattad hemfridszon. Väg/stig skär ytan skalberoende. Geometri kan ändras/uteslutas. | **Delvis.** Fastighetsgränser och säkra klasser saknas; intern information undertrycks inte konsekvent; juridik/fältkontroll kan inte automatiseras fullt. |
 | 521 Byggnad | Skalenlig svart yta; stor byggnad kan vara grå; passager/generalisering har minimimått. Inom 520 generaliseras byggnader. | OSM-fotavtryck genereras, visas normalt och kan redigeras/uteslutas. | **Delvis.** Minsta area, passage, grå storbyggnad och 520-generalisering behöver kontroll. |
-| 522 Skärmtak | Takyta som kan passeras under, med rätt mönster och öppningar. | Saknas. | **Saknas.** |
-| 523 Ruin | Tydlig ruin med normerad svart linje. | Saknas. | **Saknas.** |
+| 522 Skärmtak | Takyta som kan passeras under, med rätt mönster och öppningar. | Svart 20 %, 0,10 mm kant, minsta 0,6 × 0,6 mm och 0,4 mm inre bredd finns. | **Implementerad.** |
+| 523 Ruin | Tydlig ruin med normerad svart linje. | Streckad 0,16 mm kontur och minsta 0,8 × 0,8 mm finns. | **Implementerad.** |
 | 524 Högt torn | Högt torn/mast som punkt. | Manuellt ”Torn” finns. | **Delvis.** Exakta mått och skillnad mot 525 behöver verifieras. |
-| 525 Litet torn | Litet tydligt torn/plattform. | Saknas. | **Saknas.** |
-| 526 Stenröse | Distinkt stenröse. | Saknas. | **Saknas.** |
-| 527 Foderhäck | Distinkt foderhäck. | Saknas. | **Saknas.** |
-| 528 Särskilt linjeobjekt | Lokalt särskilt passerbart objekt; betydelsen ska beskrivas. | Saknas. | **Saknas.** |
-| 529 Särskilt ej passerbart linjeobjekt | Lokalt särskilt ej passerbart objekt; betydelsen ska beskrivas. | Saknas. | **Saknas.** |
-| 530 Särskilt byggt objekt, ring | Lokalt särskilt punktobjekt; betydelsen ska beskrivas. | Saknas. | **Saknas.** |
-| 531 Särskilt byggt objekt, kryss | Alternativt särskilt punktobjekt; betydelsen ska beskrivas. | Saknas. | **Saknas.** |
-| 532 Trappa | Tydlig trappa, ritad med normerad linje och steg. | Saknas. | **Saknas.** |
+| 525 Litet torn | Litet tydligt torn/plattform. | Norriktad 1,0 × 1,0 mm symbol finns. | **Implementerad.** |
+| 526 Röse | Distinkt röse, minnessten eller gränssten. | Normerad 0,8 mm ring med 0,14 mm mittpunkt finns. | **Implementerad.** |
+| 527 Foderhäck | Distinkt foderhäck. | Norriktad 0,9 × 0,9 mm symbol finns. | **Implementerad.** |
+| 528 Tydligt linjeföremål | Lokalt särskilt passerbart objekt; betydelsen ska beskrivas. | Normerade 45-gradersmarkeringar, minimilängd och krav på teckenförklaring finns. | **Implementerad.** |
+| 529 Tydligt opasserbart linjeföremål | Lokalt särskilt opasserbart objekt; betydelsen ska beskrivas. | Normerade grupperade 45-gradersmarkeringar, minimilängd och krav på teckenförklaring finns. | **Implementerad.** |
+| 530 Tydligt människoframställt föremål – ring | Lokalt särskilt punktobjekt; betydelsen ska beskrivas. | Svart 0,8 mm ring och krav på teckenförklaring finns. | **Implementerad.** |
+| 531 Tydligt människoframställt föremål – x | Alternativt särskilt punktobjekt; betydelsen ska beskrivas. | Norriktat svart 0,8 × 0,8 mm kryss och krav på teckenförklaring finns. | **Implementerad.** |
+| 532 Trappa | Tydlig trappa, ritad med normerad linje och steg. | Dubbla räcken, 0,4 mm inre bredd och minst tre grafiska steg finns. | **Implementerad.** |
 
 ## Kapitel 3.6 – tekniska symboler
 
 | Symbol | Krav i korthet | OMapMaker | Status |
 |---:|---|---|---|
 | 601 Magnetisk nordlinje | Parallell med magnetisk nord och papperskant; 20 mm mellanrum vid 1:15 000 och 30 mm vid 1:10 000, med tillåtna avbrott. | Registerversion 2 ritar svarta nordlinjer med 300 m markavstånd, alltså 20/30/40 mm vid 1:15 000/1:10 000/1:7 500. De ligger över ytor och höjdkurvor men under viktiga svarta kartdetaljer. Arbetsområdet lagrar manuell deklination och vektorutskriften roteras till magnetisk nord. | **Genomfört med begränsning.** Deklinationen måste ännu hämtas och kontrolleras av användaren; automatiska avbrott kring små detaljer återstår. |
-| 602 Passmärken | Minst tre passmärken får användas för färgregistrering. | Saknas. | **Saknas/extern för tryckproduktion.** |
-| 603 Höjdsiffra | Höjd till närmaste meter; vattennivå utan punkt; norrätt sans-seriftext. | Höjd finns i konturdata och tooltip, inte som karttext. | **Saknas som tryckt symbol.** |
+| 602 Passmärken | Minst tre passmärken får användas för färgregistrering. | 4 mm kors i alla tryckfärger finns som teknisk punkt. | **Implementerad som symbol; fysisk färgpassning är extern.** |
+| 603 Höjdangivelse | Höjd till närmaste meter; vattennivå utan punkt; norrätt sans-seriftext. | 1,5 mm sans-seriftext med valfri 0,3 mm punkt och vattenläge utan punkt finns. | **Implementerad.** |
 
 ## Kapitel 3.7 – banläggningssymboler
 
-OMapMaker har ingen banläggningsmodul. Samtliga krav nedan saknas och ska hållas som ett separat överlägg ovanpå baskartan.
+OMapMaker har samtliga banpåtryckssymboler som manuellt valbara objekt i separata lila över- och underlager ovanpå baskartan. En sammanhållen banläggningsmodul, ordningslogik och automatiska avbrott för läsbarhet återstår.
 
 | Symbol | Funktion | Status |
 |---:|---|---|
-| 701 | Start | **Saknas.** |
-| 702 | Kartutdelningspunkt | **Saknas.** |
-| 703 | Kontroll | **Saknas.** |
-| 704 | Kontrollnummer | **Saknas.** |
-| 705 | Sammanbindningslinje | **Saknas.** |
-| 706 | Mål | **Saknas.** |
-| 707 | Snitslad sträcka | **Saknas.** |
-| 708 | Förbjuden gräns | **Saknas.** |
-| 709 | Förbjudet område för aktuell tävling | **Saknas.** |
-| 710 | Övergång | **Saknas.** |
-| 711 | Förbjuden väg | **Saknas.** |
-| 712 | Första hjälpen | **Saknas.** |
-| 713 | Vätska | **Saknas.** |
-| 715 | Fortsättningspunkt efter kartbyte | **Saknas.** |
+| 701 | Start | **Implementerad symbol:** 6,0 mm riktad triangel, 0,35 mm linje, undre lila. |
+| 702 | Kartutdelningsplats | **Implementerad symbol:** 0,6 × 2,5 mm markering, övre lila. |
+| 703 | Kontroller | **Implementerad symbol:** 5,0 mm kontrollring, 0,35 mm linje, undre lila. |
+| 704 | Kontrollsiffror | **Implementerad symbol:** Arial 4,0 mm, norriktad, undre lila. |
+| 705 | Sammanbindningslinjer | **Implementerad symbol:** 0,35 mm linje, undre lila. |
+| 706 | Mål | **Implementerad symbol:** 4,0/6,0 mm dubbelring, 0,35 mm linje, undre lila. |
+| 707 | Snitslade delar | **Implementerad symbol:** 2,0/0,5 mm streck, 0,35 mm linje, övre lila. |
+| 708 | Gräns förbjuden att passera | **Implementerad symbol:** 0,7 mm linje, undre lila. |
+| 709 | Förbjudet område | **Implementerad symbol:** 45-graders kryssraster, normerad kant och minsta 3 × 3 mm, övre lila. |
+| 710 | Passeringspunkt | **Implementerad symbol:** två utåtböjda 0,35 mm linjer med 0,6 mm innermått, undre lila. |
+| 711 | Förbjuden väg | **Implementerad symbol:** 3 mm kryss med 4–6 mm centrumavstånd, övre lila. |
+| 712 | Första hjälpen-plats | **Implementerad symbol:** fyllt 4 × 4 mm kors med 1,33 mm stapel, undre lila. |
+| 713 | Vätskeplats | **Implementerad symbol:** normerad 3,5 mm bägare med 2,1 mm bas, undre lila. |
+| 715 | Startpunkt efter kartbyte | **Implementerad symbol:** 6,0 mm ring med riktad triangel, undre lila. |
 
 ## Kapitel 3.8 – exakta symboldefinitioner
 
-Kapitel 3.8 samlar symbolernas exakta grafik: linjebredder, diametrar, strecklängder, mellanrum, rasterprocent, rastervinklar, typsnitt och färger. Registerversion 2 innehåller pappersmått i millimeter för prototypens stödda symboler och används av både Leaflet-vyn och den SVG-baserade vektorutskriften. Måtten förstoras proportionellt från normens basskala 1:15 000.
+Kapitel 3.8 samlar symbolernas exakta grafik: linjebredder, diametrar, strecklängder, mellanrum, rasterprocent, rastervinklar, typsnitt och färger. Registerversion 13 innehåller pappersmått i millimeter för hela symboluppsättningen och används av både Leaflet-vyn och den SVG-baserade vektorutskriften. Måtten förstoras proportionellt från normens basskala 1:15 000.
 
 Status är **delvis genomförd och maskinellt kontrollerbar**:
 
@@ -269,7 +269,7 @@ Revisions- och erratasidorna i slutet av Revision 6 är redan införlivade i den
 
 ### P1 – normstyrd renderer
 
-1. **Genomfört i registerversion 2 för prototypens stödda symboler:** pappersmillimeter och proportionell förstoring används av skärm och SVG-baserad vektor-PDF.
+1. **Genomfört i registerversion 13 för hela symboluppsättningen:** pappersmillimeter och proportionell förstoring används av skärm och SVG-baserad vektor-PDF.
 2. **Genomfört med manuell deklination:** arbetsområdet lagrar deklination, utskriften roteras till magnetisk nord, 601-linjer får 300 m markavstånd och norriktade raster hålls rätt mot papperet. Automatisk deklinationskälla och avancerad textplacering återstår.
 3. **Genomfört som preflight v1:** minsta mått, linjelängd, streckantal, area/bredd och öppningar kontrolleras och grupperas i exportdialogen. Kontrollen varnar men generaliserar inte geometrin automatiskt.
 4. **Genomfört för vektorförhandsvisning:** IOF:s CMYK-definitioner, RGB-förhandsfärger, raster, färglager och simulerad övertrycksordning finns i registret. En färghanterad produktions-PDF och skrivarkalibrering ligger kvar i P4.
@@ -283,9 +283,9 @@ Revisions- och erratasidorna i slutet av Revision 6 är redan införlivade i den
 
 ### P3 – full symboltäckning
 
-1. Implementera resterande 101–603 med sökbar symbolväljare.
-2. Implementera särskilda objekt med obligatorisk kartförklaring.
-3. Bygg banläggning som separat överlägg för 701–715.
+1. **Genomfört i registerversion 13:** hela den normativa serien 101–603 finns med svenska namn, geometri och renderer. Alla objekt utom automatiskt genererade 101, 102 och 601 finns i den manuella symbolväljaren.
+2. **Delvis genomfört:** särskilda objekt har `requiresDefinition` och preflightkrav; automatisk tryckt teckenförklaring återstår.
+3. **Symbolgrafiken genomförd i registerversion 13:** 701–713 och 715 ligger i separata lila över-/underlager; en sammanhållen banläggningsmodul återstår.
 
 ### P4 – verifierad leverans
 

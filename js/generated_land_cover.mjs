@@ -75,7 +75,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
   }
 
   function installPatterns() {
-    const symbols = ['307', '308', '310', '402', '404', '412'];
+    const symbols = ['113', '114', '208', '209', '210', '211', '212', '213', '307', '308', '310', '402', '404', '407', '409', '412', '413', '414', '709'];
     const paths = [...documentObject.querySelectorAll(symbols.map(symbol => `.isom-pattern-${symbol}`).join(','))];
     const bySvg = new Map();
     paths.forEach(path => {
@@ -110,7 +110,12 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
         const fill = definition.fill ? renderer.colour(definition.fill) : 'transparent';
         const ink = renderer.colour(definition.patternColour || 'blue');
         if (fill !== 'transparent') pattern.innerHTML += `<rect width="${spacing}" height="${spacing}" fill="${fill}"/>`;
-        if (definition.pattern === 'scattered' || definition.pattern === 'cultivated') pattern.innerHTML += `<circle cx="${spacing / 2}" cy="${spacing / 2}" r="${dot / 2}" fill="${ink}"/>`;
+        if (['scattered', 'cultivated', 'orchard', 'sand'].includes(definition.pattern)) pattern.innerHTML += `<circle cx="${spacing / 2}" cy="${spacing / 2}" r="${dot / 2}" fill="${ink}"/>`;
+        else if (definition.pattern.startsWith('random-dots')) pattern.innerHTML += `<circle cx="${spacing * .22}" cy="${spacing * .28}" r="${dot / 2}" fill="${ink}"/><circle cx="${spacing * .72}" cy="${spacing * .6}" r="${dot / 2}" fill="${ink}"/><circle cx="${spacing * .38}" cy="${spacing * .82}" r="${dot / 2}" fill="${ink}"/>`;
+        else if (definition.pattern.startsWith('boulders')) pattern.innerHTML += `<path d="M${spacing * .05} ${spacing * .12}L${spacing * .8} ${spacing * .22}L${spacing * .28} ${spacing * .72}Z" fill="${ink}"/>`;
+        else if (definition.pattern === 'vineyard') pattern.innerHTML += `<path d="M${line / 2} 0V${Math.max(line, spacing * .7)}" stroke="${ink}" stroke-width="${line}"/>`;
+        else if (definition.pattern === 'forbidden-crosshatch') pattern.innerHTML += `<path d="M0 0V${spacing}M${spacing / 2} 0V${spacing}" stroke="${ink}" stroke-width="${line}"/>`;
+        else if (definition.pattern.startsWith('vertical-green')) pattern.innerHTML += `<path d="M${line / 2} 0V${spacing}" stroke="${ink}" stroke-width="${line}"/>`;
         else pattern.innerHTML += `<path d="M0 ${line / 2}H${definition.pattern === 'marsh-dashed' ? Math.max(line, spacing * .75) : spacing}" stroke="${ink}" stroke-width="${line}"/>`;
         defs.append(pattern);
         items.filter(path => path.classList.contains(`isom-pattern-${symbol}`)).forEach(path => applyLandCoverPattern(path, id));

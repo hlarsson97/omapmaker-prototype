@@ -11,8 +11,30 @@ for (const file of ['isom_symbols.js', 'isom_renderer.js']) {
 
 const registry = global.OMAPMAKER_ISOM_REGISTRY;
 const renderer = global.OMAPMAKER_ISOM_RENDERER;
-assert.strictEqual(registry.registryVersion, 12);
-assert.strictEqual(registry.renderingRevision, 12);
+assert.strictEqual(registry.registryVersion, 13);
+assert.strictEqual(registry.renderingRevision, 13);
+const expectedSymbols = [
+  '101','102','103','104','105.1','105.2','106','107','108','109','110','111','112','113','114','115',
+  '201','202','203.1','203.2','204','205','206','207','208','209','210','211','212','213','214','215',
+  '301','302','303','304','305','306','307','308','309','310','311','312','313',
+  '401','402','403','404','405','406','407','408','409','410','412','413','414','415','416','417','418','419',
+  '501','502','503','504','505','506','507','508','509','510','511','512','513.1','513.2','514','515','516','517','518','519','520','521','522','523','524','525','526','527','528','529','530','531','532',
+  '601','602','603','701','702','703','704','705','706','707','708','709','710','711','712','713','715'
+];
+const expectedSwedishNames = [
+  'Höjdkurva','Stödkurva','Hjälpkurva','Skärning','Jordvall','Stödmur av jord','Otydlig jordvall','Erosionsfåra','Liten fåra eller torrt dike','Punkthöjd','Avlång punkthöjd','Liten grop','Liten grop med branta sidor','Småkuperad terräng','Mycket småkuperad terräng','Tydligt terrängföremål',
+  'Opasserbar brant','Passerbar brant','Stenig grop eller grotta','Farlig grop','Sten','Stor sten','Gigantisk sten eller stenpelare','Grupp av stenar','Blockterräng','Tät blockterräng','Stenig mark, löphindrande','Stenig mark, svårlöpt','Stenig mark, svårframkomlig','Sandområde','Berg i dagen','Värn',
+  'Opasserbar vattenyta','Grund vattenyta','Vattenhål','Passerbart vattendrag','Passerbart litet vattendrag','Mindre vattendrag','Opasserbar sankmark','Sankmark','Smal sankmark','Otydlig sankmark','Brunn, fontän eller vattentank','Källa','Tydligt vattenföremål',
+  'Öppen lättlöpt mark','Öppen lättlöpt mark med spridda träd','Öppen mark med normal löpbarhet','Öppen mark med normal löpbarhet och spridda träd','Skog','Skog, löphindrande','Undervegetation, löphindrande, god sikt','Skog, svårlöpt','Undervegetation, svårlöpt, god sikt','Skog, svårframkomlig','Odlad mark','Fruktodling','Vingård eller liknande','Exakt begränsningslinje','Tydlig beståndsgräns','Tydligt stort träd','Tydligt träd eller buske','Tydligt vegetationsföremål',
+  'Belagd yta','Bred väg','Väg','Körväg','Stor stig','Liten stig','Liten otydlig stig','Rågång, drivningsväg eller annan smal öppning','Järnväg','Kraftledning, linbana eller skidlift','Större kraftledning','Bro/tunnel','Mur','Stödmur/terrass','Otydlig mur','Opasserbar mur','Stängsel','Raserat stängsel','Opasserbart stängsel','Genomgång','Förbjudet område','Byggnad','Skärmtak','Ruin','Högt torn','Litet torn','Röse','Foderhäck','Tydligt linjeföremål','Tydligt opasserbart linjeföremål','Tydligt människoframställt föremål – ring','Tydligt människoframställt föremål – x','Trappa',
+  'Magnetisk nordlinje','Passmärken','Höjdangivelse','Start','Kartutdelningsplats','Kontroller','Kontrollsiffror','Sammanbindningslinjer','Mål','Snitslade delar','Gräns förbjuden att passera','Förbjudet område','Passeringspunkt','Förbjuden väg','Första hjälpen-plats','Vätskeplats','Startpunkt efter kartbyte'
+];
+assert.strictEqual(expectedSwedishNames.length, expectedSymbols.length);
+expectedSymbols.forEach((symbol,index)=>assert.strictEqual(registry.symbols[symbol].nameSv,expectedSwedishNames[index],`Fel svenskt normnamn för ISOM ${symbol}`));
+assert.deepStrictEqual(Object.keys(registry.symbols).sort((a,b) => a.localeCompare(b, undefined, {numeric: true})), expectedSymbols.slice().sort((a,b) => a.localeCompare(b, undefined, {numeric: true})), 'Symbolregistret ska täcka hela ISOM 2017-2 rev. 6');
+for (const symbol of expectedSymbols) assert(renderer.definition(symbol), `ISOM ${symbol} saknar renderer`);
+const selectableSymbols = new Set(Object.values(registry.manualTypes).filter(item=>item.selectable).map(item=>String(item.symbol)));
+for(const symbol of expectedSymbols.filter(symbol=>!['101','102','601'].includes(symbol)))assert(selectableSymbols.has(symbol),`ISOM ${symbol} saknas i den manuella symbolväljaren`);
 for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
@@ -218,5 +240,59 @@ assert(check.issues.some(issue => issue.code === 'direction-missing'));
 check = renderer.preflight([{...retainingWall, properties: {isomSymbol: '513.2'}}, {...crossing, properties: {isomSymbol: '519'}}], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(check.issues.some(issue => issue.code === 'direction-missing'));
 assert(check.issues.some(issue => issue.code === 'crossing-unlinked'));
+
+assert.deepStrictEqual(registry.renderers['103'].dashMm, [2, 0.2]);
+assert.strictEqual(registry.renderers['104'].lineWidthMm, 0.25);
+assert.strictEqual(registry.renderers['107'].minimumLengthMm, 1.15);
+assert.strictEqual(registry.renderers['113'].dotDiameterMm, 0.2);
+assert.strictEqual(registry.renderers['208'].minimumSymbols, 2);
+assert.strictEqual(registry.renderers['213'].patternAngleDeg, 45);
+assert.strictEqual(registry.renderers['214'].fill, 'black35');
+assert.strictEqual(registry.renderers['215'].lineCentreGapMm, 0.2);
+assert.deepStrictEqual(registry.renderers['416'].dashMm, [0.3, 0.2]);
+assert.deepStrictEqual(registry.renderers['508'].dashMm, [2, 0.25]);
+assert.strictEqual(registry.renderers['512'].minimumLengthMm, 0.4);
+assert.strictEqual(registry.renderers['602'].widthMm, 4);
+assert.strictEqual(registry.renderers['603'].textHeightMm, 1.5);
+assert.strictEqual(registry.renderers['701'].widthMm, 6);
+assert.strictEqual(registry.renderers['703'].diameterMm, 5);
+assert.strictEqual(registry.renderers['704'].textHeightMm, 4);
+assert.strictEqual(registry.renderers['706'].innerDiameterMm, 4);
+assert.deepStrictEqual(registry.renderers['707'].dashMm, [2, 0.5]);
+assert.deepStrictEqual(registry.renderers['709'].minimumBoxMm, [3, 3]);
+assert.strictEqual(registry.renderers['712'].barWidthMm, 1.33);
+assert.strictEqual(registry.renderers['713'].baseWidthMm, 2.1);
+assert.strictEqual(registry.renderers['715'].diameterMm, 6);
+assert((renderer.pointMarkup('115', screenContext).html.match(/M/g) || []).length >= 3, 'ISOM 115 ska vara en brun stjärna');
+assert(renderer.pointMarkup('701', screenContext, {orientationDegrees: 90}).html.includes('<polygon'), 'Starten ska vara en riktad triangel');
+assert.strictEqual((renderer.pointMarkup('706', screenContext).html.match(/<circle/g) || []).length, 2, 'Målet ska vara en dubbelring');
+assert(renderer.pointMarkup('712', screenContext).html.includes('<path'), 'Första hjälpen ska vara ett fyllt kors');
+assert(renderer.pointMarkup('713', screenContext).html.includes('<path'), 'Vätskeplatsen ska vara en bägare');
+assert(renderer.pointMarkup('715', screenContext).html.includes('<polygon'), 'Start efter kartbyte ska innehålla en triangel');
+assert.strictEqual(renderer.lineStyles('215', {}, screenContext).parallelSeparationMm, 0.2, 'Värnet ska vara en dubbel 0,10 mm-linje med 0,10 mm mellanrum');
+assert(renderer.lineStyles('416', {variant: 'black-dots'}, screenContext).outer.dashArray, 'Svart punktvariant för beståndsgräns saknas');
+assert(renderer.lineStyles('508', {runnability: 'slow'}, screenContext).background, 'Rågångens löpbarhetsbakgrund saknas');
+
+const remainingAreaSymbols = ['113','114','208','209','210','211','212','213','214','413','414','709'];
+const remainingLineSymbols = ['103','104','105.1','105.2','106','107','215','416','508','512','705','707','708','711'];
+const remainingPointSymbols = ['115','602','603','701','702','703','704','706','710','712','713','715'];
+const remainingFeatures = [
+  ...remainingAreaSymbols.map((symbol, index) => ({...building, id: `area-${symbol}`, properties: {isomSymbol: symbol, background: index % 2 ? 'yellow50' : 'yellow'}})),
+  ...remainingLineSymbols.map(symbol => ({...wall, id: `line-${symbol}`, properties: {isomSymbol: symbol, downhillSide: 'right', lowerSide: 'right', variant: symbol === '416' ? 'black-dots' : undefined, runnability: symbol === '508' ? 'slow' : undefined}, geometry: {type: 'LineString', coordinates: [[18.099,59.2],[18.101,59.2]]}})),
+  ...remainingPointSymbols.map((symbol, index) => ({type: 'Feature', id: `point-${symbol}`, properties: {isomSymbol: symbol, orientationDegrees: 25, elevation: 123, controlNumber: 8}, geometry: {type: 'Point', coordinates: [18.1001 + index * .00001, 59.2002]}}))
+];
+const remainingSvg = renderer.buildVectorSvg(remainingFeatures, {scale: 15000, declination: 5, center, widthMm: 277, heightMm: 190});
+for (const pattern of ['random-dots-brown','boulders','sand','orchard-yellow50','vineyard-yellow','forbidden-crosshatch']) assert(remainingSvg.includes(`url(#p-${pattern})`), `Ytmönster ${pattern} saknas`);
+for (const symbol of ['105.1','105.2','106','512','711']) assert(remainingSvg.includes(`data-decoration-symbol="${symbol}"`), `Dekoration saknas för nytillagd ISOM ${symbol}`);
+assert(remainingSvg.includes('data-composite-symbol="215"'), 'Värnets dubbellinje saknas');
+assert(remainingSvg.includes('data-composite-symbol="508"'), 'Rågångens bakgrundslinje saknas');
+assert(remainingSvg.includes('data-colour="purpleLower"') && remainingSvg.includes('data-colour="purpleUpper"'), 'Banpåtryckets lila över- och underlager ska vara separata');
+const orientedVineyard = {...building, id:'oriented-vineyard', properties:{isomSymbol:'414',orientationDegrees:37,background:'yellow50'}};
+const orientedSvg = renderer.buildVectorSvg([orientedVineyard], {scale:15000,declination:5,center,widthMm:277,heightMm:190});
+assert(orientedSvg.includes('patternTransform="rotate(37)"'), 'Vingårdens rader ska kunna riktas efter planteringsriktningen');
+check = renderer.preflight([{...orientedVineyard, properties:{isomSymbol:'414'}}], {scale:15000,declination:5,center,widthMm:277,heightMm:190});
+assert(check.issues.some(issue=>issue.code==='orientation-missing'), 'Vingård utan planteringsriktning ska ge preflightvarning');
+check = renderer.preflight([{type:'Feature',id:'undefined-special',properties:{isomSymbol:'115'},geometry:{type:'Point',coordinates:[18.1,59.2]}}], {scale:15000,declination:5,center,widthMm:277,heightMm:190});
+assert(check.issues.some(issue=>issue.code==='definition-missing'&&issue.severity==='error'), 'Särskilt objekt utan teckenförklaring ska blockera preflight');
 
 console.log('ISOM renderer: alla kontroller godkända');

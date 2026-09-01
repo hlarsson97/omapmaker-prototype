@@ -1,8 +1,9 @@
-const CLIFF_SYMBOLS = new Set(['201', '202']);
+const CLIFF_SYMBOLS = new Set(['104', '201', '202']);
 const POWER_LINE_SYMBOLS = new Set(['510', '511']);
-const DECORATED_BARRIER_SYMBOLS = new Set(['513.1', '513.2', '514', '515', '516', '517', '518']);
+const DECORATED_BARRIER_SYMBOLS = new Set(['105.1', '105.2', '106', '513.1', '513.2', '514', '515', '516', '517', '518']);
 const PROMINENT_LINE_SYMBOLS = new Set(['528', '529']);
 const STAIRWAY_SYMBOLS = new Set(['532']);
+const OTHER_DECORATED_LINE_SYMBOLS = new Set(['512', '711']);
 const IMPASSABLE_BARRIER_SYMBOLS = new Set(['515', '518', '529']);
 const METRES_PER_DEGREE = 111320;
 
@@ -20,7 +21,7 @@ export function isDecoratedBarrierSymbol(symbol) {
 
 export function isDecoratedLineSymbol(symbol) {
   const value = String(symbol || '');
-  return DECORATED_BARRIER_SYMBOLS.has(value) || PROMINENT_LINE_SYMBOLS.has(value) || STAIRWAY_SYMBOLS.has(value);
+  return DECORATED_BARRIER_SYMBOLS.has(value) || PROMINENT_LINE_SYMBOLS.has(value) || STAIRWAY_SYMBOLS.has(value) || OTHER_DECORATED_LINE_SYMBOLS.has(value);
 }
 
 export function isBarrierLineSymbol(symbol) {
@@ -36,7 +37,7 @@ export function applyDefaultSymbolSettings(object, symbol) {
   const value = String(symbol || object.symbol || '');
   if (isCliffSymbol(value) && !['left', 'right'].includes(object.downhillSide)) object.downhillSide = 'right';
   if (isPowerLineSymbol(value) && !Array.isArray(object.supports)) object.supports = [];
-  if (value === '513.2' && !['left', 'right'].includes(object.lowerSide)) object.lowerSide = 'right';
+  if (['105.2', '513.2'].includes(value) && !['left', 'right'].includes(object.lowerSide)) object.lowerSide = 'right';
   if (['516', '517', '518'].includes(value) && !['left', 'right'].includes(object.tagSide)) object.tagSide = 'right';
   return object;
 }
@@ -44,6 +45,11 @@ export function applyDefaultSymbolSettings(object, symbol) {
 export function symbolObjectControlsHtml(object, escapeHtml) {
   const symbol = String(object.symbol || '');
   const id = escapeHtml(object.id);
+  const orientationControls = ['203.1', '413', '414', '701', '710', '715'].includes(symbol) ? `<div class="symbol-object-settings"><label><small>Riktning i grader från kartnorr</small><input type="number" min="0" max="359.9" step="0.1" value="${escapeHtml(Number(object.orientationDegrees) || 0)}" data-symbol-value-property="orientationDegrees" data-object-id="${id}"></label></div>` : '';
+  const valueControls = symbol === '603' ? `<div class="symbol-object-settings"><label><small>Höjd i hela meter</small><input type="number" step="1" value="${escapeHtml(Math.round(Number(object.elevation) || 0))}" data-symbol-value-property="elevation" data-object-id="${id}"></label><label><input type="checkbox" data-symbol-value-property="waterSurface" data-object-id="${id}" ${object.waterSurface?'checked':''}> Vattenyta utan punkt</label></div>` : symbol === '704' ? `<div class="symbol-object-settings"><label><small>Kontrollsiffra</small><input type="text" inputmode="numeric" value="${escapeHtml(object.controlNumber || '')}" data-symbol-value-property="controlNumber" data-object-id="${id}"></label></div>` : '';
+  const definitionControls = ['115','313','419','528','529','530','531'].includes(symbol) ? `<div class="symbol-object-settings"><label><small>Betydelse i teckenförklaringen (obligatorisk)</small><input type="text" value="${escapeHtml(object.legendDefinition || '')}" data-symbol-value-property="legendDefinition" data-object-id="${id}"></label></div>` : '';
+  const choiceButtons = (property, values, labels) => `<div class="symbol-setting-options">${values.map((value,index)=>`<button type="button" class="${String(object[property]??values[0])===value?'selected':''}" data-symbol-object-action="setting-choice" data-symbol-setting-property="${property}" data-symbol-setting-value="${value}" data-object-id="${id}">${labels[index]}</button>`).join('')}</div>`;
+  const choiceControls = ['413','414'].includes(symbol) ? `<div class="symbol-object-settings"><small>Bakgrund</small>${choiceButtons('background',['yellow','yellow50'],['Gul 100 %','Gul 50 %'])}</div>` : symbol === '416' ? `<div class="symbol-object-settings"><small>Utförande (samma variant ska användas över hela kartan)</small>${choiceButtons('variant',['green-dashes','black-dots'],['Mörkgröna streck','Svarta punkter'])}</div>` : symbol === '508' ? `<div class="symbol-object-settings"><small>Löpbarhet i öppningen</small>${choiceButtons('runnability',['surrounding','better','normal','slow','walk'],['Som omgivningen','Bättre','Normal','Nedsatt','Gångfart'])}</div>` : '';
   const enclosureControls = isBarrierLineSymbol(symbol) && isClosedLineCoordinates(object.coordinates) ? `<div class="symbol-object-settings"><small>Sluten inhägnad identifierad. Ytan skapas med den områdestyp som är vald i ritverktyget.</small><div class="symbol-setting-options"><button type="button" data-symbol-object-action="create-enclosed-area" data-object-id="${id}">Skapa vald yta innanför</button></div></div>` : '';
   if (isCliffSymbol(symbol)) {
     const selected = object.downhillSide;
@@ -62,7 +68,7 @@ export function symbolObjectControlsHtml(object, escapeHtml) {
     const button = (side, label) => `<button type="button" class="${selected === side ? 'selected' : ''}" data-symbol-object-action="fence-side" data-object-id="${id}" data-symbol-setting-value="${side}">${label}</button>`;
     return `<div class="symbol-object-settings"><small>Taggarnas sida, räknat i linjens ritningsriktning. För inhägnader ska de peka inåt.</small><div class="symbol-setting-options">${button('left', 'Vänster sida')}${button('right', 'Höger sida')}</div></div>${enclosureControls}`;
   }
-  if (symbol === '513.2') {
+  if (['105.2', '513.2'].includes(symbol)) {
     const selected = object.lowerSide;
     const button = (side, label) => `<button type="button" class="${selected === side ? 'selected' : ''}" data-symbol-object-action="retaining-wall-side" data-object-id="${id}" data-symbol-setting-value="${side}">${label}</button>`;
     return `<div class="symbol-object-settings"><small>Halvpunkterna ska peka mot den lägre sidan, räknat i linjens ritningsriktning.</small><div class="symbol-setting-options">${button('left', 'Lägre till vänster')}${button('right', 'Lägre till höger')}</div></div>${enclosureControls}`;
@@ -73,7 +79,7 @@ export function symbolObjectControlsHtml(object, escapeHtml) {
     const button = (value, label) => `<button type="button" class="${selected === value ? 'selected' : ''}" data-symbol-object-action="crossing-break" data-object-id="${id}" data-symbol-setting-value="${value}">${label}</button>`;
     return `<div class="symbol-object-settings"><small>${linked}</small><div class="symbol-setting-options">${button(true, 'Bryt barriärlinjen')}${button(false, 'Behåll barriärlinjen')}</div></div>`;
   }
-  return enclosureControls;
+  return `${orientationControls}${valueControls}${definitionControls}${choiceControls}${enclosureControls}`;
 }
 
 function projection(latitude) {
@@ -326,6 +332,34 @@ export function stairwayStepSegments(coordinates, definition, baseScale = 15000)
   return sampledLinePoints(coordinates, spacing, spacing / 2).map(sample => {
     const normal = {x: -Math.sin(sample.angle) * halfWidth, y: Math.cos(sample.angle) * halfWidth};
     return [sample.toCoordinate({x: sample.point.x - normal.x, y: sample.point.y - normal.y}), sample.toCoordinate({x: sample.point.x + normal.x, y: sample.point.y + normal.y})];
+  });
+}
+
+export function courseCrossSegments(coordinates, definition, baseScale = 15000) {
+  const scale = Number(baseScale) / 1000;
+  const spacing = Number(definition?.styleSpacingMm || 5) * scale;
+  const halfWidth = Number(definition?.styleWidthMm || 3) * scale / 2;
+  const halfHeight = Number(definition?.styleHeightMm || 3) * scale / 2;
+  return sampledLinePoints(coordinates, spacing, spacing / 2).flatMap(sample => {
+    const tangent = {x: Math.cos(sample.angle), y: Math.sin(sample.angle)};
+    const normal = {x: -tangent.y, y: tangent.x};
+    const point = (along, across) => sample.toCoordinate({x: sample.point.x + tangent.x * along + normal.x * across, y: sample.point.y + tangent.y * along + normal.y * across});
+    return [[point(-halfWidth, -halfHeight), point(halfWidth, halfHeight)], [point(-halfWidth, halfHeight), point(halfWidth, -halfHeight)]];
+  });
+}
+
+export function bridgeTunnelCurveSegments(coordinates, definition, baseScale = 15000) {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return [];
+  const latitude = coordinates.reduce((sum, coordinate) => sum + Number(coordinate[1]), 0) / coordinates.length;
+  const project = projection(latitude), points = coordinates.map(project.toMetres), scale = Number(baseScale) / 1000;
+  const halfTag = Number(definition?.tagLengthMm || .5) * scale / 2, reach = Number(definition?.tagSpacingMm || .4) * scale;
+  return [[points[0], points[1]], [points.at(-1), points.at(-2)]].flatMap(([end, inside]) => {
+    const dx = end.x - inside.x, dy = end.y - inside.y, length = Math.hypot(dx, dy) || 1, tangent = {x: dx / length, y: dy / length}, normal = {x: -tangent.y, y: tangent.x};
+    return [-1, 1].map(side => [
+      project.toCoordinate({x: end.x + normal.x * side * halfTag, y: end.y + normal.y * side * halfTag}),
+      project.toCoordinate({x: end.x + tangent.x * reach * .55 + normal.x * side * halfTag * .75, y: end.y + tangent.y * reach * .55 + normal.y * side * halfTag * .75}),
+      project.toCoordinate({x: end.x + tangent.x * reach, y: end.y + tangent.y * reach})
+    ]);
   });
 }
 

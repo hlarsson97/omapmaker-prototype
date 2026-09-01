@@ -19,7 +19,7 @@ import {anchoredMapCenter, anchoredRotationTranslation, createSmoothMapMarkerFac
 import {changeLocalObjectType, localObjectPopup, localObjectSourceLabel} from '../js/local_map_objects.mjs';
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {popupLayersFromElements, popupStackContent} from '../js/popup_stack.mjs';
-import {applyDefaultSymbolSettings, cliffTagSegments, closeLineCoordinates, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
+import {applyDefaultSymbolSettings, bridgeTunnelCurveSegments, cliffTagSegments, closeLineCoordinates, courseCrossSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isCliffSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
 import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyFix, formatFieldSurveyDuration, headingUpBearing, movementHeading, usableSurveyFix} from '../js/field_survey.mjs';
 import {AccountApiError, createAccountApi, userMapCacheKey, workspaceCacheKey} from '../js/account_api.mjs';
 
@@ -211,6 +211,21 @@ const stairSteps = stairwayStepSegments(fenceObject.coordinates, {stepSpacingMm:
 assert(stairSteps.length >= 3);
 assert(stairSteps[0][0][1] < stairSteps[0][1][1], 'Trappsteg ska ligga tvärs över linjens ritningsriktning');
 assert.equal(isDecoratedLineSymbol('532'), true);
+assert.equal(isCliffSymbol('104'), true);
+assert.equal(isDecoratedLineSymbol('105.1'), true);
+assert.equal(isDecoratedLineSymbol('105.2'), true);
+assert.equal(isDecoratedLineSymbol('106'), true);
+assert.equal(isDecoratedLineSymbol('512'), true);
+assert.equal(isDecoratedLineSymbol('711'), true);
+assert.equal(courseCrossSegments([[18,59],[18.01,59]], {styleSpacingMm:5,styleWidthMm:3,styleHeightMm:3}, 15000).length >= 2, true);
+assert.equal(bridgeTunnelCurveSegments([[18,59],[18.001,59]], {tagLengthMm:.5,tagSpacingMm:.4}, 15000).length, 4);
+assert.match(symbolObjectControlsHtml({id:'vineyard-1',symbol:'414',orientationDegrees:30,background:'yellow50'}, escapeHtml), /data-symbol-value-property="orientationDegrees"/);
+assert.match(symbolObjectControlsHtml({id:'vineyard-1',symbol:'414',orientationDegrees:30,background:'yellow50'}, escapeHtml), /data-symbol-setting-property="background"/);
+assert.match(symbolObjectControlsHtml({id:'boundary-1',symbol:'416',variant:'black-dots'}, escapeHtml), /data-symbol-setting-property="variant"/);
+assert.match(symbolObjectControlsHtml({id:'ride-1',symbol:'508',runnability:'walk'}, escapeHtml), /data-symbol-setting-property="runnability"/);
+assert.match(symbolObjectControlsHtml({id:'height-1',symbol:'603',elevation:219}, escapeHtml), /value="219"/);
+assert.match(symbolObjectControlsHtml({id:'number-1',symbol:'704',controlNumber:'8'}, escapeHtml), /value="8"/);
+assert.match(symbolObjectControlsHtml({id:'landform-1',symbol:'115',legendDefinition:'Kolbotten'}, escapeHtml), /data-symbol-value-property="legendDefinition"/);
 const attachment = nearestBarrierAttachment([{id: 'path', symbol: '506', coordinates: [[18, 59], [18.001, 59]]}, {id: 'wall', symbol: '515', coordinates: [[18, 59.0001], [18.001, 59.0001]]}], [18.0004, 59.00011], 25);
 assert.equal(attachment.barrier.id, 'wall');
 assert(Math.abs(attachment.snapped.coordinate[1] - 59.0001) < 1e-10);
@@ -605,10 +620,10 @@ assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
 assert(fieldHtml.includes('styles.css?v=15'));
-assert(fieldHtml.includes('isom_symbols.js?v=14'));
-assert(fieldHtml.includes('isom_renderer.js?v=17'));
+assert(fieldHtml.includes('isom_symbols.js?v=15'));
+assert(fieldHtml.includes('isom_renderer.js?v=18'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=39"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=40"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -640,6 +655,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generated_infrastructure.mjs?v=11','generated_land_cover.mjs?v=6','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=5']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generated_infrastructure.mjs?v=11','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=6']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
