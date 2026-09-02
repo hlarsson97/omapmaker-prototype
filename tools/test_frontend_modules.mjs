@@ -66,10 +66,10 @@ const syncedData=await syncApi.userData(0);assert.equal(syncedData.cursor,4);ass
 const layerChange={scopeId:'global',layerType:'roads',featureId:'way/42',payload:{properties:{status:'locally-edited'}}};
 await syncApi.syncUserData([{id:'object-1'}],[],[layerChange],'22222222-2222-4222-8222-222222222222');assert.equal(JSON.parse(syncRequests[2].options.body).mutationId,'22222222-2222-4222-8222-222222222222');assert.equal(JSON.parse(syncRequests[2].options.body).layerOverrides[0].featureId,'way/42');
 await syncApi.importUserData([{id:'object-1'}],[],[layerChange],'33333333-3333-4333-8333-333333333333');assert.equal(syncRequests[3].options.headers['X-OMapMaker-CSRF'],'csrf-sync');
-const lmRequests=[],lmResponses=[{authenticated:true,user:{id:'user-1'},csrfToken:'csrf-lm'},{connected:false,manifest:null},{connected:true,manifest:{product:'Topografi 10 Nedladdning, vektor'}},{connected:false,manifest:null}];
+const lmRequests=[],lmResponses=[{authenticated:true,user:{id:'user-1'},csrfToken:'csrf-lm'},{connected:false,manifest:null},{connected:true,manifest:{product:'Topografi 10 Nedladdning, vektor'}},{id:'download-1',status:'queued'},{job:{id:'download-1',status:'running'}},{connected:false,manifest:null}];
 const lmApi=createAccountApi({storage:new MemoryStorage(),fetchImpl:async(url,options={})=>{lmRequests.push({url,options});return{ok:true,status:200,json:async()=>lmResponses.shift()}}});
-await lmApi.session();await lmApi.lantmaterietSession();await lmApi.connectLantmateriet('user','secret','cc4cbb38-d8c6-4859-b271-592a7477e374');await lmApi.disconnectLantmateriet();
-assert.equal(lmRequests[2].options.headers['X-OMapMaker-CSRF'],'csrf-lm');assert.equal(JSON.parse(lmRequests[2].options.body).password,'secret');assert.equal(lmRequests[3].options.method,'DELETE');
+await lmApi.session();await lmApi.lantmaterietSession();await lmApi.connectLantmateriet('user','secret','cc4cbb38-d8c6-4859-b271-592a7477e374');await lmApi.startLantmaterietDownload(['communication','utilities']);await lmApi.lantmaterietDownloadStatus();await lmApi.disconnectLantmateriet();
+assert.equal(lmRequests[2].options.headers['X-OMapMaker-CSRF'],'csrf-lm');assert.equal(JSON.parse(lmRequests[2].options.body).password,'secret');assert.deepEqual(JSON.parse(lmRequests[3].options.body).themes,['communication','utilities']);assert.equal(lmRequests[3].options.headers['X-OMapMaker-CSRF'],'csrf-lm');assert.equal(lmRequests[4].url,'/api/lantmateriet-downloads/latest');assert.equal(lmRequests[5].options.method,'DELETE');
 
 assert.equal(escapeHtml('<sten & "stig">'), '&lt;sten &amp; &quot;stig&quot;&gt;');
 assert.deepEqual(cloneJson({coordinates: [18.1, 59.2]}), {coordinates: [18.1, 59.2]});
@@ -682,7 +682,7 @@ assert(fieldHtml.includes('styles.css?v=16'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=20'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=46"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=47"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','disconnectLantmateriet']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -714,6 +714,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['map_layer_api.mjs?v=3','map_setup.mjs?v=5','account_api.mjs?v=1','generated_buildings.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=14','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['map_layer_api.mjs?v=3','map_setup.mjs?v=5','account_api.mjs?v=2','generated_buildings.mjs?v=1','generated_roads.mjs?v=1','generated_infrastructure.mjs?v=14','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=7','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

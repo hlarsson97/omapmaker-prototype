@@ -123,5 +123,13 @@ export function createAccountApi({fetchImpl = globalThis.fetch, storage = global
     return request('/api/lantmateriet-session', {method: 'DELETE', csrf: true});
   }
 
-  return {session, login, logout, listWorkspaces, createWorkspace, updateWorkspace, importWorkspaces, userData, syncUserData, importUserData, lantmaterietSession, connectLantmateriet, disconnectLantmateriet, cachedUser, cachedWorkspaces, cacheWorkspaces};
+  async function startLantmaterietDownload(themes) {
+    return request('/api/lantmateriet-downloads', {method: 'POST', body: {themes}, csrf: true});
+  }
+
+  async function lantmaterietDownloadStatus() {
+    return request('/api/lantmateriet-downloads/latest');
+  }
+
+  return {session, login, logout, listWorkspaces, createWorkspace, updateWorkspace, importWorkspaces, userData, syncUserData, importUserData, lantmaterietSession, connectLantmateriet, disconnectLantmateriet, startLantmaterietDownload, lantmaterietDownloadStatus, cachedUser, cachedWorkspaces, cacheWorkspaces};
 }

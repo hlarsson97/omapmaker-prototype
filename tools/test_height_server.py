@@ -1,5 +1,6 @@
 import sys
 import tempfile
+import io
 import json
 import os
 import unittest
@@ -116,6 +117,26 @@ class GeotorgetDownloadTests(unittest.TestCase):
             geotorget.api_response('cc4cbb38-d8c6-4859-b271-592a7477e374','',username='herman',password='hemligt')
         self.assertEqual(captured['request'].get_header('Authorization'),'Basic aGVybWFuOmhlbWxpZ3Q=')
         self.assertNotIn('hemligt',captured['request'].full_url)
+
+    def test_theme_selection_uses_manifest_titles_and_rejects_unknown_themes(self):
+        manifest={'files':[
+            {'title':'kommunikation_sverige.zip','length':3,'path':'/signed/road?q=secret'},
+            {'title':'hydro_sverige.zip','length':4,'path':'/signed/water?q=secret'},
+            {'title':'ledningar_sverige.zip','length':5,'path':'/signed/power?q=secret'},
+            {'title':'mark_sverige.zip','length':6,'path':'/signed/land?q=secret'},
+        ]}
+        selected=geotorget.select_theme_files(manifest,['communication','utilities'])
+        self.assertEqual([item['title'] for item in selected],['kommunikation_sverige.zip','ledningar_sverige.zip'])
+        with self.assertRaisesRegex(ValueError,'Okänt'):geotorget.select_theme_files(manifest,['buildings'])
+
+    def test_theme_download_refreshes_paths_streams_and_reuses_complete_cache(self):
+        manifest={'deliveryId':'delivery-1','deliveryUpdated':'2026-09-01','files':[{'title':'ledningar_sverige.zip','length':5,'path':'/fresh?q=secret'}]}
+        progress=[]
+        with tempfile.TemporaryDirectory() as temporary, patch.object(geotorget,'delivery_manifest',return_value=manifest), patch.object(geotorget,'api_response',return_value=io.BytesIO(b'power')) as fetch:
+            first=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary,username='user',password='secret',progress=lambda *args:progress.append(args))
+            second=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary,username='user',password='secret')
+        self.assertFalse(first['files'][0]['cached']);self.assertTrue(second['files'][0]['cached'])
+        self.assertEqual(progress[-1],('ledningar_sverige.zip',5,5));fetch.assert_called_once()
 
 
 class QuietHandler(server.Handler):
@@ -242,6 +263,8 @@ class UserWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(status,200);self.assertTrue(result['connected']);self.assertNotIn('password',json.dumps(result));self.assertNotIn('/signed',json.dumps(result));verify.assert_called_once_with(payload['orderId'],username=payload['username'],password=payload['password'])
         _,current,_=self.request('/api/lantmateriet-session',headers={'Cookie':cookie});self.assertTrue(current['connected'])
         _,cleared,_=self.request('/api/lantmateriet-session',method='DELETE',headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf});self.assertFalse(cleared['connected']);self.assertEqual(server.LM_SESSION['password'],'')
+        status,result,_=self.request('/api/lantmateriet-downloads',{'themes':['communication']},headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf});self.assertEqual(status,401);self.assertEqual(result['code'],'lantmateriet_credentials_required')
+        status,result,_=self.request('/api/lantmateriet-downloads/latest',headers={'Cookie':cookie});self.assertEqual(status,200);self.assertIn('job',result)
 
     def test_workspaces_require_authentication_and_are_isolated(self):
         workspace=self.workspace()

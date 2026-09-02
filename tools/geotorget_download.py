@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import re
+import shutil
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -42,7 +43,7 @@ def api_response(order_id, path, bearer_token="", username="", password=""):
     except urllib.error.HTTPError as exc:
         detail = exc.read(1000).decode("utf-8", "replace")
         if exc.code in (401, 403):
-            raise ApiError("Geotorget nekade åtkomst till ordern. Kontrollera OrderID och OAuth2-behörighet till Geotorget Nedladdning.") from exc
+            raise ApiError("Geotorget nekade åtkomst till ordern. Kontrollera OrderID, användarnamn, lösenord och behörighet till Geotorget Nedladdning.") from exc
         raise ApiError(f"HTTP {exc.code} från Geotorget Nedladdning: {detail}") from exc
     except urllib.error.URLError as exc:
         raise ApiError(f"Kunde inte nå Geotorget Nedladdning: {exc.reason}") from exc
@@ -96,6 +97,79 @@ def delivery_manifest(order_id, bearer_token="", username="", password=""):
         "totalBytes": sum(item["length"] for item in files),
         "files": files,
     }
+
+
+THEME_PREFIXES = {
+    "communication": ("kommunikation",),
+    "hydrography": ("hydro",),
+    "utilities": ("ledningar",),
+}
+
+
+def select_theme_files(manifest, themes):
+    """Select known Topografi 10 archives without trusting client file paths."""
+    requested = list(dict.fromkeys(str(theme or "").strip().lower() for theme in themes or []))
+    unknown = [theme for theme in requested if theme not in THEME_PREFIXES]
+    if unknown:
+        raise ValueError("Okänt Topografi 10-tema: " + ", ".join(unknown))
+    if not requested:
+        raise ValueError("Välj minst ett Topografi 10-tema.")
+    selected = []
+    for item in manifest.get("files", []):
+        title = Path(str(item.get("title") or "")).name
+        normalized = title.lower()
+        if any(normalized.startswith(THEME_PREFIXES[theme]) for theme in requested):
+            selected.append({**item, "title": title})
+    missing = [theme for theme in requested if not any(item["title"].lower().startswith(THEME_PREFIXES[theme]) for item in selected)]
+    if missing:
+        raise ApiError("Leveransen saknar valda teman: " + ", ".join(missing))
+    return selected
+
+
+def download_theme_files(order_id, themes, destination, bearer_token="", username="", password="", progress=None, cancelled=None):
+    """Refresh signed URLs and stream selected archives into the server cache."""
+    manifest = delivery_manifest(order_id, bearer_token, username, password)
+    files = select_theme_files(manifest, themes)
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    required = sum(max(0, int(item.get("length") or 0)) for item in files)
+    missing_bytes = sum(max(0, int(item.get("length") or 0)) for item in files if not (destination / item["title"]).is_file() or (item.get("length") and (destination / item["title"]).stat().st_size != int(item["length"])))
+    if shutil.disk_usage(destination).free < missing_bytes + 512 * 1024 * 1024:
+        raise OSError("Servern saknar tillräckligt diskutrymme för de valda Topografi 10-filerna.")
+    transferred = 0
+    results = []
+    for item in files:
+        if cancelled and cancelled():
+            raise InterruptedError("Nedladdningen avbröts.")
+        target = destination / item["title"]
+        expected = max(0, int(item.get("length") or 0))
+        if target.is_file() and (not expected or target.stat().st_size == expected):
+            transferred += target.stat().st_size
+            results.append({"title": item["title"], "length": target.stat().st_size, "cached": True})
+            if progress:
+                progress(item["title"], transferred, required)
+            continue
+        temporary = target.with_name(target.name + ".part")
+        temporary.unlink(missing_ok=True)
+        try:
+            with api_response(order_id, item["path"], bearer_token, username, password) as response, temporary.open("wb") as output:
+                while True:
+                    if cancelled and cancelled():
+                        raise InterruptedError("Nedladdningen avbröts.")
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    transferred += len(chunk)
+                    if progress:
+                        progress(item["title"], transferred, required)
+            if expected and temporary.stat().st_size != expected:
+                raise ApiError(f"{item['title']} blev ofullständig ({temporary.stat().st_size} av {expected} byte).")
+            temporary.replace(target)
+            results.append({"title": item["title"], "length": target.stat().st_size, "cached": False})
+        finally:
+            temporary.unlink(missing_ok=True)
+    return {"deliveryId": manifest.get("deliveryId"), "deliveryUpdated": manifest.get("deliveryUpdated"), "totalBytes": required, "files": results}
 
 
 def service_credential(name, environment_name):

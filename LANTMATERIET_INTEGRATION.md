@@ -25,7 +25,19 @@ vid tjänsteomstart.
 
 Byggnader hämtas via STAC-vektor till en temporär katalog. GeoPackage-lagret klipps omedelbart till arbetsområdets bbox och råleveransen tas bort när anropet är klart. Endast geometri, tekniskt käll-ID, namn och ändamål behålls. Källan ingår i central-lagrets parametrar så OSM och Lantmäteriet inte blandas.
 
-Nästa steg är motsvarande import för Topografi 10 samt därefter Fastighetsindelning.
+Topografi 10 kan nu anslutas med ett privat Geotorget-konto och hämtas som ett
+bakgrundsjobb. OMapMaker begär alltid en färsk fillista och sparar därför aldrig
+de tidsbegränsade `q`-signaturerna. Följande teman kan mellanlagras på servern:
+
+- `kommunikation` för vägar, stigar och järnvägar,
+- `hydro` för vattendrag, diken och vattenytor,
+- `ledningar` för kraftledningar och master.
+
+Filerna strömmas till `data/lantmateriet/topografi10/`, en katalog som ignoreras
+av Git. Avbrutna `.part`-filer tas bort och kompletta filer återanvänds. Nästa
+steg är att läsa de levererade GeoPackage-lagren, klippa dem till arbetsområdet
+och mappa attributen till OMapMakers objektmodell. Fastighetsindelning följer
+därefter.
 
 ## Villkor och attribution
 

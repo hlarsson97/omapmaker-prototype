@@ -13,7 +13,7 @@ from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Polyg
 from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from lantmateriet_vector import lantmateriet_buildings, lantmateriet_property_boundaries
-from geotorget_download import delivery_manifest as geotorget_delivery_manifest
+from geotorget_download import delivery_manifest as geotorget_delivery_manifest, download_theme_files as geotorget_download_theme_files
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -24,6 +24,7 @@ LEVELS={'detailed':2,'normal':5,'soft':10}
 HEIGHT_VALIDATION_VERSION=1
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
 HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':'','orderId':'','manifest':None}
+TOPO_LOCK=threading.Lock();TOPO_JOBS={};TOPO_CANCEL_EVENTS={};TOPO_EXECUTOR=ThreadPoolExecutor(max_workers=1,thread_name_prefix='omapmaker-topografi10')
 OAUTH_LOCK=threading.Lock();OAUTH_STATE={'accessToken':'','expiresAt':0.0}
 JOBS_LOCK=threading.Lock();JOBS={};JOB_CANCEL_EVENTS={};JOB_EXECUTOR=ThreadPoolExecutor(max_workers=2,thread_name_prefix='omapmaker-contours')
 LOGIN_LOCK=threading.Lock();LOGIN_FAILURES={}
@@ -1066,8 +1067,60 @@ def set_geotorget_credentials(username,password,order_id):
     return {'connected':True,'manifest':public_geotorget_manifest(manifest)}
 
 def clear_geotorget_credentials():
+    with TOPO_LOCK:
+        for job_id,job in TOPO_JOBS.items():
+            if job.get('status') in ('queued','running'):
+                event=TOPO_CANCEL_EVENTS.get(job_id)
+                if event:event.set()
     with LM_SESSION_LOCK:LM_SESSION.update({'username':'','password':'','orderId':'','manifest':None})
     return {'connected':False,'manifest':None}
+
+def public_topography_job(job_id):
+    with TOPO_LOCK:job=TOPO_JOBS.get(job_id)
+    if not job:return None
+    return {key:value for key,value in job.items() if key not in ('createdAt','updatedAt')}
+
+def update_topography_job(job_id,**changes):
+    with TOPO_LOCK:
+        if job_id in TOPO_JOBS:TOPO_JOBS[job_id].update(changes,updatedAt=time.time())
+
+def run_topography_job(job_id,order_id,username,password,themes):
+    event=TOPO_CANCEL_EVENTS[job_id]
+    try:
+        update_topography_job(job_id,status='running',stage='refreshing',message='Hämtar en färsk fillista från Geotorget…')
+        def progress(title,transferred,total):
+            percent=round(100*transferred/total,1) if total else 0
+            update_topography_job(job_id,stage='downloading',message=f'Hämtar {title}…',transferredBytes=transferred,totalBytes=total,progressPercent=percent)
+        result=geotorget_download_theme_files(order_id,themes,DATA/'topografi10',username=username,password=password,progress=progress,cancelled=event.is_set)
+        update_topography_job(job_id,status='complete',stage='complete',message='Topografi 10-filerna finns i serverns cache.',progressPercent=100,result=result)
+    except InterruptedError:update_topography_job(job_id,status='cancelled',stage='cancelled',message='Nedladdningen avbröts.')
+    except (LantmaterietApiError,ValueError,OSError) as exc:update_topography_job(job_id,status='error',stage='failed',message=str(exc),code='topography_download_error')
+    except Exception as exc:
+        print(f'Topografi 10-jobb {job_id} misslyckades: {type(exc).__name__}: {exc}',file=sys.stderr,flush=True);traceback.print_exc()
+        update_topography_job(job_id,status='error',stage='failed',message='Topografi 10-filerna kunde inte hämtas.',code='topography_download_error')
+    finally:password=''
+
+def create_topography_job(themes):
+    with LM_SESSION_LOCK:
+        username=LM_SESSION.get('username');password=LM_SESSION.get('password');order_id=LM_SESSION.get('orderId')
+    if not username or not password or not order_id:raise LantmaterietCredentialsRequired('Anslut Geotorget innan Topografi 10-filer hämtas.')
+    themes=list(dict.fromkeys(str(theme or '').strip().lower() for theme in themes or []))
+    allowed={'communication','hydrography','utilities'}
+    if not themes or any(theme not in allowed for theme in themes):raise ValueError('Välj minst ett giltigt Topografi 10-tema.')
+    with TOPO_LOCK:
+        active=next((job for job in TOPO_JOBS.values() if job.get('status') in ('queued','running')),None)
+        if active:return {key:value for key,value in active.items() if key not in ('createdAt','updatedAt')}
+        job_id=uuid.uuid4().hex;now=time.time()
+        TOPO_JOBS[job_id]={'id':job_id,'status':'queued','stage':'queued','message':'Topografi 10-jobbet väntar…','themes':themes,'transferredBytes':0,'totalBytes':0,'progressPercent':0,'createdAt':now,'updatedAt':now}
+        TOPO_CANCEL_EVENTS[job_id]=threading.Event()
+    TOPO_EXECUTOR.submit(run_topography_job,job_id,order_id,username,password,themes)
+    return public_topography_job(job_id)
+
+def latest_topography_job():
+    with TOPO_LOCK:
+        if not TOPO_JOBS:return None
+        job_id=max(TOPO_JOBS,key=lambda key:TOPO_JOBS[key].get('createdAt',0))
+    return public_topography_job(job_id)
 
 def expected_height_files(search_result):
     files=[]
@@ -1359,6 +1412,10 @@ class Handler(SimpleHTTPRequestHandler):
             session=self.require_session()
             if not session:return
             return self.send_json(200,geotorget_session_status())
+        if path=='/api/lantmateriet-downloads/latest':
+            session=self.require_session()
+            if not session:return
+            return self.send_json(200,{'job':latest_topography_job()})
         if path=='/api/workspaces':
             session=self.require_session()
             if not session:return
@@ -1456,6 +1513,12 @@ class Handler(SimpleHTTPRequestHandler):
                 request=self.read_json(64_000)
                 return self.send_json(200,set_geotorget_credentials(request.get('username'),request.get('password'),request.get('orderId')))
             except LantmaterietApiError as exc:return self.send_json(401,{'error':str(exc),'code':'lantmateriet_credentials_rejected'})
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path=='/api/lantmateriet-downloads':
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:return self.send_json(202,create_topography_job(self.read_json(64_000).get('themes')))
+            except LantmaterietCredentialsRequired as exc:return self.send_json(401,{'error':str(exc),'code':'lantmateriet_credentials_required'})
             except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/workspaces':
             session=self.require_session(csrf=True)
