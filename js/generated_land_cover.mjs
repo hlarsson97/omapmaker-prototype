@@ -34,7 +34,7 @@ export function applyLandCoverPattern(path, patternId) {
 
 export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
   let layer = null;
-  let attributionVisible = false;
+  let currentAttribution = '';
   let patternSerial = 0;
 
   function style(feature) {
@@ -70,8 +70,8 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     const id = escapeHtml(feature.id);
     const select = water ? `<select class="land-cover-type-select" data-land-cover-id="${id}">${symbolOptions(feature).map(symbol => `<option value="${symbol}" ${String(properties.isomSymbol) === symbol ? 'selected' : ''}>${symbol} ${WATER_SYMBOL_NAMES[symbol]}</option>`).join('')}</select><button type="button" data-land-cover-review="change" data-land-cover-id="${id}">Ändra typ</button>` : '';
     const object = generatedMapObject('land-cover', feature, {statusLabel: generatedStatusLabel(feature)});
-    const osmType = properties.boundaryEvidence || properties.building || properties.barrier || properties.natural || properties.wetland || properties.water || properties.waterway || properties.landuse || 'okänd typ';
-    return mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDetails: properties.reviewRequired ? [`säkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`] : [], secondaryDetails: [`OSM-typ: ${osmType}`], controlsHtml: select, actionsHtml: generatedActionHtml('land-cover', feature), className: 'land-cover-popup'});
+    const sourceType = properties.sourceObjectType || properties.boundaryEvidence || properties.building || properties.barrier || properties.natural || properties.wetland || properties.water || properties.waterway || properties.landuse || 'okänd typ';
+    return mapObjectPopup(object, {title, isomClaim, escapeHtml, primaryDetails: properties.reviewRequired ? [`säkerhet ${confidence[properties.classificationConfidence] || 'okänd'}`] : [], secondaryDetails: [`Källtyp: ${sourceType}`], controlsHtml: select, actionsHtml: generatedActionHtml('land-cover', feature), className: 'land-cover-popup'});
   }
 
   function installPatterns() {
@@ -126,9 +126,9 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
   function render() {
     if (layer) map.removeLayer(layer);
     layer = null;
-    if (attributionVisible) {
-      map.attributionControl.removeAttribution(LAND_COVER_ATTRIBUTION);
-      attributionVisible = false;
+    if (currentAttribution) {
+      map.attributionControl.removeAttribution(currentAttribution);
+      currentAttribution = '';
     }
     const data = getData();
     if (!data || !isVisible()) return;
@@ -136,8 +136,8 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     const restricted = Leaflet.geoJSON(data, {pane: 'restrictedAreaPane', filter: feature => isCurrentLandCoverData(data) && String(feature.properties?.isomSymbol) === '520' && featureIsSelected(feature), style, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
     layer = Leaflet.layerGroup([base, restricted]).addTo(map);
     schedule(installPatterns);
-    map.attributionControl.addAttribution(LAND_COVER_ATTRIBUTION);
-    attributionVisible = true;
+    currentAttribution = data.properties?.attribution || LAND_COVER_ATTRIBUTION;
+    map.attributionControl.addAttribution(currentAttribution);
   }
 
   function refreshMeta() {

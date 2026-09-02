@@ -27,7 +27,7 @@ export function infrastructureMetaText(data, generatedStatus, centralLayerLabel)
 
 export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement}) {
   let layer = null;
-  let attributionVisible = false;
+  let currentAttribution = '';
 
   function outerStyle(feature) {
     const symbol = String(feature.properties?.isomSymbol || '510');
@@ -66,9 +66,9 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
   function render() {
     if (layer) map.removeLayer(layer);
     layer = null;
-    if (attributionVisible) {
-      map.attributionControl.removeAttribution(INFRASTRUCTURE_ATTRIBUTION);
-      attributionVisible = false;
+    if (currentAttribution) {
+      map.attributionControl.removeAttribution(currentAttribution);
+      currentAttribution = '';
     }
     const data = getData();
     if (!data || !isVisible()) return;
@@ -84,8 +84,8 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     const bridgeDecorations = data.features.filter(feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '512' && !['excluded', 'deleted'].includes(generatedStatus(feature))).flatMap(feature => bridgeTunnelCurveSegments(feature.geometry?.coordinates || [], renderer.definition('512'), 15000).map(segment => Leaflet.polyline(segment.map(coordinate => [coordinate[1], coordinate[0]]), {pane: 'infrastructurePane', interactive: false, ...renderer.lineStyles('512', feature.properties || {}, normContext()).outer, lineJoin: 'miter', className: generatedClass(feature, 'osm-infrastructure infrastructure-512 bridge-decoration')})));
     const supports = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => feature.properties?.featureKind === 'support' && featureIsSelected(feature), pointToLayer: (feature, latlng) => mapMarker(latlng, {pane: 'infrastructureMarkerPane', icon: supportIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 300})});
     layer = Leaflet.layerGroup([outer, major, inner, ...bridgeDecorations, supports]).addTo(map);
-    map.attributionControl.addAttribution(INFRASTRUCTURE_ATTRIBUTION);
-    attributionVisible = true;
+    currentAttribution = data.properties?.attribution || INFRASTRUCTURE_ATTRIBUTION;
+    map.attributionControl.addAttribution(currentAttribution);
   }
 
   function refreshMeta() {

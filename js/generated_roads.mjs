@@ -24,7 +24,7 @@ export function roadMetaText(data, generatedStatus, centralLayerLabel) {
 
 export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, featureIsVisible, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, lineStyles, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, onRoadClick = null}) {
   let layer = null;
-  let attributionVisible = false;
+  let currentAttribution = '';
 
   function style(feature) {
     const symbol = String(feature.properties?.isomSymbol || '506');
@@ -35,7 +35,7 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
   function popup(feature) {
     const properties = feature.properties || {};
     const confidence = {high: 'hög', medium: 'medel', low: 'låg'};
-    const reasons = {'explicit-width': 'uppmätt bredd', 'estimated-width': 'uppskattad bredd', 'inferred-lanes': 'antal körfält', 'motorway-system': 'motorvägssystem', 'junction-inherited': 'rondellens vägklass', 'dual-carriageway': 'delad körbana', 'paired-oneway': 'parade enkelriktade körbanor', 'road-class': 'OSM-vägklass', 'firm-vehicle-road': 'fast fordonsväg', 'vehicle-track': 'fordonsspår', 'trail-visibility': 'stigens synlighet', 'path-width-or-visibility': 'stigens bredd eller synlighet', 'path-class': 'OSM-stigtyp', 'unknown-highway': 'okänd vägtyp'};
+    const reasons = {'explicit-width': 'uppmätt bredd', 'estimated-width': 'uppskattad bredd', 'inferred-lanes': 'antal körfält', 'motorway-system': 'motorvägssystem', 'junction-inherited': 'rondellens vägklass', 'dual-carriageway': 'delad körbana', 'paired-oneway': 'parade enkelriktade körbanor', 'road-class': 'OSM-vägklass', 'firm-vehicle-road': 'fast fordonsväg', 'vehicle-track': 'fordonsspår', 'trail-visibility': 'stigens synlighet', 'path-width-or-visibility': 'stigens bredd eller synlighet', 'path-class': 'OSM-stigtyp', 'unknown-highway': 'okänd vägtyp', 'lantmateriet-object-type': 'Lantmäteriets objekttyp'};
     const id = escapeHtml(feature.id);
     const options = Object.entries(ROAD_TYPES).map(([symbol, data]) => `<option value="${symbol}" ${String(properties.isomSymbol) === symbol ? 'selected' : ''}>${symbol} ${data[1]}</option>`).join('');
     const object = generatedMapObject('roads', feature, {statusLabel: generatedStatusLabel(feature)});
@@ -46,17 +46,17 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
   function render() {
     if (layer) map.removeLayer(layer);
     layer = null;
-    if (attributionVisible) {
-      map.attributionControl.removeAttribution(ROAD_ATTRIBUTION);
-      attributionVisible = false;
+    if (currentAttribution) {
+      map.attributionControl.removeAttribution(currentAttribution);
+      currentAttribution = '';
     }
     const data = getData();
     if (!data || !isVisible()) return;
     const outer = Leaflet.geoJSON(data, {pane: 'foundationPane', filter: featureIsVisible, style, onEachFeature: (feature, featureLayer) => {featureLayer.bindPopup(popup(feature), {maxWidth: 320});if(onRoadClick)featureLayer.on('click', event => onRoadClick(feature, event, featureLayer))}});
     const inner = Leaflet.geoJSON(data, {pane: 'foundationPane', interactive: false, filter: feature => featureIsVisible(feature) && String(feature.properties?.isomSymbol) === '502' && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: feature => ({...lineStyles('502', feature.properties || {}, normContext()).inner, className: 'osm-road-fill'})});
     layer = Leaflet.layerGroup([outer, inner]).addTo(map);
-    map.attributionControl.addAttribution(ROAD_ATTRIBUTION);
-    attributionVisible = true;
+    currentAttribution = data.properties?.attribution || ROAD_ATTRIBUTION;
+    map.attributionControl.addAttribution(currentAttribution);
   }
 
   function refreshMeta() {

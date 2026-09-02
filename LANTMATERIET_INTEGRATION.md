@@ -23,23 +23,32 @@ lösenord skrivs aldrig till databasen, webbläsarlagring, loggar eller Git.
 Signerade fillänkar sparas aldrig. Den lokala credential-filen läses och ordern
 verifieras automatiskt vid tjänsteomstart.
 
-## Nästa implementation
+## Implementerat
 
 Byggnader hämtas via STAC-vektor till en temporär katalog. GeoPackage-lagret klipps omedelbart till arbetsområdets bbox och råleveransen tas bort när anropet är klart. Endast geometri, tekniskt käll-ID, namn och ändamål behålls. Källan ingår i central-lagrets parametrar så OSM och Lantmäteriet inte blandas.
 
-Topografi 10 kan nu anslutas med ett privat Geotorget-konto och hämtas som ett
+Topografi 10 kan anslutas med ett privat Geotorget-konto och hämtas som ett
 bakgrundsjobb. OMapMaker begär alltid en färsk fillista och sparar därför aldrig
-de tidsbegränsade `q`-signaturerna. Följande teman kan mellanlagras på servern:
+de tidsbegränsade `q`-signaturerna. Följande teman hämtas och importeras områdesvis:
 
 - `kommunikation` för vägar, stigar och järnvägar,
 - `hydro` för vattendrag, diken och vattenytor,
 - `ledningar` för kraftledningar och master.
 
 Filerna strömmas till `data/lantmateriet/topografi10/`, en katalog som ignoreras
-av Git. Avbrutna `.part`-filer tas bort och kompletta filer återanvänds. Nästa
-steg är att läsa de levererade GeoPackage-lagren, klippa dem till arbetsområdet
-och mappa attributen till OMapMakers objektmodell. Fastighetsindelning följer
-därefter.
+av Git. Avbrutna `.part`-filer tas bort och kompletta filer återanvänds. GeoPackage-
+filerna packas upp en gång i den privata servercachen. Därefter används deras
+spatiala index så att endast objekt som berör arbetsområdet läses, klipps och
+omprojiceras från SWEREF 99 TM till WGS 84.
+
+Kommunikation ger vägar och stigar (ISOM 502–506) samt järnvägar (509). Ledningar
+ger fördelningsledningar (510) och region-/stamledningar (511). Hydrografins
+linjer ersätter motsvarande OSM-vattendrag som försiktiga 305-kandidater; övriga
+vattenytor och ISOM 520-underlag ligger kvar från OSM tills tema Mark respektive
+de senare referensprodukterna har importerats. Automatisk vägkälla föredrar den
+lokala Topografi 10-leveransen och faller tillbaka på OSM om filen saknas.
+
+Fastighetsindelning är dessutom ansluten som separat referenslager.
 
 ## Villkor och attribution
 

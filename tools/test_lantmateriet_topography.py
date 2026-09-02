@@ -1,0 +1,58 @@
+import tempfile
+import unittest
+import zipfile
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lantmateriet_topography as topo
+
+
+LINE = {"type": "LineString", "coordinates": [[18.0, 59.0], [18.001, 59.001]]}
+
+
+class TopographyImportTests(unittest.TestCase):
+    def test_archive_is_extracted_to_private_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with zipfile.ZipFile(root / "kommunikation_sverige.zip", "w") as package:
+                package.writestr("kommunikation_sverige.gpkg", b"gpkg-test")
+            with patch.object(topo, "TOPOGRAPHY_ROOT", root), patch.object(topo, "EXTRACTED_ROOT", root / "extracted"):
+                target = topo.ensure_geopackage("communication")
+                self.assertEqual(target.read_bytes(), b"gpkg-test")
+                self.assertTrue(topo.cache_status()["communication"]["extracted"])
+
+    def test_road_object_types_map_to_isom(self):
+        values = {
+            "vaglinje": [("1", 0, {"objektidentitet": "road", "objekttypnr": 1801, "objekttyp": "Motorväg", "bro_och_tunnel": "överfart", "gatunamn": "E4"}, LINE)],
+            "ovrig_vag": [("2", 0, {"objektidentitet": "path", "objekttypnr": 1624, "objekttyp": "Gångstig", "vagutforande": "Normal"}, LINE)],
+        }
+        with patch.object(topo, "ensure_geopackage", return_value=Path("communication.gpkg")), patch.object(topo, "_line_features", side_effect=lambda package, layer, bbox: values[layer]):
+            result = topo.roads([17.9, 58.9, 18.1, 59.1])
+        self.assertEqual([item["properties"]["isomSymbol"] for item in result["features"]], ["502", "506"])
+        self.assertEqual(result["features"][0]["properties"]["bridge"], "yes")
+        self.assertEqual(result["properties"]["sourceType"], "lantmateriet")
+
+    def test_rail_and_power_lines_map_to_isom(self):
+        layers = {
+            "ralstrafik": [("1", 0, {"objektidentitet": "rail", "objekttyp": "Järnväg", "status": "Öppen", "under_byggnad": "Nej", "bro_och_tunnel": "Ingen information"}, LINE)],
+            "ledningslinje": [("2", 0, {"objektidentitet": "power", "objekttypnr": 1703, "objekttyp": "Kraftledning region"}, LINE)],
+        }
+        with patch.object(topo, "ensure_geopackage", side_effect=[Path("communication.gpkg"), Path("utilities.gpkg")]), patch.object(topo, "_line_features", side_effect=lambda package, layer, bbox: layers[layer]):
+            result = topo.infrastructure([17.9, 58.9, 18.1, 59.1])
+        self.assertEqual([item["properties"]["isomSymbol"] for item in result["features"]], ["509", "511"])
+
+    def test_hydro_replaces_osm_watercourse_lines_but_keeps_areas(self):
+        imported = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": "lm", "properties": {"isomSymbol": "305"}, "geometry": LINE}]}
+        base = {"type": "FeatureCollection", "properties": {"importVersion": 10}, "features": [
+            {"type": "Feature", "id": "osm-line", "properties": {"isomSymbol": "305"}, "geometry": LINE},
+            {"type": "Feature", "id": "water", "properties": {"isomSymbol": "301"}, "geometry": {"type": "Polygon", "coordinates": []}},
+        ]}
+        result = topo.merge_hydrography(base, imported)
+        self.assertEqual([item["id"] for item in result["features"]], ["water", "lm"])
+        self.assertEqual(result["properties"]["importVersion"], 11)
+
+
+if __name__ == "__main__":
+    unittest.main()

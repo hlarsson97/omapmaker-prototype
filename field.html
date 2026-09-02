@@ -86,16 +86,16 @@
     <label><input id="lineRoads" type="checkbox"><span><b>Vägar och fordonsstråk</b><small>ISOM 502–504</small></span></label>
     <label><input id="linePaths" type="checkbox"><span><b>Stigar och gångstråk</b><small>ISOM 505–506</small></span></label>
     <label><input id="lineFaintPaths" type="checkbox"><span><b>Otydliga stigar</b><small>ISOM 507 · ingår i Detaljerad</small></span></label>
-    <label><input id="lineWatercourses" type="checkbox"><span><b>Vattendrag och diken</b><small>ISOM 304–306 och 309</small></span></label>
+    <label><input id="lineWatercourses" type="checkbox"><span><b>Vattendrag och diken</b><small>ISOM 304–306 och 309 · Lantmäteriet när tillgängligt</small></span></label>
     <label><input id="lineBridges" type="checkbox"><span><b>Karterade broar och tunnlar</b><small>ISOM 512 · säkra OSM-taggar</small></span></label>
     <label><input id="lineInferredBridges" type="checkbox"><span><b>Möjliga broar och tunnlar</b><small>ISOM 512 · riskvillig tolkning av korsande vägar · kräver granskning</small></span></label>
-    <label><input id="lineRailways" type="checkbox"><span><b>Järnvägar</b><small>ISOM 509 · aktiva synliga spår</small></span></label>
+    <label><input id="lineRailways" type="checkbox"><span><b>Järnvägar</b><small>ISOM 509 · aktiva synliga spår · Lantmäteriet när tillgängligt</small></span></label>
     <label><input id="lineDisusedRailways" type="checkbox"><span><b>Nedlagda spår med räls kvar</b><small>ISOM 509 · lägre säkerhet · Detaljerad</small></span></label>
-    <label><input id="linePowerLines" type="checkbox"><span><b>Kraftledningar</b><small>ISOM 510–511 · kända stolpar och master</small></span></label>
+    <label><input id="linePowerLines" type="checkbox"><span><b>Kraftledningar</b><small>ISOM 510–511 · Lantmäteriet när tillgängligt</small></span></label>
     <label><input id="lineAerialways" type="checkbox"><span><b>Linbanor och skidliftar</b><small>ISOM 510 · ingår i Detaljerad</small></span></label>
     <label class="future-option"><input type="checkbox" disabled><span><b>Staket och murar</b><small>Kommer när datakällan är ansluten</small></span></label>
   </fieldset>
-  <details class="generation-advanced"><summary>Avancerat · välj datakälla</summary><label class="generation-select">Vägar och stigar<select id="roadDataSource"><option value="automatic">Automatiskt · rekommenderad</option><option value="osm">OpenStreetMap</option><option value="lantmateriet" disabled>Lantmäteriet · aktiveras efter godkänd behörighet</option></select><small>Topografi 10 ansluts när produktbeställningen har godkänts.</small></label></details>
+  <details class="generation-advanced"><summary>Avancerat · välj datakälla</summary><label class="generation-select">Vägar och stigar<select id="roadDataSource"><option value="automatic">Automatiskt · rekommenderad</option><option value="lantmateriet">Lantmäteriet · Topografi 10</option><option value="osm">OpenStreetMap</option></select><small>Automatiskt använder den importerade Topografi 10-leveransen och faller tillbaka på OpenStreetMap om filen saknas.</small></label></details>
   <div class="generation-note"><b>Samma globala underlag</b><span>Profilerna styr urvalet i arbetsområdet. Källdata kan återanvändas av andra kartor.</span></div>
   <button id="runLineGeneration" class="generation-primary" type="submit">Generera valda linjer</button><p id="lineGenerationStatus" class="generation-status" role="status"></p>
 </form></dialog>
@@ -163,4 +163,4 @@
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="printAttribution">Höjddata © Lantmäteriet · övrigt underlag © OpenStreetMap contributors · egen fältdata</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=16"></script><script src="isom_renderer.js?v=20"></script><script type="module" src="app.mjs?v=50"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=16"></script><script src="isom_renderer.js?v=20"></script><script type="module" src="app.mjs?v=51"></script></body></html>

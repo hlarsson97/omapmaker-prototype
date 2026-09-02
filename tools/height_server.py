@@ -14,6 +14,7 @@ from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from lantmateriet_vector import lantmateriet_buildings, lantmateriet_property_boundaries
 from geotorget_download import delivery_manifest as geotorget_delivery_manifest, download_theme_files as geotorget_download_theme_files
+from lantmateriet_topography import cache_status as topography_cache_status, hydrography as lantmateriet_hydrography, infrastructure as lantmateriet_infrastructure, merge_hydrography as merge_lantmateriet_hydrography, roads as lantmateriet_roads, theme_available as topography_theme_available
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -73,6 +74,23 @@ def building_source(request):
 def generated_buildings(bbox,source):
     if source=='lantmateriet':return lantmateriet_buildings(bbox,lantmateriet_bearer_token())
     return osm_buildings(bbox)
+
+def topography_source(theme,request):
+    requested=str(request.get('source') or 'automatic').lower()
+    if requested not in {'automatic','osm','lantmateriet'}:raise ValueError('Ogiltig datakälla för Topografi 10')
+    if requested=='automatic':return 'lantmateriet' if topography_theme_available(theme) else 'osm'
+    if requested=='lantmateriet' and not topography_theme_available(theme):raise ValueError('Det valda Topografi 10-temat har inte hämtats till servern')
+    return requested
+
+def generated_roads(bbox,source):
+    return lantmateriet_roads(bbox) if source=='lantmateriet' else osm_roads(bbox)
+
+def generated_infrastructure(bbox,source):
+    return lantmateriet_infrastructure(bbox) if source=='lantmateriet' else osm_infrastructure(bbox)
+
+def generated_land_cover(bbox,print_scale,source):
+    base=osm_land_cover(bbox,print_scale)
+    return merge_lantmateriet_hydrography(base,lantmateriet_hydrography(bbox)) if source=='lantmateriet' else base
 
 def number_tag(value):
     if value is None:return None
@@ -1058,7 +1076,7 @@ def geotorget_session_status():
     if not connected and GEOTORGET_CREDENTIAL_FILE.is_file():
         load_geotorget_credentials()
         with LM_SESSION_LOCK:manifest=LM_SESSION.get('manifest');connected=bool(LM_SESSION.get('username') and LM_SESSION.get('password') and manifest)
-    with LM_SESSION_LOCK:return {'connected':connected,'persistent':bool(LM_SESSION.get('persistent')),'manifest':public_geotorget_manifest(manifest)}
+    with LM_SESSION_LOCK:return {'connected':connected,'persistent':bool(LM_SESSION.get('persistent')),'manifest':public_geotorget_manifest(manifest),'cachedThemes':topography_cache_status()}
 
 def save_geotorget_credentials(username,password,order_id):
     target=GEOTORGET_CREDENTIAL_FILE;target.parent.mkdir(parents=True,exist_ok=True)
@@ -1602,13 +1620,18 @@ class Handler(SimpleHTTPRequestHandler):
                 requested_source=str(request.get('source') or 'automatic').lower();source=building_source(request)
                 return self.send_json(200,centralize_layer('buildings',bbox,generated_buildings(bbox,source),{'importVersion':4,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/property-boundaries':return self.send_json(200,centralize_layer('property-boundaries',bbox,lantmateriet_property_boundaries(bbox,lantmateriet_bearer_token()),{'importVersion':1}))
-            if path=='/api/roads':return self.send_json(200,centralize_layer('roads',bbox,osm_roads(bbox),{'importVersion':4,'symbolRegistryVersion':REGISTRY_VERSION}))
-            if path=='/api/infrastructure':return self.send_json(200,centralize_layer('infrastructure',bbox,osm_infrastructure(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/roads':
+                requested_source=str(request.get('source') or 'automatic').lower();source=topography_source('communication',request)
+                return self.send_json(200,centralize_layer('roads',bbox,generated_roads(bbox,source),{'importVersion':5,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
+            if path=='/api/infrastructure':
+                requested_source=str(request.get('source') or 'automatic').lower();communication=topography_source('communication',request);utilities=topography_source('utilities',request);source='lantmateriet' if communication=='lantmateriet' and utilities=='lantmateriet' else 'osm'
+                return self.send_json(200,centralize_layer('infrastructure',bbox,generated_infrastructure(bbox,source),{'importVersion':2,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)
                 if print_scale not in {7500,10000,15000}:raise ValueError('Ogiltig utskriftsskala')
-                return self.send_json(200,centralize_layer('land-cover',bbox,osm_land_cover(bbox,print_scale),{'importVersion':10,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
+                requested_source=str(request.get('source') or 'automatic').lower();source=topography_source('hydrography',request)
+                return self.send_json(200,centralize_layer('land-cover',bbox,generated_land_cover(bbox,print_scale,source),{'importVersion':11,'source':requested_source,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})

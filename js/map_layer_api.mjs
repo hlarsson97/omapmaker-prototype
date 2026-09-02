@@ -2,10 +2,10 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
   const parameters = {
     contours: () => ({interval: Number(workspace?.contourInterval || 5), generalization: 'detailed', baseElevation: 0, verticalDatum: 'RH 2000', symbolRegistryVersion}),
     buildings: () => ({importVersion: 4, source: sources.buildings || 'automatic', symbolRegistryVersion}),
-    roads: () => ({importVersion: 4, symbolRegistryVersion}),
-    infrastructure: () => ({importVersion: 1, symbolRegistryVersion}),
+    roads: () => ({importVersion: 5, source: sources.roads || 'automatic', symbolRegistryVersion}),
+    infrastructure: () => ({importVersion: 2, source: 'automatic', symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
-    'land-cover': () => ({importVersion: 10, printScale: Number(workspace?.scale || 10000), symbolRegistryVersion}),
+    'land-cover': () => ({importVersion: 11, source: 'automatic', printScale: Number(workspace?.scale || 10000), symbolRegistryVersion}),
     'property-boundaries': () => ({importVersion: 1})
   };
   return parameters[layerType]();
@@ -39,6 +39,8 @@ export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = l
     if (central) return {data: central.layer, reused: true};
     const payload = {bbox};
     if (layerType === 'buildings') payload.source = sources?.buildings || 'automatic';
+    if (layerType === 'roads') payload.source = sources?.roads || 'automatic';
+    if (layerType === 'infrastructure' || layerType === 'land-cover') payload.source = 'automatic';
     if (layerType === 'land-cover') payload.printScale = Number(workspace?.scale || 10000);
     return {data: await postJson(endpoint, payload), reused: false};
   }
