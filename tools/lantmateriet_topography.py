@@ -26,6 +26,7 @@ THEMES = {
     "communication": ("kommunikation_sverige.zip", "kommunikation_sverige.gpkg"),
     "hydrography": ("hydro_sverige.zip", "hydro_sverige.gpkg"),
     "utilities": ("ledningar_sverige.zip", "ledningar_sverige.gpkg"),
+    "land": ("mark_sverige.zip", "mark_sverige.gpkg"),
 }
 
 
@@ -103,6 +104,24 @@ def _line_features(package, layer, bbox_wgs84):
             parts = list(geometry.geoms) if geometry.geom_type == "MultiLineString" else [geometry]
             for index, part in enumerate(parts):
                 if part.geom_type != "LineString" or len(part.coords) < 2:
+                    continue
+                yield str(item.id), index, dict(item.properties), mapping(part)
+
+
+def _area_features(package, layer, bbox_wgs84):
+    request_bounds = _request_bounds(bbox_wgs84)
+    unproject = Transformer.from_crs("EPSG:3006", "EPSG:4326", always_xy=True).transform
+    clip = box(*bbox_wgs84)
+    with fiona.open(package, layer=layer) as source:
+        for item in source.filter(bbox=request_bounds):
+            if not item.geometry:
+                continue
+            geometry = transform(unproject, shape(item.geometry)).intersection(clip)
+            if geometry.is_empty:
+                continue
+            parts = list(geometry.geoms) if geometry.geom_type == "MultiPolygon" else [geometry]
+            for index, part in enumerate(parts):
+                if part.geom_type != "Polygon" or part.area <= 0:
                     continue
                 yield str(item.id), index, dict(item.properties), mapping(part)
 
@@ -235,6 +254,68 @@ def hydrography(bbox_wgs84):
         })
         features.append({"type": "Feature", "id": f"lm-hydro-{source_id}-{part}", "properties": properties, "geometry": geometry})
     return _collection("land-cover", bbox_wgs84, features, 11)
+
+
+LAND_CLASSES = {
+    2631: ("301", "water_301", "high", "water-area"),
+    2632: ("301", "water_301", "high", "water-area"),
+    2633: ("301", "water_301", "high", "water-area"),
+    2634: ("301", "water_301", "medium", "constructed-water-area"),
+    2640: ("403", "rough_open_land", "medium", "open-land"),
+    2642: ("412", "cultivated_land", "high", "cultivated-land"),
+    2643: ("413", "orchard", "high", "orchard"),
+    2644: ("403", "rough_open_land", "medium", "open-mountain-land"),
+    2645: ("405", "forest", "low", "forest-cover-not-runnability"),
+    2646: ("405", "forest", "low", "forest-cover-not-runnability"),
+    2647: ("405", "forest", "low", "forest-cover-not-runnability"),
+}
+
+MARSH_CLASSES = {
+    2651: ("308", "marsh_308", "low", "firm-marsh"),
+    2652: ("307", "marsh_307", "medium", "wet-marsh"),
+}
+
+
+def land_cover(bbox_wgs84):
+    package = ensure_geopackage("land")
+    features = []
+    for layer, classes in (("mark", LAND_CLASSES), ("sankmark", MARSH_CLASSES)):
+        for feature_id, part, values, geometry in _area_features(package, layer, bbox_wgs84):
+            object_number = int(values.get("objekttypnr") or 0)
+            classification = classes.get(object_number)
+            if not classification:
+                continue
+            symbol, map_class, confidence, reason = classification
+            source_id = str(values.get("objektidentitet") or f"{layer}/{feature_id}")
+            properties = _properties(source_id, values.get("objekttyp"), confidence)
+            properties.update({
+                "isomSymbol": symbol, "automaticIsomSymbol": symbol,
+                "mapClass": map_class, "automaticMapClass": map_class,
+                "classificationReason": reason,
+                "landTypeNumber": object_number,
+                "shorelineSource": "mark-polygon-boundary" if object_number in {2631, 2632, 2633, 2634} else None,
+            })
+            features.append({"type": "Feature", "id": f"lm-land-{source_id}-{part}", "properties": properties, "geometry": geometry})
+    return _collection("land-cover", bbox_wgs84, features, 12)
+
+
+def compose_land_cover(imported_land, imported_hydro, restricted):
+    features = list(imported_land.get("features", []))
+    features.extend(imported_hydro.get("features", []))
+    features.extend(restricted.get("features", []))
+    properties = dict(imported_land.get("properties") or {})
+    properties.update({
+        "source": "Lantmäteriet + OpenStreetMap",
+        "sourceType": "mixed-lantmateriet-osm",
+        "attribution": ATTRIBUTION + " · ISOM 520-underlag © OpenStreetMap contributors",
+        "importVersion": 12,
+        "landSource": "Topografi 10 Nedladdning, vektor",
+        "hydrographySource": "Topografi 10 Nedladdning, vektor",
+        "shorelineStrategy": "Exact boundaries of Topografi 10 water polygons",
+        "restrictedAreaStrategy": restricted.get("properties", {}).get("strategy"),
+        "restrictedAreaCount": len(restricted.get("features", [])),
+    })
+    return {"type": "FeatureCollection", "properties": properties, "features": features}
 
 
 def merge_hydrography(base, imported):

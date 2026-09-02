@@ -8,7 +8,7 @@ import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs';
 import {ROAD_TYPES, createGeneratedRoadLayer} from './js/generated_roads.mjs?v=2';
 import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/generated_infrastructure.mjs?v=15';
 import {bridgeTunnelGeometryFromRoads, ensureBridgeTunnelMinimum, generateBridgeTunnelFeatures, isRoadLikeFeature} from './js/bridge_tunnel.mjs?v=2';
-import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature} from './js/generated_land_cover.mjs?v=8';
+import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature} from './js/generated_land_cover.mjs?v=9';
 import {magneticNorthRequestUrl, magneticNorthSummary} from './js/magnetic_north.mjs';
 import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextSupportedMapOrientation} from './js/map_orientation.mjs?v=3';
 import {createSmoothMapMarkerFactory, installMiddleButtonRotation} from './js/smooth_rotation.mjs?v=1';

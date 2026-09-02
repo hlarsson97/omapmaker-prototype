@@ -103,6 +103,7 @@ THEME_PREFIXES = {
     "communication": ("kommunikation",),
     "hydrography": ("hydro",),
     "utilities": ("ledningar",),
+    "land": ("mark_",),
 }
 
 

@@ -16,15 +16,17 @@ export function isCurrentLandCoverData(data) {
 
 export function landCoverMetaText(data, generatedStatus, centralLayerLabel) {
   if (!data) return 'Inte hämtat';
-  const counts = {water: 0, restricted: 0, edited: 0, excluded: 0};
+  const counts = {water: 0, forest: 0, land: 0, restricted: 0, edited: 0, excluded: 0};
   data.features.forEach(feature => {
     if (isWaterFeature(feature)) counts.water++;
+    else if (feature.properties?.mapClass === 'forest') counts.forest++;
+    else if (String(feature.properties?.isomSymbol) !== '520') counts.land++;
     if (String(feature.properties?.isomSymbol) === '520') counts.restricted++;
     if (generatedStatus(feature) === 'edited') counts.edited++;
     if (generatedStatus(feature) === 'excluded') counts.excluded++;
   });
   if (!isCurrentLandCoverData(data)) return `${counts.water} vatten · 520 behöver hämtas på nytt`;
-  return `${counts.water} vatten · ${counts.restricted} st 520${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
+  return `${counts.water} vatten${counts.forest ? ` · ${counts.forest} skog` : ''}${counts.land ? ` · ${counts.land} öppen/odlad mark` : ''} · ${counts.restricted} st 520${counts.edited ? ` · ${counts.edited} ändrade` : ''}${counts.excluded ? ` · ${counts.excluded} uteslutna` : ''}${centralLayerLabel(data)}`;
 }
 
 export function applyLandCoverPattern(path, patternId) {
@@ -64,7 +66,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     const properties = feature.properties || {};
     const confidence = {high: 'hög', medium: 'medel', low: 'låg'};
     const restrictedNames = {'industrial-enclosure': 'Inhägnat industriområde', 'industrial-private': 'Privat industriområde', 'residential-enclosure': 'Avgränsad hemfridszon', 'residential-boundary': 'Möjlig hemfridszon', 'residential-estimate': 'Uppskattad hemfridszon'};
-    const names = {cultivated_land: 'Odlad mark', open_land: 'Öppen mark', rough_open_land: 'Öppen naturmark', restricted_area: restrictedNames[properties.restrictedKind] || 'ISOM 520-underlag'};
+    const names = {forest: 'Skog', orchard: 'Fruktodling', cultivated_land: 'Odlad mark', open_land: 'Öppen mark', rough_open_land: 'Öppen naturmark', restricted_area: restrictedNames[properties.restrictedKind] || 'ISOM 520-underlag'};
     const water = isWaterFeature(feature);
     const title = properties.name || (water ? WATER_SYMBOL_NAMES[String(properties.isomSymbol)] : names[properties.mapClass]) || 'Markyta';
     const id = escapeHtml(feature.id);

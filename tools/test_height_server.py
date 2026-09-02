@@ -125,8 +125,8 @@ class GeotorgetDownloadTests(unittest.TestCase):
             {'title':'ledningar_sverige.zip','length':5,'path':'/signed/power?q=secret'},
             {'title':'mark_sverige.zip','length':6,'path':'/signed/land?q=secret'},
         ]}
-        selected=geotorget.select_theme_files(manifest,['communication','utilities'])
-        self.assertEqual([item['title'] for item in selected],['kommunikation_sverige.zip','ledningar_sverige.zip'])
+        selected=geotorget.select_theme_files(manifest,['communication','utilities','land'])
+        self.assertEqual([item['title'] for item in selected],['kommunikation_sverige.zip','ledningar_sverige.zip','mark_sverige.zip'])
         with self.assertRaisesRegex(ValueError,'Okänt'):geotorget.select_theme_files(manifest,['buildings'])
 
     def test_theme_download_refreshes_paths_streams_and_reuses_complete_cache(self):
@@ -137,6 +137,18 @@ class GeotorgetDownloadTests(unittest.TestCase):
             second=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary,username='user',password='secret')
         self.assertFalse(first['files'][0]['cached']);self.assertTrue(second['files'][0]['cached'])
         self.assertEqual(progress[-1],('ledningar_sverige.zip',5,5));fetch.assert_called_once()
+
+    def test_land_theme_can_be_queued_for_download_and_extraction(self):
+        previous_session=dict(server.LM_SESSION)
+        try:
+            with server.LM_SESSION_LOCK:server.LM_SESSION.update({'username':'user','password':'secret','orderId':'cc4cbb38-d8c6-4859-b271-592a7477e374'})
+            with server.TOPO_LOCK:server.TOPO_JOBS.clear();server.TOPO_CANCEL_EVENTS.clear()
+            with patch.object(server.TOPO_EXECUTOR,'submit') as submit:
+                job=server.create_topography_job(['land'])
+            self.assertEqual(job['themes'],['land']);submit.assert_called_once()
+        finally:
+            with server.LM_SESSION_LOCK:server.LM_SESSION.clear();server.LM_SESSION.update(previous_session)
+            with server.TOPO_LOCK:server.TOPO_JOBS.clear();server.TOPO_CANCEL_EVENTS.clear()
 
     def test_persistent_credentials_are_private_reloadable_and_forgettable(self):
         manifest={'product':'Topografi 10 Nedladdning, vektor','orderStatus':'AKTIV','deliveryStatus':'LYCKAD','files':[]}

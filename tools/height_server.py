@@ -14,7 +14,7 @@ from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from lantmateriet_vector import lantmateriet_buildings, lantmateriet_property_boundaries
 from geotorget_download import delivery_manifest as geotorget_delivery_manifest, download_theme_files as geotorget_download_theme_files
-from lantmateriet_topography import cache_status as topography_cache_status, hydrography as lantmateriet_hydrography, infrastructure as lantmateriet_infrastructure, merge_hydrography as merge_lantmateriet_hydrography, roads as lantmateriet_roads, theme_available as topography_theme_available
+from lantmateriet_topography import cache_status as topography_cache_status, compose_land_cover as compose_lantmateriet_land_cover, ensure_geopackage as ensure_topography_geopackage, hydrography as lantmateriet_hydrography, infrastructure as lantmateriet_infrastructure, land_cover as lantmateriet_land_cover, merge_hydrography as merge_lantmateriet_hydrography, roads as lantmateriet_roads, theme_available as topography_theme_available
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -88,9 +88,16 @@ def generated_roads(bbox,source):
 def generated_infrastructure(bbox,source):
     return lantmateriet_infrastructure(bbox) if source=='lantmateriet' else osm_infrastructure(bbox)
 
-def generated_land_cover(bbox,print_scale,source):
+def generated_land_cover(bbox,print_scale,requested_source):
+    if requested_source not in {'automatic','osm','lantmateriet'}:raise ValueError('Ogiltig datakälla för mark och vatten')
+    if requested_source=='osm':return osm_land_cover(bbox,print_scale)
+    has_land=topography_theme_available('land');has_hydro=topography_theme_available('hydrography')
+    if requested_source=='lantmateriet' and not has_land:raise ValueError('mark_sverige.zip har inte hämtats till servern')
+    if has_land:
+        hydro=lantmateriet_hydrography(bbox) if has_hydro else {'type':'FeatureCollection','features':[]}
+        return compose_lantmateriet_land_cover(lantmateriet_land_cover(bbox),hydro,osm_restricted_areas(bbox,print_scale))
     base=osm_land_cover(bbox,print_scale)
-    return merge_lantmateriet_hydrography(base,lantmateriet_hydrography(bbox)) if source=='lantmateriet' else base
+    return merge_lantmateriet_hydrography(base,lantmateriet_hydrography(bbox)) if has_hydro else base
 
 def number_tag(value):
     if value is None:return None
@@ -1140,6 +1147,11 @@ def run_topography_job(job_id,order_id,username,password,themes):
             percent=round(100*transferred/total,1) if total else 0
             update_topography_job(job_id,stage='downloading',message=f'Hämtar {title}…',transferredBytes=transferred,totalBytes=total,progressPercent=percent)
         result=geotorget_download_theme_files(order_id,themes,DATA/'topografi10',username=username,password=password,progress=progress,cancelled=event.is_set)
+        update_topography_job(job_id,stage='extracting',message='Packar upp valda Topografi 10-teman för områdesvis import…',progressPercent=99)
+        for theme in themes:
+            if event.is_set():raise InterruptedError('Nedladdningen avbröts.')
+            ensure_topography_geopackage(theme)
+        result['cacheStatus']=topography_cache_status()
         update_topography_job(job_id,status='complete',stage='complete',message='Topografi 10-filerna finns i serverns cache.',progressPercent=100,result=result)
     except InterruptedError:update_topography_job(job_id,status='cancelled',stage='cancelled',message='Nedladdningen avbröts.')
     except (LantmaterietApiError,ValueError,OSError) as exc:update_topography_job(job_id,status='error',stage='failed',message=str(exc),code='topography_download_error')
@@ -1153,7 +1165,7 @@ def create_topography_job(themes):
         username=LM_SESSION.get('username');password=LM_SESSION.get('password');order_id=LM_SESSION.get('orderId')
     if not username or not password or not order_id:raise LantmaterietCredentialsRequired('Anslut Geotorget innan Topografi 10-filer hämtas.')
     themes=list(dict.fromkeys(str(theme or '').strip().lower() for theme in themes or []))
-    allowed={'communication','hydrography','utilities'}
+    allowed={'communication','hydrography','utilities','land'}
     if not themes or any(theme not in allowed for theme in themes):raise ValueError('Välj minst ett giltigt Topografi 10-tema.')
     with TOPO_LOCK:
         active=next((job for job in TOPO_JOBS.values() if job.get('status') in ('queued','running')),None)
@@ -1630,8 +1642,8 @@ class Handler(SimpleHTTPRequestHandler):
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)
                 if print_scale not in {7500,10000,15000}:raise ValueError('Ogiltig utskriftsskala')
-                requested_source=str(request.get('source') or 'automatic').lower();source=topography_source('hydrography',request)
-                return self.send_json(200,centralize_layer('land-cover',bbox,generated_land_cover(bbox,print_scale,source),{'importVersion':11,'source':requested_source,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
+                requested_source=str(request.get('source') or 'automatic').lower()
+                return self.send_json(200,centralize_layer('land-cover',bbox,generated_land_cover(bbox,print_scale,requested_source),{'importVersion':12,'source':requested_source,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})
