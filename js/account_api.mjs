@@ -115,8 +115,8 @@ export function createAccountApi({fetchImpl = globalThis.fetch, storage = global
     return request('/api/lantmateriet-session');
   }
 
-  async function connectLantmateriet(username, password, orderId) {
-    return request('/api/lantmateriet-session', {method: 'POST', body: {username, password, orderId}, csrf: true});
+  async function connectLantmateriet(username, password, orderId, persist = false) {
+    return request('/api/lantmateriet-session', {method: 'POST', body: {username, password, orderId, persist}, csrf: true});
   }
 
   async function disconnectLantmateriet() {

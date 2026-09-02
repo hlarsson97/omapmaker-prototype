@@ -138,6 +138,22 @@ class GeotorgetDownloadTests(unittest.TestCase):
         self.assertFalse(first['files'][0]['cached']);self.assertTrue(second['files'][0]['cached'])
         self.assertEqual(progress[-1],('ledningar_sverige.zip',5,5));fetch.assert_called_once()
 
+    def test_persistent_credentials_are_private_reloadable_and_forgettable(self):
+        manifest={'product':'Topografi 10 Nedladdning, vektor','orderStatus':'AKTIV','deliveryStatus':'LYCKAD','files':[]}
+        previous=dict(server.LM_SESSION)
+        try:
+            with tempfile.TemporaryDirectory() as temporary, patch.object(server,'GEOTORGET_CREDENTIAL_FILE',Path(temporary)/'private'/'geotorget.json'), patch.object(server,'geotorget_delivery_manifest',return_value=manifest):
+                result=server.set_geotorget_credentials('user','secret','cc4cbb38-d8c6-4859-b271-592a7477e374',persist=True)
+                credential_file=server.GEOTORGET_CREDENTIAL_FILE
+                self.assertTrue(result['persistent'])
+                if os.name=='posix':self.assertEqual(credential_file.stat().st_mode&0o777,0o600)
+                saved=json.loads(credential_file.read_text(encoding='utf-8'));self.assertEqual(set(saved),{'username','password','orderId'});self.assertNotIn('files',saved)
+                with server.LM_SESSION_LOCK:server.LM_SESSION.update({'username':'','password':'','orderId':'','manifest':None,'persistent':False})
+                self.assertTrue(server.load_geotorget_credentials());self.assertTrue(server.geotorget_session_status()['connected'])
+                server.clear_geotorget_credentials(forget=True);self.assertFalse(credential_file.exists())
+        finally:
+            with server.LM_SESSION_LOCK:server.LM_SESSION.clear();server.LM_SESSION.update(previous)
+
 
 class QuietHandler(server.Handler):
     def log_message(self, *_):pass

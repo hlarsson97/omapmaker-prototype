@@ -19,11 +19,11 @@ from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, Sync
 from isom_registry import REGISTRY_VERSION
 from magnetic_north import calculate_magnetic_north
 
-ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE); USER_STORE=UserStore(MAP_DATABASE)
+ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GEOTORGET_CREDENTIAL_FILE=Path(os.environ.get('OMAP_GEOTORGET_CREDENTIAL_FILE',DATA/'geotorget-credentials.json')); GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE); USER_STORE=UserStore(MAP_DATABASE)
 LEVELS={'detailed':2,'normal':5,'soft':10}
 HEIGHT_VALIDATION_VERSION=1
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
-HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':'','orderId':'','manifest':None}
+HEIGHT_LOCK=threading.RLock();CONTOUR_LOCK=threading.RLock();LM_SESSION_LOCK=threading.Lock();LM_SESSION={'username':'','password':'','orderId':'','manifest':None,'persistent':False}
 TOPO_LOCK=threading.Lock();TOPO_JOBS={};TOPO_CANCEL_EVENTS={};TOPO_EXECUTOR=ThreadPoolExecutor(max_workers=1,thread_name_prefix='omapmaker-topografi10')
 OAUTH_LOCK=threading.Lock();OAUTH_STATE={'accessToken':'','expiresAt':0.0}
 JOBS_LOCK=threading.Lock();JOBS={};JOB_CANCEL_EVENTS={};JOB_EXECUTOR=ThreadPoolExecutor(max_workers=2,thread_name_prefix='omapmaker-contours')
@@ -1054,26 +1054,56 @@ def public_geotorget_manifest(manifest):
 def geotorget_session_status():
     with LM_SESSION_LOCK:
         manifest=LM_SESSION.get('manifest')
-        return {'connected':bool(LM_SESSION.get('username') and LM_SESSION.get('password') and manifest),'manifest':public_geotorget_manifest(manifest)}
+        connected=bool(LM_SESSION.get('username') and LM_SESSION.get('password') and manifest)
+    if not connected and GEOTORGET_CREDENTIAL_FILE.is_file():
+        load_geotorget_credentials()
+        with LM_SESSION_LOCK:manifest=LM_SESSION.get('manifest');connected=bool(LM_SESSION.get('username') and LM_SESSION.get('password') and manifest)
+    with LM_SESSION_LOCK:return {'connected':connected,'persistent':bool(LM_SESSION.get('persistent')),'manifest':public_geotorget_manifest(manifest)}
 
-def set_geotorget_credentials(username,password,order_id):
+def save_geotorget_credentials(username,password,order_id):
+    target=GEOTORGET_CREDENTIAL_FILE;target.parent.mkdir(parents=True,exist_ok=True)
+    try:os.chmod(target.parent,0o700)
+    except OSError:pass
+    temporary=target.with_name(target.name+'.part')
+    try:
+        fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
+        with os.fdopen(fd,'w',encoding='utf-8') as output:json.dump({'username':username,'password':password,'orderId':order_id},output,separators=(',',':'))
+        os.chmod(temporary,0o600);temporary.replace(target);os.chmod(target,0o600)
+    finally:temporary.unlink(missing_ok=True)
+
+def load_geotorget_credentials():
+    if not GEOTORGET_CREDENTIAL_FILE.is_file():return False
+    try:
+        values=json.loads(GEOTORGET_CREDENTIAL_FILE.read_text(encoding='utf-8'))
+        set_geotorget_credentials(values.get('username'),values.get('password'),values.get('orderId'),persist=False)
+        with LM_SESSION_LOCK:LM_SESSION['persistent']=True
+        print('Geotorget-anslutningen lästes från serverns privata credential-fil.',flush=True)
+        return True
+    except Exception as exc:
+        print(f'Geotorgets sparade anslutning kunde inte verifieras: {type(exc).__name__}: {exc}',file=sys.stderr,flush=True)
+        return False
+
+def set_geotorget_credentials(username,password,order_id,persist=False):
     username=str(username or '').strip();password=str(password or '');order_id=str(order_id or '').strip()
     if not username or not password or not order_id:raise ValueError('Användarnamn, lösenord och OrderID krävs')
     manifest=geotorget_delivery_manifest(order_id,username=username,password=password)
     if 'topografi 10' not in str(manifest.get('product') or '').lower():raise ValueError('OrderID:t avser inte Topografi 10 Nedladdning, vektor')
     if manifest.get('orderStatus')!='AKTIV':raise ValueError('Topografi 10-ordern är inte aktiv')
     if manifest.get('deliveryStatus')!='LYCKAD':raise ValueError('Den senaste Topografi 10-leveransen är inte klar')
-    with LM_SESSION_LOCK:LM_SESSION.update({'username':username,'password':password,'orderId':order_id,'manifest':manifest})
-    return {'connected':True,'manifest':public_geotorget_manifest(manifest)}
+    if persist:save_geotorget_credentials(username,password,order_id)
+    with LM_SESSION_LOCK:LM_SESSION.update({'username':username,'password':password,'orderId':order_id,'manifest':manifest,'persistent':bool(persist or GEOTORGET_CREDENTIAL_FILE.is_file())})
+    return {'connected':True,'persistent':bool(persist or GEOTORGET_CREDENTIAL_FILE.is_file()),'manifest':public_geotorget_manifest(manifest)}
 
-def clear_geotorget_credentials():
+def clear_geotorget_credentials(forget=False):
     with TOPO_LOCK:
         for job_id,job in TOPO_JOBS.items():
             if job.get('status') in ('queued','running'):
                 event=TOPO_CANCEL_EVENTS.get(job_id)
                 if event:event.set()
-    with LM_SESSION_LOCK:LM_SESSION.update({'username':'','password':'','orderId':'','manifest':None})
-    return {'connected':False,'manifest':None}
+    if forget:GEOTORGET_CREDENTIAL_FILE.unlink(missing_ok=True)
+    persistent=GEOTORGET_CREDENTIAL_FILE.is_file()
+    with LM_SESSION_LOCK:LM_SESSION.update({'username':'','password':'','orderId':'','manifest':None,'persistent':persistent})
+    return {'connected':False,'persistent':persistent,'manifest':None}
 
 def public_topography_job(job_id):
     with TOPO_LOCK:job=TOPO_JOBS.get(job_id)
@@ -1474,7 +1504,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path=='/api/lantmateriet-session':
             session=self.require_session(csrf=True)
             if not session:return
-            return self.send_json(200,clear_geotorget_credentials())
+            return self.send_json(200,clear_geotorget_credentials(forget=True))
         if path.startswith('/api/workspaces/'):
             session=self.require_session(csrf=True)
             if not session:return
@@ -1511,7 +1541,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not session:return
             try:
                 request=self.read_json(64_000)
-                return self.send_json(200,set_geotorget_credentials(request.get('username'),request.get('password'),request.get('orderId')))
+                return self.send_json(200,set_geotorget_credentials(request.get('username'),request.get('password'),request.get('orderId'),request.get('persist') is True))
             except LantmaterietApiError as exc:return self.send_json(401,{'error':str(exc),'code':'lantmateriet_credentials_rejected'})
             except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/lantmateriet-downloads':
@@ -1601,7 +1631,7 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--host',default='127.0.0.1');parser.add_argument('--port',type=int,default=8765);args=parser.parse_args();server=ThreadingHTTPServer((args.host,args.port),Handler)
+    parser=argparse.ArgumentParser();parser.add_argument('--host',default='127.0.0.1');parser.add_argument('--port',type=int,default=8765);args=parser.parse_args();load_geotorget_credentials();server=ThreadingHTTPServer((args.host,args.port),Handler)
     shown_host='127.0.0.1' if args.host=='0.0.0.0' else args.host
     print(f'OMapMaker kör på http://{shown_host}:{args.port}/field.html');print('Stäng med Ctrl+C.');server.serve_forever()
 if __name__=='__main__':main()

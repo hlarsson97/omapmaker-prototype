@@ -7,7 +7,9 @@ Geotorget.
 
 ## Säkerhetsregler
 
-- Lägg aldrig Geotorget-användarnamn eller lösenord i Git, en prompt eller en fil.
+- Lägg aldrig Geotorget-användarnamn eller lösenord i Git, en prompt eller en
+  allmänt läsbar fil. På en privat, disk-krypterad server kan OMapMaker lagra
+  dem i sin rättighetsskyddade runtime-katalog enligt avsnittet nedan.
 - Lägg aldrig OAuth2-nycklar i Git, chatt, webbläsarlagring, miljövariabler eller
   en okrypterad servicefil. Använd installationsskriptet nedan.
 - Mapparna `data/lantmateriet/` och `data/contour-cache/` ska stanna på servern.
@@ -63,6 +65,43 @@ Kontrollera tjänsten med:
 ```bash
 sudo systemctl status omapmaker.service
 curl http://127.0.0.1:8765/api/height-status
+```
+
+## Permanent Geotorget-anslutning på privat server
+
+I dialogen Kartlager → Datakällor → Geotorget kan **Spara anslutningen på den
+här privata servern** väljas. Efter att ordern har verifierats skrivs endast
+användarnamn, lösenord och OrderID till:
+
+```text
+data/lantmateriet/geotorget-credentials.json
+```
+
+Filen och katalogen sätts till `0600` respektive `0700`, omfattas av Git-ignore
+och är läsbara endast för användaren som kör OMapMaker. Signerade leverans-URL:er
+lagras aldrig. Vid omstart verifieras ordern på nytt och anslutningen återställs.
+Knappen **Glöm och koppla från** stoppar pågående Topografi 10-hämtning, tömmer
+serverminnet och raderar credential-filen.
+
+Eftersom lösenordet behöver kunna skickas vidare som Basic-auth är filen inte
+hashad. Full diskkryptering och en privat, åtkomstbegränsad säkerhetskopia
+rekommenderas. För en fleranvändar- eller externt driftad server bör i stället
+systemd credentials eller en separat secrets manager användas.
+
+Som alternativ till webbgränssnittet kan anslutningen konfigureras från
+PowerShell via en interaktiv SSH-terminal. Lösenordet efterfrågas dolt och hamnar
+inte i PowerShell-historiken:
+
+```powershell
+ssh -t systemadmin@labserver1 "cd /home/systemadmin/omapmaker-prototype && .venv/bin/python tools/configure_geotorget.py"
+```
+
+Den körande servern upptäcker filen nästa gång Geotorget-statusen läses; någon
+tjänsteomstart krävs inte. För att radera den sparade anslutningen från
+PowerShell:
+
+```powershell
+ssh -t systemadmin@labserver1 "cd /home/systemadmin/omapmaker-prototype && .venv/bin/python tools/configure_geotorget.py --forget"
 ```
 
 ## Cachemodell

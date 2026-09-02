@@ -17,9 +17,11 @@ För privatpersonskonton använder Geotorget Nedladdning Basic-autentisering. De
 privata appen har därför ett sessionsflöde under Kartlager → Datakällor. Det
 kräver en inloggad OMapMaker-användare och CSRF-skydd, verifierar att OrderID:t
 avser en aktiv Topografi 10-order med lyckad leverans och behåller uppgifterna
-endast i serverprocessens minne. Användarnamn, lösenord och signerade fillänkar
-skrivs aldrig till databasen, webbläsarlagring, loggar eller Git och försvinner
-vid tjänsteomstart.
+endast i serverprocessens minne, eller efter uttryckligt val i en lokal fil med
+rättighet `0600` under den Git-ignorerade runtime-katalogen. Användarnamn och
+lösenord skrivs aldrig till databasen, webbläsarlagring, loggar eller Git.
+Signerade fillänkar sparas aldrig. Den lokala credential-filen läses och ordern
+verifieras automatiskt vid tjänsteomstart.
 
 ## Nästa implementation
 
