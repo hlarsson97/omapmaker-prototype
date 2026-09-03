@@ -1,17 +1,18 @@
 export function centralLayerParameters(layerType, {workspace, symbolRegistryVersion, sources = {}}) {
   const parameters = {
     contours: () => ({interval: Number(workspace?.contourInterval || 5), generalization: 'detailed', baseElevation: 0, verticalDatum: 'RH 2000', symbolRegistryVersion}),
-    buildings: () => ({importVersion: 4, source: sources.buildings || 'automatic', symbolRegistryVersion}),
+    buildings: () => ({importVersion: 5, source: sources.buildings || 'automatic', symbolRegistryVersion}),
     roads: () => ({importVersion: 5, source: sources.roads || 'automatic', symbolRegistryVersion}),
-    infrastructure: () => ({importVersion: 2, source: 'automatic', symbolRegistryVersion}),
+    infrastructure: () => ({importVersion: 3, source: 'automatic', symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
     'land-cover': () => ({importVersion: 12, source: 'automatic', printScale: Number(workspace?.scale || 10000), symbolRegistryVersion}),
-    'property-boundaries': () => ({importVersion: 1})
+    'property-boundaries': () => ({importVersion: 1}),
+    'facility-references': () => ({importVersion: 1})
   };
   return parameters[layerType]();
 }
 
-export const CENTRAL_LAYER_TYPES = Object.freeze(['contours', 'buildings', 'roads', 'infrastructure', 'paved-areas', 'land-cover', 'property-boundaries']);
+export const CENTRAL_LAYER_TYPES = Object.freeze(['contours', 'buildings', 'roads', 'infrastructure', 'paved-areas', 'land-cover', 'property-boundaries', 'facility-references']);
 
 export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = location.hostname}) {
   const postJson = async (endpoint, payload) => jsonResponse(await fetchImpl(endpoint, {

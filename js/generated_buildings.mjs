@@ -2,9 +2,11 @@ import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
 
 export const BUILDING_ATTRIBUTION = 'Byggnader © OpenStreetMap contributors';
 export const LANTMATERIET_BUILDING_ATTRIBUTION = 'Byggnad Nedladdning, vektor © Lantmäteriet · bearbetad av OMapMaker · CC BY 4.0';
+export const LANTMATERIET_TOPOGRAPHY_BUILDING_ATTRIBUTION = 'Topografi 10 Nedladdning, vektor © Lantmäteriet · bearbetad av OMapMaker · CC BY 4.0';
 
 export function buildingAttribution(data) {
-  return data?.properties?.sourceType === 'lantmateriet' ? LANTMATERIET_BUILDING_ATTRIBUTION : BUILDING_ATTRIBUTION;
+  if (data?.properties?.sourceType !== 'lantmateriet') return BUILDING_ATTRIBUTION;
+  return String(data?.properties?.sourceDataset || '').includes('Topografi 10') ? LANTMATERIET_TOPOGRAPHY_BUILDING_ATTRIBUTION : LANTMATERIET_BUILDING_ATTRIBUTION;
 }
 
 export function buildingMetaText(data, generatedStatus, centralLayerLabel) {

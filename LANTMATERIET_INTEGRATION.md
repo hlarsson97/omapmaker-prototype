@@ -11,7 +11,7 @@ API-applikationen har `STAC-vektor`, `STAC-hojd` och `GeodatakatalogNedladdning`
 
 ## Förberett i klienten
 
-Genereringsinställningarna lagrar datakälla per arbetsområde för byggnader samt vägar och stigar. Värdena är `automatic`, `osm` och `lantmateriet`. Byggnadsimporten är ansluten; `automatic` föredrar Lantmäteriet när serverns OAuth-applikation är konfigurerad och använder annars OSM. Topografi 10 är fortfarande avstängd i klienten.
+Genereringsinställningarna lagrar datakälla per arbetsområde för byggnader samt vägar och stigar. Värdena är `automatic`, `osm` och `lantmateriet`. `automatic` föredrar den lokala Topografi 10-cachen för byggnader när tema Byggnadsverk finns, därefter Byggnad Nedladdning via OAuth och annars OSM.
 
 För privatpersonskonton använder Geotorget Nedladdning Basic-autentisering. Den
 privata appen har därför ett sessionsflöde under Kartlager → Datakällor. Det
@@ -33,7 +33,10 @@ de tidsbegränsade `q`-signaturerna. Följande teman hämtas och importeras omr�
 
 - `kommunikation` för vägar, stigar och järnvägar,
 - `hydro` för vattendrag, diken och vattenytor,
-- `ledningar` för kraftledningar och master.
+- `ledningar` för kraftledningar och master,
+- `mark` för markslag, sankmark, vatten och strandlinjer,
+- `byggnadsverk` för byggnadsytor, linbanor, renstängsel och tydliga punktobjekt,
+- `anlaggningsomrade` som separat referenslager.
 
 Filerna strömmas till `data/lantmateriet/topografi10/`, en katalog som ignoreras
 av Git. Avbrutna `.part`-filer tas bort och kompletta filer återanvänds. GeoPackage-
@@ -41,12 +44,20 @@ filerna packas upp en gång i den privata servercachen. Därefter används deras
 spatiala index så att endast objekt som berör arbetsområdet läses, klipps och
 omprojiceras från SWEREF 99 TM till WGS 84.
 
-Kommunikation ger vägar och stigar (ISOM 502–506) samt järnvägar (509). Ledningar
-ger fördelningsledningar (510) och region-/stamledningar (511). Hydrografins
-linjer ersätter motsvarande OSM-vattendrag som försiktiga 305-kandidater; övriga
-vattenytor och ISOM 520-underlag ligger kvar från OSM tills tema Mark respektive
-de senare referensprodukterna har importerats. Automatisk vägkälla föredrar den
-lokala Topografi 10-leveransen och faller tillbaka på OSM om filen saknas.
+Kommunikation ger vägar och stigar (ISOM 502–506), bro-/tunnelunderlag och
+järnvägar (509). Ledningar ger fördelningsledningar (510) och region-/stamledningar
+(511). Hydrografins linjer ersätter motsvarande OSM-vattendrag som försiktiga
+305-kandidater. Mark ger skog, öppen och odlad mark, sankmark samt vattenpolygoner
+vars exakta gränser används som strandlinjer. Skogsklassen är uttryckligen ett
+lågkonfidensunderlag eftersom marktäckedata inte beskriver löpbarhet.
+
+Byggnadsverk ger byggnadspolygoner (521), linbana (510), renstängsel (516) samt
+markanta torn, master, skorstenar, fyrar och vindkraftverk (524). Klockstaplar och
+väderkvarnar blir granskningsbara 525-kandidater. Anläggningsområden visas bara
+som lila referensgeometri. Ett fåtal verksamhetstyper markeras som möjliga
+520-kandidater, men får inte automatiskt ISOM-symbol eftersom produkten saknar
+uppgift om tillträdesförbud. Inte heller idrottsplaner eller startbanor antas vara
+hårdgjorda utan ytterligare beläggningsdata.
 
 Fastighetsindelning är dessutom ansluten som separat referenslager.
 

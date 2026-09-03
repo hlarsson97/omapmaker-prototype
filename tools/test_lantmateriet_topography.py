@@ -44,6 +44,40 @@ class TopographyImportTests(unittest.TestCase):
             result = topo.infrastructure([17.9, 58.9, 18.1, 59.1])
         self.assertEqual([item["properties"]["isomSymbol"] for item in result["features"]], ["509", "511"])
 
+    def test_structure_lines_and_prominent_points_map_to_isom(self):
+        lines = [("3", 0, {"objektidentitet": "lift", "objekttypnr": 1978, "objekttyp": "Lintrafik"}, LINE)]
+        points = {
+            "byggnadsanlaggningspunkt": [("4", {"objektidentitet": "mast", "objekttypnr": 2019, "objekttyp": "Mast", "hojd": 30}, {"type": "Point", "coordinates": [18, 59]})],
+            "byggnadspunkt": [("5", {"objektidentitet": "tower", "objekttypnr": 1045, "objekttyp": "Torn"}, {"type": "Point", "coordinates": [18, 59]})],
+        }
+        with patch.object(topo, "ensure_geopackage", side_effect=[Path("communication.gpkg"), Path("utilities.gpkg"), Path("structures.gpkg")]), patch.object(topo, "theme_available", return_value=True), patch.object(topo, "_line_features", side_effect=lambda package, layer, bbox: lines if layer == "byggnadsanlaggningslinje" else []), patch.object(topo, "_point_features", side_effect=lambda package, layer, bbox: points[layer]):
+            result = topo.infrastructure([17.9, 58.9, 18.1, 59.1])
+        self.assertEqual([item["properties"]["isomSymbol"] for item in result["features"]], ["510", "524", "524"])
+        self.assertTrue(all(item["properties"]["featureKind"] in {"line", "point"} for item in result["features"]))
+
+    def test_topography_buildings_keep_names_and_purposes(self):
+        values = [("1", 0, {"objektidentitet": "building", "objekttyp": "Samhällsfunktion", "byggnadsnamn1": "Skolan", "andamal1": "Skola", "andamal2": "Sporthall", "husnummer": "4"}, POLYGON)]
+        with patch.object(topo, "ensure_geopackage", return_value=Path("structures.gpkg")), patch.object(topo, "_area_features", return_value=values):
+            result = topo.buildings([17.9, 58.9, 18.1, 59.1])
+        feature = result["features"][0]
+        self.assertEqual(feature["properties"]["name"], "Skolan")
+        self.assertEqual(feature["properties"]["buildingPurposes"], ["Skola", "Sporthall"])
+        self.assertEqual(result["properties"]["sourceDataset"], "Topografi 10 Nedladdning, vektor")
+
+    def test_facility_areas_are_reference_only_and_not_automatic_520(self):
+        areas = {
+            "anlaggningsomrade": [("1", 0, {"objektidentitet": "quarry", "objekttypnr": 2831, "objekttyp": "Industriområde", "andamal": "Täkt"}, POLYGON)],
+            "start_landningsbana": [],
+            "flygplatsomrade": [],
+        }
+        with patch.object(topo, "ensure_geopackage", return_value=Path("facilities.gpkg")), patch.object(topo, "_area_features", side_effect=lambda package, layer, bbox: areas[layer]), patch.object(topo, "_point_features", return_value=[]):
+            result = topo.facility_references([17.9, 58.9, 18.1, 59.1])
+        feature = result["features"][0]
+        self.assertTrue(feature["properties"]["referenceOnly"])
+        self.assertEqual(feature["properties"]["candidateIsomSymbol"], "520")
+        self.assertNotIn("isomSymbol", feature["properties"])
+        self.assertEqual(result["properties"]["candidate520Count"], 1)
+
     def test_hydro_replaces_osm_watercourse_lines_but_keeps_areas(self):
         imported = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": "lm", "properties": {"isomSymbol": "305"}, "geometry": LINE}]}
         base = {"type": "FeatureCollection", "properties": {"importVersion": 10}, "features": [

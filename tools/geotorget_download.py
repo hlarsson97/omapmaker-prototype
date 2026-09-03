@@ -104,6 +104,8 @@ THEME_PREFIXES = {
     "hydrography": ("hydro",),
     "utilities": ("ledningar",),
     "land": ("mark_",),
+    "facility_areas": ("anlaggningsomrade_",),
+    "structures": ("byggnadsverk_",),
 }
 
 

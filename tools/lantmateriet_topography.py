@@ -27,6 +27,8 @@ THEMES = {
     "hydrography": ("hydro_sverige.zip", "hydro_sverige.gpkg"),
     "utilities": ("ledningar_sverige.zip", "ledningar_sverige.gpkg"),
     "land": ("mark_sverige.zip", "mark_sverige.gpkg"),
+    "facility_areas": ("anlaggningsomrade_sverige.zip", "anlaggningsomrade_sverige.gpkg"),
+    "structures": ("byggnadsverk_sverige.zip", "byggnadsverk_sverige.gpkg"),
 }
 
 
@@ -124,6 +126,20 @@ def _area_features(package, layer, bbox_wgs84):
                 if part.geom_type != "Polygon" or part.area <= 0:
                     continue
                 yield str(item.id), index, dict(item.properties), mapping(part)
+
+
+def _point_features(package, layer, bbox_wgs84):
+    request_bounds = _request_bounds(bbox_wgs84)
+    unproject = Transformer.from_crs("EPSG:3006", "EPSG:4326", always_xy=True).transform
+    clip = box(*bbox_wgs84)
+    with fiona.open(package, layer=layer) as source:
+        for item in source.filter(bbox=request_bounds):
+            if not item.geometry:
+                continue
+            geometry = transform(unproject, shape(item.geometry))
+            if geometry.is_empty or geometry.geom_type != "Point" or not clip.covers(geometry):
+                continue
+            yield str(item.id), dict(item.properties), mapping(geometry)
 
 
 def _properties(source_id, object_type, confidence="medium"):
@@ -237,7 +253,81 @@ def infrastructure(bbox_wgs84):
             "power": "line" if symbol == "511" else "minor_line",
         })
         features.append({"type": "Feature", "id": f"lm-power-{source_id}-{part}", "properties": properties, "geometry": geometry})
-    return _collection("infrastructure", bbox_wgs84, features, 2)
+
+    if theme_available("structures"):
+        structures = ensure_geopackage("structures")
+        for feature_id, part, values, geometry in _line_features(structures, "byggnadsanlaggningslinje", bbox_wgs84):
+            object_number = int(values.get("objekttypnr") or 0)
+            if object_number not in {1978, 1980}:
+                continue
+            symbol, omap_type, confidence = ("510", "aerialway", "high") if object_number == 1978 else ("516", "fence", "medium")
+            source_id = str(values.get("objektidentitet") or f"byggnadsanlaggningslinje/{feature_id}")
+            properties = _properties(source_id, values.get("objekttyp"), confidence)
+            properties.update({"featureKind": "line", "isomSymbol": symbol, "omapType": omap_type, "automaticIsomSymbol": symbol, "automaticOmapType": omap_type, "name": values.get("objekttyp"), "tagSide": "right" if symbol == "516" else None})
+            features.append({"type": "Feature", "id": f"lm-structure-line-{source_id}-{part}", "properties": properties, "geometry": geometry})
+
+        point_classes = {
+            2019: ("524", "tower", "high"),
+            2022: ("524", "tower", "high"),
+            2025: ("524", "tower", "high"),
+            1045: ("524", "tower", "high"),
+            1051: ("524", "tower", "high"),
+            2016: ("525", "small_tower", "medium"),
+            1047: ("525", "small_tower", "medium"),
+            1052: ("530", "prominent_manmade_ring", "low"),
+        }
+        for layer in ("byggnadsanlaggningspunkt", "byggnadspunkt"):
+            for feature_id, values, geometry in _point_features(structures, layer, bbox_wgs84):
+                object_number = int(values.get("objekttypnr") or 0)
+                classification = point_classes.get(object_number)
+                if not classification:
+                    continue
+                symbol, omap_type, confidence = classification
+                source_id = str(values.get("objektidentitet") or f"{layer}/{feature_id}")
+                properties = _properties(source_id, values.get("objekttyp"), confidence)
+                properties.update({"featureKind": "point", "isomSymbol": symbol, "omapType": omap_type, "automaticIsomSymbol": symbol, "automaticOmapType": omap_type, "name": values.get("objekttyp"), "heightMetres": values.get("hojd"), "orientationDegrees": values.get("rotation"), "legendDefinition": values.get("objekttyp")})
+                features.append({"type": "Feature", "id": f"lm-structure-point-{source_id}", "properties": properties, "geometry": geometry})
+
+    return _collection("infrastructure", bbox_wgs84, features, 3)
+
+
+def buildings(bbox_wgs84):
+    package = ensure_geopackage("structures")
+    features = []
+    for feature_id, part, values, geometry in _area_features(package, "byggnad", bbox_wgs84):
+        source_id = str(values.get("objektidentitet") or f"byggnad/{feature_id}")
+        name = next((values.get(key) for key in ("byggnadsnamn1", "byggnadsnamn2", "byggnadsnamn3") if values.get(key)), None)
+        purposes = [values.get(key) for key in ("andamal1", "andamal2", "andamal3", "andamal4", "andamal5") if values.get(key)]
+        properties = _properties(source_id, values.get("objekttyp"), "high")
+        properties.update({"sourceType": "lantmateriet", "building": str(values.get("objekttyp") or "yes").casefold(), "buildingPurpose": purposes[0] if purposes else values.get("objekttyp"), "buildingPurposes": purposes, "name": name, "houseNumber": values.get("husnummer"), "mainBuilding": values.get("huvudbyggnad")})
+        features.append({"type": "Feature", "id": f"lm-topo-building-{source_id}-{part}", "properties": properties, "geometry": geometry})
+    return _collection("buildings", bbox_wgs84, features, 5)
+
+
+FACILITY_520_CANDIDATES = {"Skjutbaneområde", "Täkt", "Avfallsanläggning", "Kriminalvårdsanstalt", "Testbana", "Gruvområde"}
+
+
+def facility_references(bbox_wgs84):
+    package = ensure_geopackage("facility_areas")
+    features = []
+    for layer in ("anlaggningsomrade", "start_landningsbana", "flygplatsomrade"):
+        for feature_id, part, values, geometry in _area_features(package, layer, bbox_wgs84):
+            source_id = str(values.get("objektidentitet") or f"{layer}/{feature_id}")
+            purpose = values.get("andamal") or values.get("objekttyp")
+            candidate = "520" if int(values.get("objekttypnr") or 0) == 2834 or purpose in FACILITY_520_CANDIDATES else None
+            properties = _properties(source_id, values.get("objekttyp"), "low" if candidate else "medium")
+            properties.update({"featureKind": "area", "facilityType": values.get("objekttyp"), "purpose": purpose, "name": purpose, "candidateIsomSymbol": candidate, "candidateReason": "facility-type-may-have-access-restrictions" if candidate else None, "referenceOnly": True, "reviewRequired": True})
+            features.append({"type": "Feature", "id": f"lm-facility-area-{source_id}-{part}", "properties": properties, "geometry": geometry})
+    for layer in ("anlaggningsomradespunkt", "flygplatspunkt"):
+        for feature_id, values, geometry in _point_features(package, layer, bbox_wgs84):
+            source_id = str(values.get("objektidentitet") or f"{layer}/{feature_id}")
+            purpose = values.get("andamal") or values.get("objekttyp")
+            properties = _properties(source_id, values.get("objekttyp"), "medium")
+            properties.update({"featureKind": "point", "facilityType": values.get("objekttyp"), "purpose": purpose, "name": purpose, "referenceOnly": True, "reviewRequired": True})
+            features.append({"type": "Feature", "id": f"lm-facility-point-{source_id}", "properties": properties, "geometry": geometry})
+    result = _collection("facility-references", bbox_wgs84, features, 1)
+    result["properties"].update({"referenceOnly": True, "candidate520Count": sum(1 for item in features if item["properties"].get("candidateIsomSymbol") == "520"), "warning": "Anläggningsområde anger inte om marken får beträdas eller om ytan är hårdgjord. Kandidater måste granskas."})
+    return result
 
 
 def hydrography(bbox_wgs84):
@@ -337,7 +427,7 @@ def _collection(object_type, bbox_wgs84, features, import_version):
     return {
         "type": "FeatureCollection",
         "properties": {
-            "source": "Lantmäteriet", "sourceType": "lantmateriet", "license": LICENSE,
+            "source": "Lantmäteriet", "sourceType": "lantmateriet", "sourceDataset": "Topografi 10 Nedladdning, vektor", "license": LICENSE,
             "attribution": ATTRIBUTION, "objectType": object_type, "importVersion": import_version,
             "bboxWgs84": list(bbox_wgs84),
             "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
