@@ -208,7 +208,7 @@ const largeTree = {type: 'Feature', id: 'large-tree', properties: {isomSymbol: '
 const bushTree = {type: 'Feature', id: 'bush-tree', properties: {isomSymbol: '418'}, geometry: {type: 'Point', coordinates: [18.1008, 59.2]}};
 const vegetationFeature = {type: 'Feature', id: 'vegetation-feature', properties: {isomSymbol: '419'}, geometry: {type: 'Point', coordinates: [18.1009, 59.2]}};
 const stairway = {...wall, id: 'stairway', properties: {isomSymbol: '532'}};
-const label = {...shortPath, id: 'label', properties: {isomSymbol: '101', mapText: '42,5', labelCoordinate: [center.lng, center.lat], textHeightMm: 1.5}};
+const label = {...shortPath, id: 'label', properties: {isomSymbol: '101', mapText: '42,5', labelCoordinate: [center.lng, center.lat], textHeightMm: 1.5, textAnchor: 'start', rotationDegrees: -12}};
 const svg = renderer.buildVectorSvg([building, canopy, ruin, slowVisibleVegetation, walkVisibleVegetation, smallTower, cairn, fodderRack, prominentLine, prominentUncrossableLine, prominentRing, prominentX, largeTree, bushTree, vegetationFeature, stairway, road, railway, gully, cliff, powerLine, powerSupport, wall, fence, retainingWall, ruinedWall, impassableWall, ruinedFence, impassableFence, crossing, label], {scale: 10000, declination: 8.5, center, widthMm: 277, heightMm: 190});
 assert(svg.startsWith('<svg'));
 assert(svg.includes('symbolRegistryVersion'));
@@ -217,10 +217,12 @@ assert(svg.includes('data-colour="white"'), 'Vita läsbarhetsmasker ska ligga i 
 assert(Math.abs(renderer.paperMm(registry.technical['601'].lineWidthBlackMm, 10000) - 0.15) < 1e-9);
 assert(svg.includes('<path'));
 assert(svg.includes('data-composite-symbol="502"'));
+assert(svg.includes('text-anchor="start"'));
+assert(svg.includes('rotate(-12 '));
 assert(svg.includes('data-composite-symbol="509"'));
 assert(svg.includes('stroke-dasharray="1.5 0.75"'));
 assert(svg.includes('stroke-dasharray="0 '));
-assert(svg.includes('data-orientation="magnetic-north"'));
+assert(svg.includes('data-orientation="map"'));
 assert((svg.match(/stroke-linecap="round"/g) || []).length >= 2, 'Branttaggar eller punktlinje saknas');
 assert(svg.includes('rotate(81.5)'), 'Stödmarkeringen ska roteras vinkelrätt mot ledningen och kartrotationen');
 assert(svg.includes('data-decoration-symbol="513.1"'), 'Murens punkter saknas i vektorutskriften');

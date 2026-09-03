@@ -177,6 +177,7 @@ body.manual-mode #gpsQuality:focus-visible,body.manual-mode #modeSwitch button:f
 #layersSheet .basemap-grid small{display:block;margin-top:2px;color:#77827b;font-size:8px;font-weight:550;letter-spacing:0;line-height:1.25}
 #layersSheet input[type=radio],#layersSheet input[type=checkbox]{accent-color:var(--mode-color)}
 #layersSheet .workspace-panel{margin-top:4px}
+#map .omap-map-label-icon{background:transparent;border:0;overflow:visible}.omap-map-label{position:absolute;display:block;width:max-content;color:#171a18;font:600 var(--label-size,10px)/1.05 Arial,sans-serif;white-space:nowrap;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;transform:translate(-50%,-50%) rotate(var(--label-rotation,0deg));transform-origin:0 50%}.omap-map-label.water{color:#0072bc;font-style:italic}.omap-map-label.anchor-left{transform:translate(0,-50%) rotate(var(--label-rotation,0deg))}.omap-map-label.anchor-right{transform:translate(-100%,-50%) rotate(var(--label-rotation,0deg))}
 #layersSheet .workspace-panel[hidden],#layersSheet .workspace-action[hidden]{display:none!important}
 #layerNote{margin:7px 0 0}
 

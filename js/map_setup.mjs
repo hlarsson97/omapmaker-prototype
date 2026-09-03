@@ -18,6 +18,7 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     foundationPane: 380,
     infrastructurePane: 385,
     buildingPane: 390,
+    mapLabelPane: 395,
     evidencePane: 425,
     globalObjectPane: 440,
     fieldPane: 450,
@@ -29,7 +30,7 @@ export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
     globalMarkerPane: 441,
     fieldMarkerPane: 451
   };
-  const nonInteractive = new Set(['contourPane', 'northLinePane', 'evidencePane', 'gpsPane']);
+  const nonInteractive = new Set(['contourPane', 'northLinePane', 'mapLabelPane', 'evidencePane', 'gpsPane']);
   const rotatingPane = map.getPane('overlayPane')?.parentElement;
   for (const [name, zIndex] of Object.entries(panes)) {
     map.createPane(name, rotatingPane);

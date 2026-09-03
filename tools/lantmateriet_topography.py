@@ -29,6 +29,7 @@ THEMES = {
     "land": ("mark_sverige.zip", "mark_sverige.gpkg"),
     "facility_areas": ("anlaggningsomrade_sverige.zip", "anlaggningsomrade_sverige.gpkg"),
     "structures": ("byggnadsverk_sverige.zip", "byggnadsverk_sverige.gpkg"),
+    "text": ("text_sverige.zip", "text_sverige.gpkg"),
 }
 
 
@@ -327,6 +328,48 @@ def facility_references(bbox_wgs84):
             features.append({"type": "Feature", "id": f"lm-facility-point-{source_id}", "properties": properties, "geometry": geometry})
     result = _collection("facility-references", bbox_wgs84, features, 1)
     result["properties"].update({"referenceOnly": True, "candidate520Count": sum(1 for item in features if item["properties"].get("candidateIsomSymbol") == "520"), "warning": "Anläggningsområde anger inte om marken får beträdas eller om ytan är hårdgjord. Kandidater måste granskas."})
+    return result
+
+
+def map_labels(bbox_wgs84):
+    """Expose Topografi 10's cartographically placed text without inventing names."""
+    package = ensure_geopackage("text")
+    features = []
+    for feature_id, values, geometry in _point_features(package, "textobjekt", bbox_wgs84):
+        text = str(values.get("text") or "").strip()
+        if not text:
+            continue
+        detail_type = str(values.get("detaljtyp") or "").upper()
+        category = (
+            "water" if detail_type.startswith("VATT") else
+            "settlement" if detail_type.startswith("BEB") else
+            "facility" if detail_type.startswith("ANL") else
+            "terrain" if detail_type.startswith("TERR") else
+            "marsh" if detail_type.startswith("SANK") else
+            "nature" if detail_type.startswith("NATU") else
+            "other"
+        )
+        source_height = float(values.get("thojd") or 10)
+        text_height_mm = max(1.5, min(5.5, source_height * 0.18))
+        source_rotation = float(values.get("trikt") or 0)
+        justification = int(values.get("tjust") or 5)
+        anchor = "start" if justification in {1, 4, 7} else "end" if justification in {3, 6, 9} else "middle"
+        coordinates = geometry["coordinates"]
+        properties = _properties(f"textobjekt/{feature_id}", detail_type, "high")
+        properties.update({
+            "featureKind": "label", "mapText": text,
+            "registerText": values.get("regtext") or text,
+            "textPartIndex": values.get("tdelidx"), "detailType": detail_type,
+            "labelCategory": category, "labelCoordinate": coordinates,
+            "sourceRotationDegrees": source_rotation, "rotationDegrees": -source_rotation,
+            "sourceTextHeightPoints": source_height, "textHeightMm": text_height_mm,
+            "textColour": "blue" if category == "water" else "black",
+            "sourceJustification": justification, "textAnchor": anchor,
+            "referenceOnly": True, "reviewRequired": False,
+        })
+        features.append({"type": "Feature", "id": f"lm-label-{feature_id}", "properties": properties, "geometry": geometry})
+    result = _collection("map-labels", bbox_wgs84, features, 1)
+    result["properties"].update({"referenceOnly": True, "placement": "Topografi 10 textobjekt", "splitNamesPreserved": True})
     return result
 
 

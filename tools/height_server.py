@@ -14,7 +14,7 @@ from shapely.ops import polygonize, transform as transform_geometry, unary_union
 from lantmateriet_height import ApiError as LantmaterietApiError, PROPERTY_API_ROOT, VECTOR_API_ROOT, api_json as lantmateriet_api_json, asset_candidates, collections as lantmateriet_collections, download_assets, oauth_token as lantmateriet_oauth_token, safe_filename, search as lantmateriet_search
 from lantmateriet_vector import lantmateriet_buildings, lantmateriet_property_boundaries
 from geotorget_download import delivery_manifest as geotorget_delivery_manifest, download_theme_files as geotorget_download_theme_files
-from lantmateriet_topography import buildings as topography_buildings, cache_status as topography_cache_status, compose_land_cover as compose_lantmateriet_land_cover, ensure_geopackage as ensure_topography_geopackage, facility_references as lantmateriet_facility_references, hydrography as lantmateriet_hydrography, infrastructure as lantmateriet_infrastructure, land_cover as lantmateriet_land_cover, merge_hydrography as merge_lantmateriet_hydrography, roads as lantmateriet_roads, theme_available as topography_theme_available
+from lantmateriet_topography import buildings as topography_buildings, cache_status as topography_cache_status, compose_land_cover as compose_lantmateriet_land_cover, ensure_geopackage as ensure_topography_geopackage, facility_references as lantmateriet_facility_references, hydrography as lantmateriet_hydrography, infrastructure as lantmateriet_infrastructure, land_cover as lantmateriet_land_cover, map_labels as lantmateriet_map_labels, merge_hydrography as merge_lantmateriet_hydrography, roads as lantmateriet_roads, theme_available as topography_theme_available
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
 from isom_registry import REGISTRY_VERSION
@@ -32,7 +32,7 @@ LOGIN_LOCK=threading.Lock();LOGIN_FAILURES={}
 
 OAUTH_CLIENT_ID_CREDENTIAL='lantmateriet_oauth_client_id'
 OAUTH_CLIENT_SECRET_CREDENTIAL='lantmateriet_oauth_client_secret'
-CENTRAL_LAYER_TYPES={'contours','buildings','roads','infrastructure','paved-areas','land-cover','property-boundaries','facility-references'}
+CENTRAL_LAYER_TYPES={'contours','buildings','roads','infrastructure','paved-areas','land-cover','property-boundaries','facility-references','map-labels'}
 
 class LantmaterietCredentialsRequired(RuntimeError):pass
 class ContourJobCancelled(RuntimeError):pass
@@ -1167,7 +1167,7 @@ def create_topography_job(themes):
         username=LM_SESSION.get('username');password=LM_SESSION.get('password');order_id=LM_SESSION.get('orderId')
     if not username or not password or not order_id:raise LantmaterietCredentialsRequired('Anslut Geotorget innan Topografi 10-filer hämtas.')
     themes=list(dict.fromkeys(str(theme or '').strip().lower() for theme in themes or []))
-    allowed={'communication','hydrography','utilities','land','facility_areas','structures'}
+    allowed={'communication','hydrography','utilities','land','facility_areas','structures','text'}
     if not themes or any(theme not in allowed for theme in themes):raise ValueError('Välj minst ett giltigt Topografi 10-tema.')
     with TOPO_LOCK:
         active=next((job for job in TOPO_JOBS.values() if job.get('status') in ('queued','running')),None)
@@ -1609,7 +1609,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(200,USER_STORE.sync_user_data(session['user']['id'],request.get('mutationId'),request.get('objects'),request.get('fieldSurveys'),request.get('layerOverrides')))
             except SyncConflict as exc:return self.send_json(409,{'error':str(exc),'code':'sync_conflict','current':exc.current})
             except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
-        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/property-boundaries','/api/facility-references','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
+        if path not in ('/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/property-boundaries','/api/facility-references','/api/map-labels','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw'):return self.send_json(404,{'error':'Okänd API-adress'})
         try:
             request=self.read_json()
             if path=='/api/submissions':return self.send_json(201,MAP_STORE.submit(self.device_id(),request.get('clientSubmissionId'),request.get('features')))
@@ -1637,6 +1637,9 @@ class Handler(SimpleHTTPRequestHandler):
             if path=='/api/facility-references':
                 if not topography_theme_available('facility_areas'):raise ValueError('anlaggningsomrade_sverige.zip har inte hämtats till servern')
                 return self.send_json(200,centralize_layer('facility-references',bbox,lantmateriet_facility_references(bbox),{'importVersion':1}))
+            if path=='/api/map-labels':
+                if not topography_theme_available('text'):raise ValueError('text_sverige.zip har inte hämtats till servern')
+                return self.send_json(200,centralize_layer('map-labels',bbox,lantmateriet_map_labels(bbox),{'importVersion':1}))
             if path=='/api/roads':
                 requested_source=str(request.get('source') or 'automatic').lower();source=topography_source('communication',request)
                 return self.send_json(200,centralize_layer('roads',bbox,generated_roads(bbox,source),{'importVersion':5,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))

@@ -106,6 +106,7 @@ THEME_PREFIXES = {
     "land": ("mark_",),
     "facility_areas": ("anlaggningsomrade_",),
     "structures": ("byggnadsverk_",),
+    "text": ("text_",),
 }
 
 

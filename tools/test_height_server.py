@@ -20,6 +20,7 @@ import height_server as server
 import lantmateriet_height as lm_height
 import lantmateriet_vector as lm_vector
 import geotorget_download as geotorget
+import lantmateriet_topography as topography
 import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
 from magnetic_north import calculate_magnetic_north
@@ -124,9 +125,10 @@ class GeotorgetDownloadTests(unittest.TestCase):
             {'title':'hydro_sverige.zip','length':4,'path':'/signed/water?q=secret'},
             {'title':'ledningar_sverige.zip','length':5,'path':'/signed/power?q=secret'},
             {'title':'mark_sverige.zip','length':6,'path':'/signed/land?q=secret'},
+            {'title':'text_sverige.zip','length':7,'path':'/signed/text?q=secret'},
         ]}
-        selected=geotorget.select_theme_files(manifest,['communication','utilities','land'])
-        self.assertEqual([item['title'] for item in selected],['kommunikation_sverige.zip','ledningar_sverige.zip','mark_sverige.zip'])
+        selected=geotorget.select_theme_files(manifest,['communication','utilities','land','text'])
+        self.assertEqual([item['title'] for item in selected],['kommunikation_sverige.zip','ledningar_sverige.zip','mark_sverige.zip','text_sverige.zip'])
         with self.assertRaisesRegex(ValueError,'Okänt'):geotorget.select_theme_files(manifest,['buildings'])
 
     def test_theme_download_refreshes_paths_streams_and_reuses_complete_cache(self):
@@ -149,6 +151,20 @@ class GeotorgetDownloadTests(unittest.TestCase):
         finally:
             with server.LM_SESSION_LOCK:server.LM_SESSION.clear();server.LM_SESSION.update(previous_session)
             with server.TOPO_LOCK:server.TOPO_JOBS.clear();server.TOPO_CANCEL_EVENTS.clear()
+
+    def test_topography_text_preserves_placed_parts_and_register_name(self):
+        points=[
+            ('1',{'text':'Tall-','regtext':'Talludden','tdelidx':1,'detaljtyp':'TERRTX','trikt':12,'tjust':7,'thojd':10},{'type':'Point','coordinates':(18.1,59.2)}),
+            ('2',{'text':'udden','regtext':'Talludden','tdelidx':2,'detaljtyp':'VATTDRTX','trikt':0,'tjust':5,'thojd':12},{'type':'Point','coordinates':(18.11,59.21)}),
+        ]
+        with patch.object(topography,'ensure_geopackage',return_value=Path('text.gpkg')),patch.object(topography,'_point_features',return_value=iter(points)):
+            result=topography.map_labels([18,59,19,60])
+        self.assertEqual([feature['properties']['mapText'] for feature in result['features']],['Tall-','udden'])
+        self.assertEqual({feature['properties']['registerText'] for feature in result['features']},{'Talludden'})
+        self.assertEqual(result['features'][0]['properties']['rotationDegrees'],-12)
+        self.assertEqual(result['features'][0]['properties']['textAnchor'],'start')
+        self.assertEqual(result['features'][1]['properties']['textColour'],'blue')
+        self.assertTrue(result['properties']['splitNamesPreserved'])
 
     def test_persistent_credentials_are_private_reloadable_and_forgettable(self):
         manifest={'product':'Topografi 10 Nedladdning, vektor','orderStatus':'AKTIV','deliveryStatus':'LYCKAD','files':[]}

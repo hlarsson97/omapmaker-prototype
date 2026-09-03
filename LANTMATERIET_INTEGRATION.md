@@ -36,7 +36,8 @@ de tidsbegränsade `q`-signaturerna. Följande teman hämtas och importeras omr�
 - `ledningar` för kraftledningar och master,
 - `mark` för markslag, sankmark, vatten och strandlinjer,
 - `byggnadsverk` för byggnadsytor, linbanor, renstängsel och tydliga punktobjekt,
-- `anlaggningsomrade` som separat referenslager.
+- `anlaggningsomrade` som separat referenslager,
+- `text` för Lantmäteriets granskade kartnamn och kartografiskt placerade etiketter.
 
 Filerna strömmas till `data/lantmateriet/topografi10/`, en katalog som ignoreras
 av Git. Avbrutna `.part`-filer tas bort och kompletta filer återanvänds. GeoPackage-
@@ -58,6 +59,12 @@ som lila referensgeometri. Ett fåtal verksamhetstyper markeras som möjliga
 520-kandidater, men får inte automatiskt ISOM-symbol eftersom produkten saknar
 uppgift om tillträdesförbud. Inte heller idrottsplaner eller startbanor antas vara
 hårdgjorda utan ytterligare beläggningsdata.
+
+Text/Ortnamn visas som ett separat, valbart kartnamnslager. Importen bevarar
+textdelar, fullständigt registernamn, placering, riktning, justering och den
+typografiska höjden från `textobjekt`. Vattennamn återges blått. Etiketterna
+följer med i vektorexporten men skapar inga ISOM-objekt och ändrar inte andra
+kartobjekts klassning.
 
 Fastighetsindelning är dessutom ansluten som separat referenslager.
 
