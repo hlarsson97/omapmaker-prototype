@@ -30,6 +30,8 @@ THEMES = {
     "facility_areas": ("anlaggningsomrade_sverige.zip", "anlaggningsomrade_sverige.gpkg"),
     "structures": ("byggnadsverk_sverige.zip", "byggnadsverk_sverige.gpkg"),
     "text": ("text_sverige.zip", "text_sverige.gpkg"),
+    "nature": ("naturvard_sverige.zip", "naturvard_sverige.gpkg"),
+    "military": ("militartomrade_sverige.zip", "militartomrade_sverige.gpkg"),
 }
 
 
@@ -370,6 +372,57 @@ def map_labels(bbox_wgs84):
         features.append({"type": "Feature", "id": f"lm-label-{feature_id}", "properties": properties, "geometry": geometry})
     result = _collection("map-labels", bbox_wgs84, features, 1)
     result["properties"].update({"referenceOnly": True, "placement": "Topografi 10 textobjekt", "splitNamesPreserved": True})
+    return result
+
+
+def nature_references(bbox_wgs84):
+    package = ensure_geopackage("nature")
+    features = []
+    for layer in ("skyddadnatur", "restriktionsomrade"):
+        for feature_id, part, values, geometry in _area_features(package, layer, bbox_wgs84):
+            source_id = str(values.get("objektidentitet") or f"{layer}/{feature_id}")
+            object_type = values.get("objekttyp")
+            properties = _properties(source_id, object_type, "high")
+            properties.update({
+                "featureKind": "area", "referenceKind": layer,
+                "name": values.get("nvr_beskrivning") or values.get("informativ_text") or object_type,
+                "natureType": object_type, "natureRegisterId": values.get("nvid"),
+                "externalRegisterUnit": values.get("extern_registerenhet"),
+                "animalProtectionType": values.get("djurskyddstyp"),
+                "restrictionText": values.get("informativ_text"),
+                "timeRestriction": values.get("tidsbegransning"),
+                "possibleAccessRestriction": layer == "restriktionsomrade" or object_type == "Djurskyddsområde",
+                "referenceOnly": True, "reviewRequired": True,
+            })
+            features.append({"type": "Feature", "id": f"lm-nature-area-{source_id}-{part}", "properties": properties, "geometry": geometry})
+    for feature_id, values, geometry in _point_features(package, "naturvardspunkt", bbox_wgs84):
+        source_id = str(values.get("objektidentitet") or f"naturvardspunkt/{feature_id}")
+        object_type = values.get("objekttyp")
+        properties = _properties(source_id, object_type, "high")
+        properties.update({"featureKind": "point", "referenceKind": "naturvardspunkt", "name": values.get("nvr_beskrivning") or object_type, "natureType": object_type, "natureRegisterId": values.get("nvid"), "orientationDegrees": values.get("rotation"), "referenceOnly": True, "reviewRequired": True})
+        features.append({"type": "Feature", "id": f"lm-nature-point-{source_id}", "properties": properties, "geometry": geometry})
+    result = _collection("nature-references", bbox_wgs84, features, 1)
+    result["properties"].update({"referenceOnly": True, "candidate520Count": 0, "warning": "Naturskydd eller aktivitetsrestriktion innebär inte automatiskt tillträdesförbud enligt ISOM 520."})
+    return result
+
+
+def military_references(bbox_wgs84):
+    package = ensure_geopackage("military")
+    features = []
+    for feature_id, part, values, geometry in _area_features(package, "militart_omrade", bbox_wgs84):
+        source_id = str(values.get("objektidentitet") or f"militart_omrade/{feature_id}")
+        object_type = values.get("objekttyp")
+        properties = _properties(source_id, object_type, "low")
+        properties.update({
+            "featureKind": "area", "referenceKind": "military-area",
+            "name": object_type, "militaryType": object_type, "militaryId": values.get("mo_id"),
+            "firingRangeType": values.get("skjutfaltstyp"), "riskArea": values.get("riskomrade"),
+            "candidateIsomSymbol": "520", "candidateReason": "military-access-restrictions-may-be-time-dependent",
+            "referenceOnly": True, "reviewRequired": True,
+        })
+        features.append({"type": "Feature", "id": f"lm-military-{source_id}-{part}", "properties": properties, "geometry": geometry})
+    result = _collection("military-references", bbox_wgs84, features, 1)
+    result["properties"].update({"referenceOnly": True, "candidate520Count": len(features), "warning": "Militärt område är endast 520-underlag. Aktuell avspärrning och faktiskt tillträdesförbud måste verifieras."})
     return result
 
 

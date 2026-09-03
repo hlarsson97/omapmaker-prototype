@@ -107,6 +107,8 @@ THEME_PREFIXES = {
     "facility_areas": ("anlaggningsomrade_",),
     "structures": ("byggnadsverk_",),
     "text": ("text_",),
+    "nature": ("naturvard_",),
+    "military": ("militartomrade_",),
 }
 
 

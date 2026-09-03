@@ -126,9 +126,11 @@ class GeotorgetDownloadTests(unittest.TestCase):
             {'title':'ledningar_sverige.zip','length':5,'path':'/signed/power?q=secret'},
             {'title':'mark_sverige.zip','length':6,'path':'/signed/land?q=secret'},
             {'title':'text_sverige.zip','length':7,'path':'/signed/text?q=secret'},
+            {'title':'naturvard_sverige.zip','length':8,'path':'/signed/nature?q=secret'},
+            {'title':'militartomrade_sverige.zip','length':9,'path':'/signed/military?q=secret'},
         ]}
-        selected=geotorget.select_theme_files(manifest,['communication','utilities','land','text'])
-        self.assertEqual([item['title'] for item in selected],['kommunikation_sverige.zip','ledningar_sverige.zip','mark_sverige.zip','text_sverige.zip'])
+        selected=geotorget.select_theme_files(manifest,['communication','utilities','land','text','nature','military'])
+        self.assertEqual([item['title'] for item in selected],['kommunikation_sverige.zip','ledningar_sverige.zip','mark_sverige.zip','text_sverige.zip','naturvard_sverige.zip','militartomrade_sverige.zip'])
         with self.assertRaisesRegex(ValueError,'Okänt'):geotorget.select_theme_files(manifest,['buildings'])
 
     def test_theme_download_refreshes_paths_streams_and_reuses_complete_cache(self):
@@ -165,6 +167,30 @@ class GeotorgetDownloadTests(unittest.TestCase):
         self.assertEqual(result['features'][0]['properties']['textAnchor'],'start')
         self.assertEqual(result['features'][1]['properties']['textColour'],'blue')
         self.assertTrue(result['properties']['splitNamesPreserved'])
+
+    def test_nature_is_reference_only_and_never_automatic_520(self):
+        geometry={'type':'Polygon','coordinates':[[[18,59],[18.1,59],[18.1,59.1],[18,59.1],[18,59]]]}
+        def areas(_package,layer,_bbox):
+            if layer=='skyddadnatur':return [('1',0,{'objektidentitet':'nature-1','objekttyp':'Naturreservat','objekttypnr':5604,'nvr_beskrivning':'Testreservatet'},geometry)]
+            return [('2',0,{'objektidentitet':'restriction-1','objekttyp':'Tält- och eldningsförbud','objekttypnr':5611,'informativ_text':'Förbud'},geometry)]
+        with patch.object(topography,'ensure_geopackage',return_value=Path('nature.gpkg')),patch.object(topography,'_area_features',side_effect=areas),patch.object(topography,'_point_features',return_value=[]):
+            result=topography.nature_references([18,59,19,60])
+        self.assertEqual(len(result['features']),2)
+        self.assertTrue(all(feature['properties']['referenceOnly'] for feature in result['features']))
+        self.assertTrue(all('isomSymbol' not in feature['properties'] for feature in result['features']))
+        self.assertEqual(result['properties']['candidate520Count'],0)
+        self.assertTrue(result['features'][1]['properties']['possibleAccessRestriction'])
+
+    def test_military_is_only_a_review_required_520_candidate(self):
+        geometry={'type':'Polygon','coordinates':[[[18,59],[18.1,59],[18.1,59.1],[18,59.1],[18,59]]]}
+        rows=[('1',0,{'objektidentitet':'mil-1','objekttyp':'Militärt skjutfält','objekttypnr':5503,'mo_id':'MO0001','skjutfaltstyp':'Skjutfält','riskomrade':'Riskområde 4'},geometry)]
+        with patch.object(topography,'ensure_geopackage',return_value=Path('military.gpkg')),patch.object(topography,'_area_features',return_value=rows):
+            result=topography.military_references([18,59,19,60])
+        feature=result['features'][0]
+        self.assertEqual(feature['properties']['candidateIsomSymbol'],'520')
+        self.assertNotIn('isomSymbol',feature['properties'])
+        self.assertTrue(feature['properties']['referenceOnly'])
+        self.assertTrue(feature['properties']['reviewRequired'])
 
     def test_persistent_credentials_are_private_reloadable_and_forgettable(self):
         manifest={'product':'Topografi 10 Nedladdning, vektor','orderStatus':'AKTIV','deliveryStatus':'LYCKAD','files':[]}
