@@ -156,6 +156,15 @@ class GeotorgetDownloadTests(unittest.TestCase):
             result=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary)
         self.assertFalse(result['files'][0]['cached']);self.assertEqual(fetch.call_count,2)
 
+    def test_dated_legacy_metadata_is_backfilled_without_redownload(self):
+        manifest={'deliveryId':'delivery-1','deliveryUpdated':'2026-09-01','files':[{'title':'ledningar_sverige.zip','length':5,'path':'/file'}]}
+        with tempfile.TemporaryDirectory() as temporary,patch.object(geotorget,'delivery_manifest',return_value=manifest),patch.object(geotorget,'api_response') as fetch:
+            target=Path(temporary)/'ledningar_sverige.zip';target.write_bytes(b'power')
+            geotorget.save_download_metadata(temporary,{'schemaVersion':1,'files':{'ledningar_sverige.zip':{'length':5,'downloadedAt':'2026-09-04T10:00:00+00:00','deliveryUpdated':'2026-09-01'}}})
+            result=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary)
+        self.assertTrue(result['files'][0]['cached']);fetch.assert_not_called()
+        self.assertEqual(geotorget.load_download_metadata(temporary)['files']['ledningar_sverige.zip']['deliveryId'],'delivery-1')
+
     def test_land_theme_can_be_queued_for_download_and_extraction(self):
         previous_session=dict(server.LM_SESSION)
         try:

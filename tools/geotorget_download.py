@@ -166,12 +166,23 @@ def download_theme_files(order_id, themes, destination, bearer_token="", usernam
     file_metadata = metadata.setdefault("files", {})
     required = sum(max(0, int(item.get("length") or 0)) for item in files)
     current_delivery = str(manifest.get("deliveryId") or "")
+    current_updated = manifest.get("deliveryUpdated")
+
+    def same_delivery(previous):
+        if not isinstance(previous, dict):
+            return True
+        previous_delivery = str(previous.get("deliveryId") or "")
+        if not current_delivery:
+            return True
+        if previous_delivery:
+            return previous_delivery == current_delivery
+        return bool(current_updated and previous.get("deliveryUpdated") == current_updated)
+
     def needs_download(item):
         target = destination / item["title"]
         expected = max(0, int(item.get("length") or 0))
         previous = file_metadata.get(item["title"])
-        same_delivery = not isinstance(previous, dict) or not current_delivery or previous.get("deliveryId") == current_delivery
-        return not target.is_file() or bool(expected and target.stat().st_size != expected) or not same_delivery
+        return not target.is_file() or bool(expected and target.stat().st_size != expected) or not same_delivery(previous)
     missing_bytes = sum(max(0, int(item.get("length") or 0)) for item in files if needs_download(item))
     if shutil.disk_usage(destination).free < missing_bytes + 512 * 1024 * 1024:
         raise OSError("Servern saknar tillräckligt diskutrymme för de valda Topografi 10-filerna.")
@@ -183,8 +194,7 @@ def download_theme_files(order_id, themes, destination, bearer_token="", usernam
         target = destination / item["title"]
         expected = max(0, int(item.get("length") or 0))
         previous = file_metadata.get(item["title"]) if isinstance(file_metadata.get(item["title"]), dict) else None
-        reusable_delivery = not previous or not current_delivery or previous.get("deliveryId") == current_delivery
-        cached = target.is_file() and (not expected or target.stat().st_size == expected) and reusable_delivery
+        cached = target.is_file() and (not expected or target.stat().st_size == expected) and same_delivery(previous)
         if cached:
             transferred += target.stat().st_size
             results.append({"title": item["title"], "theme": item["theme"], "length": target.stat().st_size, "cached": True})
