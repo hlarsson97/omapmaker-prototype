@@ -59,13 +59,14 @@ class LantmaterietVectorTests(unittest.TestCase):
         coordinates=[transformer.transform(lon,lat) for lon,lat in [(18.0,59.0),(18.001,59.0),(18.001,59.001),(18.0,59.001),(18.0,59.0)]]
         with tempfile.TemporaryDirectory() as temporary:
             path=Path(temporary)/'buildings.gpkg'
-            schema={'geometry':'Polygon','properties':{'objektidentitet':'str','namn':'str','andamal':'str'}}
+            schema={'geometry':'Polygon','properties':{'objektidentitet':'str','namn':'str','andamal':'str','andamal2':'str'}}
             with fiona.open(path,'w',driver='GPKG',layer='byggnader',crs='EPSG:3006',schema=schema) as target:
-                target.write({'geometry':{'type':'Polygon','coordinates':[coordinates]},'properties':{'objektidentitet':'lm-42','namn':'Klubbhus','andamal':'Samhällsfunktion'}})
+                target.write({'geometry':{'type':'Polygon','coordinates':[coordinates]},'properties':{'objektidentitet':'lm-42','namn':'Klubbhus','andamal':'Samhällsfunktion','andamal2':'Småhus friliggande'}})
             features=lm_vector.read_buildings([path],[17.9995,58.9995,18.0005,59.0005])
         self.assertEqual(len(features),1)
         self.assertEqual(features[0]['id'],'lantmateriet-building/lm-42')
         self.assertEqual(features[0]['properties']['name'],'Klubbhus')
+        self.assertEqual(features[0]['properties']['buildingPurposes'],['Samhällsfunktion','Småhus friliggande'])
         self.assertLessEqual(max(point[0] for point in features[0]['geometry']['coordinates'][0]),18.0005)
 
     def test_property_reference_layers_are_filtered_and_do_not_retain_designations(self):
@@ -88,6 +89,8 @@ class LantmaterietVectorTests(unittest.TestCase):
         self.assertEqual({feature['properties']['referenceKind'] for feature in features},{'boundary','parcel-area','boundary-point'})
         self.assertTrue(all('fastighet' not in feature['properties'] for feature in features))
         self.assertTrue(all(feature['id'].startswith('lantmateriet-property/') for feature in features))
+        area=next(feature for feature in features if feature['properties']['referenceKind']=='parcel-area')
+        self.assertGreater(area['properties']['sourceAreaSquareMetres'],4000)
 
 
 class GeotorgetDownloadTests(unittest.TestCase):
@@ -509,6 +512,36 @@ class PavedAreaTests(unittest.TestCase):
 
 
 class LandCoverTests(unittest.TestCase):
+    @staticmethod
+    def feature(identifier, properties, coordinates):
+        return {'type':'Feature','id':identifier,'properties':properties,'geometry':{'type':'Polygon','coordinates':[coordinates]}}
+
+    def test_small_lantmateriet_property_with_small_house_becomes_520(self):
+        parcel=self.feature('parcel-1',{'referenceKind':'parcel-area','sourceId':'lantmateriet-property/parcel-1','sourceAreaSquareMetres':4000},[(18,59),(18.0004,59),(18.0004,59.0004),(18,59.0004),(18,59)])
+        house=self.feature('house-1',{'sourceObjectId':'lantmateriet-building/house-1','buildingPurposes':['Bostad','Småhus friliggande']},[(18.0001,59.0001),(18.0002,59.0001),(18.0002,59.0002),(18.0001,59.0002),(18.0001,59.0001)])
+        features=server.lantmateriet_property_restricted_areas({'features':[parcel]},{'features':[house]},[17.99,58.99,18.01,59.01])
+        self.assertEqual(len(features),1)
+        self.assertEqual(features[0]['properties']['isomSymbol'],'520')
+        self.assertEqual(features[0]['properties']['restrictedKind'],'small-house-property')
+        self.assertEqual(features[0]['properties']['propertyAreaSquareMetres'],4000)
+        self.assertEqual(features[0]['geometry'],parcel['geometry'])
+
+    def test_large_or_non_small_house_property_does_not_become_520(self):
+        coordinates=[(18,59),(18.0004,59),(18.0004,59.0004),(18,59.0004),(18,59)]
+        large=self.feature('large',{'referenceKind':'parcel-area','sourceAreaSquareMetres':4000.1},coordinates)
+        small_house=self.feature('small-house',{'buildingPurpose':'Småhus kedjehus'},[(18.0001,59.0001),(18.0002,59.0001),(18.0002,59.0002),(18.0001,59.0002),(18.0001,59.0001)])
+        ordinary=self.feature('ordinary',{'referenceKind':'parcel-area','sourceAreaSquareMetres':3000},coordinates)
+        apartment=self.feature('apartment',{'buildingPurpose':'Flerbostadshus'},small_house['geometry']['coordinates'][0])
+        self.assertEqual(server.lantmateriet_property_restricted_areas({'features':[large]},{'features':[small_house]},[17.99,58.99,18.01,59.01]),[])
+        self.assertEqual(server.lantmateriet_property_restricted_areas({'features':[ordinary]},{'features':[apartment]},[17.99,58.99,18.01,59.01]),[])
+
+    def test_lantmateriet_property_replaces_overlapping_osm_residential_guess(self):
+        geometry={'type':'Polygon','coordinates':[[(18,59),(18.001,59),(18.001,59.001),(18,59.001),(18,59)]]}
+        osm={'type':'Feature','id':'osm','properties':{'restrictedKind':'residential-estimate'},'geometry':geometry}
+        industrial={'type':'Feature','id':'industrial','properties':{'restrictedKind':'industrial-private'},'geometry':geometry}
+        authoritative={'type':'Feature','id':'lm','properties':{'restrictedKind':'small-house-property'},'geometry':geometry}
+        self.assertEqual([item['id'] for item in server.merge_restricted_area_features([osm,industrial],[authoritative])],['industrial','lm'])
+
     def test_water_area_and_stream_are_distinguished(self):
         self.assertEqual(server.land_cover_classification({'natural': 'water'}, True)[:2], ('water_301', '301'))
         self.assertEqual(server.land_cover_classification({'waterway': 'stream'}, False)[:2], ('watercourse_305', '305'))

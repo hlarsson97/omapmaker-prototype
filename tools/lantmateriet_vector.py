@@ -108,6 +108,18 @@ def _property(properties, *names):
     return None
 
 
+def _building_purposes(properties):
+    """Return every populated building-purpose field in source order."""
+    purposes = []
+    prefixes = ("andamal", "ändamål", "byggnadsandamal", "byggnadsändamål")
+    for key, value in properties.items():
+        normalized = str(key).casefold().replace("_", "")
+        if not normalized.startswith(prefixes) or value in (None, "") or value in purposes:
+            continue
+        purposes.append(value)
+    return purposes
+
+
 def _building_layers(fiona_module, path):
     layers = list(fiona_module.listlayers(path))
     matches = [layer for layer in layers if any(word in layer.lower() for word in BUILDING_LAYER_WORDS)]
@@ -145,6 +157,7 @@ def read_buildings(paths, bbox_wgs84):
                     else:
                         continue
                     properties = dict(item.properties)
+                    purposes = _building_purposes(properties)
                     object_id = str(_property(properties, "objektidentitet", "objektid", "objectid", "id") or item.id)
                     source_object_id = "lantmateriet-building/" + object_id
                     for part_index, part in enumerate(parts):
@@ -160,6 +173,7 @@ def read_buildings(paths, bbox_wgs84):
                                 "sourceType": "lantmateriet",
                                 "sourceId": feature_id,
                                 "sourceObjectId": source_object_id,
+                                "buildingPurposes": purposes,
                                 "name": _property(properties, "namn", "name"),
                                 "buildingPurpose": _property(properties, "andamal", "ändamål", "byggnadsandamal", "byggnadsändamål", "objekttyp"),
                                 "status": "automatic-unverified",
@@ -199,11 +213,13 @@ def read_property_boundaries(paths, bbox_wgs84):
                 source_crs = CRS.from_user_input(source.crs_wkt or source.crs or "EPSG:3006")
                 to_source = Transformer.from_crs("EPSG:4326", source_crs, always_xy=True).transform
                 to_wgs84 = Transformer.from_crs(source_crs, "EPSG:4326", always_xy=True).transform
+                to_sweref = Transformer.from_crs(source_crs, "EPSG:3006", always_xy=True).transform
                 source_bbox = transform(to_source, clip_wgs84).bounds
                 for item in source.filter(bbox=source_bbox):
                     if not item.geometry:
                         continue
-                    geometry = transform(to_wgs84, shape(item.geometry)).intersection(clip_wgs84)
+                    source_geometry = shape(item.geometry)
+                    geometry = transform(to_wgs84, source_geometry).intersection(clip_wgs84)
                     if geometry.is_empty:
                         continue
                     properties = dict(item.properties)
@@ -212,6 +228,7 @@ def read_property_boundaries(paths, bbox_wgs84):
                     if feature_id in seen:
                         continue
                     seen.add(feature_id)
+                    source_area = transform(to_sweref, source_geometry).area if reference_kind == "parcel-area" else None
                     features.append({
                         "type": "Feature",
                         "id": feature_id,
@@ -221,6 +238,7 @@ def read_property_boundaries(paths, bbox_wgs84):
                             "sourceId": feature_id,
                             "sourceLayer": layer,
                             "referenceKind": reference_kind,
+                            "sourceAreaSquareMetres": round(source_area, 1) if source_area is not None else None,
                             "detailType": _property(properties, "detaljtyp", "objekttyp"),
                             "positionalUncertainty": _property(properties, "xyfel", "medelfel"),
                             "license": "CC BY 4.0",

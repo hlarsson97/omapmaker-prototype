@@ -5,7 +5,7 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
     roads: () => ({importVersion: 5, source: sources.roads || 'automatic', symbolRegistryVersion}),
     infrastructure: () => ({importVersion: 3, source: 'automatic', symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
-    'land-cover': () => ({importVersion: 12, source: 'automatic', printScale: Number(workspace?.scale || 10000), symbolRegistryVersion}),
+    'land-cover': () => ({importVersion: 13, source: 'automatic', printScale: Number(workspace?.scale || 10000), symbolRegistryVersion}),
     'property-boundaries': () => ({importVersion: 1}),
     'facility-references': () => ({importVersion: 1}),
     'map-labels': () => ({importVersion: 1}),

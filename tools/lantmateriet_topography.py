@@ -509,11 +509,12 @@ def compose_land_cover(imported_land, imported_hydro, restricted):
     features.extend(imported_hydro.get("features", []))
     features.extend(restricted.get("features", []))
     properties = dict(imported_land.get("properties") or {})
+    restricted_attribution = restricted.get("properties", {}).get("attribution", "ISOM 520-underlag © OpenStreetMap contributors")
     properties.update({
         "source": "Lantmäteriet + OpenStreetMap",
         "sourceType": "mixed-lantmateriet-osm",
-        "attribution": ATTRIBUTION + " · ISOM 520-underlag © OpenStreetMap contributors",
-        "importVersion": 12,
+        "attribution": ATTRIBUTION + " · " + restricted_attribution,
+        "importVersion": 13,
         "landSource": "Topografi 10 Nedladdning, vektor",
         "hydrographySource": "Topografi 10 Nedladdning, vektor",
         "shorelineStrategy": "Exact boundaries of Topografi 10 water polygons",
