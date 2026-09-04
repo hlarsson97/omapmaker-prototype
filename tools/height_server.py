@@ -544,6 +544,8 @@ RESIDENTIAL_BUILDINGS=SINGLE_HOUSE_BUILDINGS|{'semidetached_house','terrace'}
 OCCUPIED_RESIDENTIAL_BUILDINGS=RESIDENTIAL_BUILDINGS|{'apartments','residential','dormitory'}
 MAX_HOME_BOUNDARY_AREA=10000.0
 MAX_SMALL_HOUSE_PROPERTY_AREA=4000.0
+MIN_LARGE_PROPERTY_HOME_BUFFER_METRES=15.0
+MAX_LARGE_PROPERTY_HOME_BUFFER_METRES=30.0
 MIN_HOME_BOUNDARY_AREA=100.0
 ESTIMATED_HOME_BUFFER={'house':14.0,'detached':14.0,'bungalow':14.0,'cabin':12.0,'farm':18.0}
 RESTRICTED_BARRIERS={'fence','wall','hedge'}
@@ -806,6 +808,7 @@ def is_industrial_building(feature):
 def lantmateriet_property_restricted_areas(properties,buildings,bbox,print_scale=10000,enclosure_features=None):
     """Classify small-house and reliably enclosed industrial properties as 520."""
     to_local=Transformer.from_crs('EPSG:4326','EPSG:3006',always_xy=True)
+    to_wgs84=Transformer.from_crs('EPSG:3006','EPSG:4326',always_xy=True)
     small_houses=[];industrial_buildings=[]
     for feature in buildings.get('features') or []:
         small_house=is_small_house_building(feature);industrial=is_industrial_building(feature)
@@ -813,9 +816,8 @@ def lantmateriet_property_restricted_areas(properties,buildings,bbox,print_scale
         try:geometry=polygonal_geometry(transform_geometry(to_local.transform,geometry_shape(feature.get('geometry'))))
         except (TypeError,ValueError):continue
         if geometry is not None:
-            record=(feature,geometry.representative_point())
-            if small_house:small_houses.append(record)
-            if industrial:industrial_buildings.append(record)
+            if small_house:small_houses.append((feature,geometry,geometry.representative_point()))
+            if industrial:industrial_buildings.append((feature,geometry.representative_point()))
     industrial_enclosures=[]
     for feature in enclosure_features or []:
         if feature.get('properties',{}).get('restrictedKind') not in {'industrial-enclosure','closed-barrier-evidence'}:continue
@@ -833,7 +835,7 @@ def lantmateriet_property_restricted_areas(properties,buildings,bbox,print_scale
         try:area=float(source_area) if source_area is not None else zone.area
         except (TypeError,ValueError):continue
         if not 0<area<=MAX_SMALL_HOUSE_PROPERTY_AREA:continue
-        matches=[feature for feature,centre in small_houses if zone.covers(centre)]
+        matches=[feature for feature,_,centre in small_houses if zone.covers(centre)]
         if not matches:continue
         parcel_source=str(parcel_properties.get('sourceId') or parcel.get('id'))
         purposes=[];building_ids=[]
@@ -846,6 +848,39 @@ def lantmateriet_property_restricted_areas(properties,buildings,bbox,print_scale
         output_properties={'source':'Lantmäteriet','sourceType':'lantmateriet','sourceId':parcel_source,'status':'automatic-unverified','license':'CC BY 4.0','isomSymbol':'520','automaticIsomSymbol':'520','mapClass':'restricted_area','automaticMapClass':'restricted_area','restrictedKind':'small-house-property','classificationConfidence':'medium','classificationReason':'small-lantmateriet-property-with-small-house','reviewRequired':True,'areaSquareMetres':round(zone.area),'propertyAreaSquareMetres':round(area),'minimumDimensionMetres':round(minimum_dimension,1),'boundary':'unclear','buildingCount':len(matches),'buildingSourceIds':building_ids,'buildingPurposes':purposes,'generatorVersion':5,'printScale':int(print_scale)}
         feature_id=f"lm-520-{hashlib.sha256(parcel_source.encode()).hexdigest()[:16]}"
         features.append({'type':'Feature','id':feature_id,'properties':output_properties,'geometry':parcel.get('geometry')})
+        classified_parcels.add(str(parcel.get('id')))
+    for parcel in properties.get('features') or []:
+        parcel_properties=parcel.get('properties') or {}
+        if parcel_properties.get('referenceKind')!='parcel-area' or str(parcel.get('id')) in classified_parcels:continue
+        try:parcel_zone=polygonal_geometry(transform_geometry(to_local.transform,geometry_shape(parcel.get('geometry'))))
+        except (TypeError,ValueError):continue
+        if parcel_zone is None:continue
+        source_area=parcel_properties.get('sourceAreaSquareMetres')
+        try:property_area=float(source_area) if source_area is not None else parcel_zone.area
+        except (TypeError,ValueError):continue
+        if property_area<=MAX_SMALL_HOUSE_PROPERTY_AREA:continue
+        matches=[(feature,building) for feature,building,centre in small_houses if parcel_zone.covers(centre)]
+        if not matches:continue
+        buffered=[];buffer_distances=[]
+        for _,building in matches:
+            distance=max(MIN_LARGE_PROPERTY_HOME_BUFFER_METRES,min(MAX_LARGE_PROPERTY_HOME_BUFFER_METRES,5.0+math.sqrt(building.area)))
+            buffered.append(building.buffer(distance,join_style=2));buffer_distances.append(round(distance,1))
+        zone=polygonal_geometry(unary_union(buffered).intersection(parcel_zone))
+        if zone is None:continue
+        area,minimum_dimension=projected_polygon_metrics(zone)
+        minimum_area=(float(print_scale)/1000.0)**2
+        if area<minimum_area:continue
+        parcel_source=str(parcel_properties.get('sourceId') or parcel.get('id'))
+        purposes=[];building_ids=[]
+        for building,_ in matches:
+            building_properties=building.get('properties') or {}
+            building_ids.append(str(building_properties.get('sourceObjectId') or building_properties.get('sourceId') or building.get('id')))
+            for purpose in building_properties.get('buildingPurposes') or [building_properties.get('buildingPurpose')]:
+                if purpose and purpose not in purposes:purposes.append(purpose)
+        coverage=min(100.0,area/property_area*100.0)
+        output_properties={'source':'Lantmäteriet','sourceType':'lantmateriet','sourceId':parcel_source,'status':'automatic-unverified','license':'CC BY 4.0','isomSymbol':'520','automaticIsomSymbol':'520','mapClass':'restricted_area','automaticMapClass':'restricted_area','restrictedKind':'large-property-home-zone','classificationConfidence':'low','classificationReason':'adaptive-small-house-buffer-on-large-property','reviewRequired':True,'areaSquareMetres':round(area),'propertyAreaSquareMetres':round(property_area),'propertyCoveragePercent':round(coverage),'minimumDimensionMetres':round(minimum_dimension,1),'boundary':'unclear','buildingCount':len(matches),'buildingSourceIds':building_ids,'buildingPurposes':purposes,'bufferMetres':buffer_distances,'generatorVersion':7,'printScale':int(print_scale)}
+        feature_id=f"lm-520-home-zone-{hashlib.sha256((parcel_source+'|'+'|'.join(building_ids)).encode()).hexdigest()[:16]}"
+        features.append({'type':'Feature','id':feature_id,'properties':output_properties,'geometry':geometry_mapping(transform_geometry(to_wgs84.transform,zone))})
         classified_parcels.add(str(parcel.get('id')))
     for parcel in properties.get('features') or []:
         parcel_properties=parcel.get('properties') or {}
@@ -886,7 +921,7 @@ def merge_restricted_area_features(osm_features,lantmateriet_features):
     residential_kinds={'residential-enclosure','residential-boundary','residential-estimate'}
     for feature in osm_features:
         kind=feature.get('properties',{}).get('restrictedKind')
-        replacement_kinds={'small-house-property'} if kind in residential_kinds else {'industrial-property-enclosure'} if kind=='industrial-enclosure' else set()
+        replacement_kinds={'small-house-property','large-property-home-zone'} if kind in residential_kinds else {'industrial-property-enclosure'} if kind=='industrial-enclosure' else set()
         candidates=[geometry for candidate_kind,geometry in authoritative if candidate_kind in replacement_kinds]
         if candidates:
             try:
@@ -907,7 +942,7 @@ def generated_restricted_areas(bbox,print_scale=10000,include_lantmateriet=False
     lantmateriet_features=lantmateriet_property_restricted_areas(properties,buildings,bbox,print_scale,enclosure_features)
     features=merge_restricted_area_features(osm.get('features') or [],lantmateriet_features)
     result_properties=dict(osm.get('properties') or {})
-    result_properties.update({'source':'Lantmäteriet + OpenStreetMap','sourceType':'mixed-lantmateriet-osm','attribution':'ISOM 520-underlag: Fastighetsindelning och Byggnad © Lantmäteriet · bearbetad av OMapMaker · CC BY 4.0; © OpenStreetMap contributors','importVersion':6,'strategy':'Properties up to 4,000 m² containing a Lantmäteriet small-house building become ISOM 520. Industrial properties require a Lantmäteriet industrial building and a closed OSM enclosure covering at least 80 percent of the complete property area. OSM supplies fallback candidates elsewhere.','lantmaterietPropertyCount':len(lantmateriet_features)})
+    result_properties.update({'source':'Lantmäteriet + OpenStreetMap','sourceType':'mixed-lantmateriet-osm','attribution':'ISOM 520-underlag: Fastighetsindelning och Byggnad © Lantmäteriet · bearbetad av OMapMaker · CC BY 4.0; © OpenStreetMap contributors','importVersion':7,'strategy':'Properties up to 4,000 m² containing a Lantmäteriet small-house building become ISOM 520. Larger small-house properties receive an adaptive 15–30 metre home zone around each building, clipped to the property. Industrial properties require a Lantmäteriet industrial building and a closed OSM enclosure covering at least 80 percent of the complete property area. OSM supplies fallback candidates elsewhere.','lantmaterietPropertyCount':len(lantmateriet_features)})
     return {'type':'FeatureCollection','properties':result_properties,'features':features}
 
 def replace_restricted_features(base,restricted):
@@ -917,7 +952,7 @@ def replace_restricted_features(base,restricted):
     restricted_attribution=restricted.get('properties',{}).get('attribution')
     attribution=properties.get('attribution')
     if restricted_attribution and restricted_attribution not in str(attribution or ''):attribution=f'{attribution} · {restricted_attribution}' if attribution else restricted_attribution
-    properties.update({'source':restricted.get('properties',{}).get('source',properties.get('source')),'sourceType':restricted.get('properties',{}).get('sourceType',properties.get('sourceType')),'attribution':attribution,'restrictedAreaStrategy':restricted.get('properties',{}).get('strategy'),'restrictedAreaCount':len(restricted.get('features') or []),'importVersion':14})
+    properties.update({'source':restricted.get('properties',{}).get('source',properties.get('source')),'sourceType':restricted.get('properties',{}).get('sourceType',properties.get('sourceType')),'attribution':attribution,'restrictedAreaStrategy':restricted.get('properties',{}).get('strategy'),'restrictedAreaCount':len(restricted.get('features') or []),'importVersion':15})
     return {'type':'FeatureCollection','properties':properties,'features':features}
 
 def osm_restricted_areas(bbox,print_scale=10000):
@@ -1806,7 +1841,7 @@ class Handler(SimpleHTTPRequestHandler):
                 print_scale=int(request.get('printScale') or 10000)
                 if print_scale not in {7500,10000,15000}:raise ValueError('Ogiltig utskriftsskala')
                 requested_source=str(request.get('source') or 'automatic').lower()
-                return self.send_json(200,centralize_layer('land-cover',bbox,generated_land_cover(bbox,print_scale,requested_source),{'importVersion':14,'source':requested_source,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
+                return self.send_json(200,centralize_layer('land-cover',bbox,generated_land_cover(bbox,print_scale,requested_source),{'importVersion':15,'source':requested_source,'printScale':print_scale,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/height-coverage':return self.send_json(200,height_cache_status(bbox))
             if path=='/api/height-data':
                 _,height_data=ensure_height_data(bbox);return self.send_json(200,{'ok':True,**height_data})

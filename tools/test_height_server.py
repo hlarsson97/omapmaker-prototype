@@ -526,13 +526,20 @@ class LandCoverTests(unittest.TestCase):
         self.assertEqual(features[0]['properties']['propertyAreaSquareMetres'],4000)
         self.assertEqual(features[0]['geometry'],parcel['geometry'])
 
-    def test_large_or_non_small_house_property_does_not_become_520(self):
-        coordinates=[(18,59),(18.0004,59),(18.0004,59.0004),(18,59.0004),(18,59)]
-        large=self.feature('large',{'referenceKind':'parcel-area','sourceAreaSquareMetres':4000.1},coordinates)
-        small_house=self.feature('small-house',{'buildingPurpose':'Småhus kedjehus'},[(18.0001,59.0001),(18.0002,59.0001),(18.0002,59.0002),(18.0001,59.0002),(18.0001,59.0001)])
+    def test_large_small_house_property_gets_limited_adaptive_home_zone(self):
+        coordinates=[(18,59),(18.001,59),(18.001,59.001),(18,59.001),(18,59)]
+        large=self.feature('large',{'referenceKind':'parcel-area','sourceAreaSquareMetres':6200},coordinates)
+        small_house=self.feature('small-house',{'buildingPurpose':'Småhus kedjehus'},[(18.00045,59.00045),(18.00055,59.00045),(18.00055,59.00055),(18.00045,59.00055),(18.00045,59.00045)])
         ordinary=self.feature('ordinary',{'referenceKind':'parcel-area','sourceAreaSquareMetres':3000},coordinates)
         apartment=self.feature('apartment',{'buildingPurpose':'Flerbostadshus'},small_house['geometry']['coordinates'][0])
-        self.assertEqual(server.lantmateriet_property_restricted_areas({'features':[large]},{'features':[small_house]},[17.99,58.99,18.01,59.01]),[])
+        features=server.lantmateriet_property_restricted_areas({'features':[large]},{'features':[small_house]},[17.99,58.99,18.01,59.01])
+        self.assertEqual(len(features),1)
+        self.assertEqual(features[0]['properties']['restrictedKind'],'large-property-home-zone')
+        self.assertEqual(features[0]['properties']['classificationConfidence'],'low')
+        self.assertGreaterEqual(features[0]['properties']['bufferMetres'][0],15)
+        self.assertLessEqual(features[0]['properties']['bufferMetres'][0],30)
+        self.assertLess(features[0]['properties']['propertyCoveragePercent'],100)
+        self.assertNotEqual(features[0]['geometry'],large['geometry'])
         self.assertEqual(server.lantmateriet_property_restricted_areas({'features':[ordinary]},{'features':[apartment]},[17.99,58.99,18.01,59.01]),[])
 
     def test_lantmateriet_property_replaces_overlapping_osm_residential_guess(self):
