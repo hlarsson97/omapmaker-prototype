@@ -514,7 +514,7 @@ def compose_land_cover(imported_land, imported_hydro, restricted):
         "source": "Lantmäteriet + OpenStreetMap",
         "sourceType": "mixed-lantmateriet-osm",
         "attribution": ATTRIBUTION + " · " + restricted_attribution,
-        "importVersion": 13,
+        "importVersion": 14,
         "landSource": "Topografi 10 Nedladdning, vektor",
         "hydrographySource": "Topografi 10 Nedladdning, vektor",
         "shorelineStrategy": "Exact boundaries of Topografi 10 water polygons",

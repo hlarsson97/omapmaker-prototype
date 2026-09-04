@@ -2,13 +2,13 @@ import {$, cloneJson, escapeHtml, formatBytes, jsonResponse, uuidPattern, wait} 
 import {applyGenerationProfile, generationSummary, readGenerationSettings} from './js/generation_settings.mjs';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 import {createFieldMap} from './js/map_setup.mjs?v=6';
-import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs?v=8';
+import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs?v=9';
 import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs?v=2';
 import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs';
 import {ROAD_TYPES, createGeneratedRoadLayer} from './js/generated_roads.mjs?v=2';
 import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/generated_infrastructure.mjs?v=16';
 import {bridgeTunnelGeometryFromRoads, ensureBridgeTunnelMinimum, generateBridgeTunnelFeatures, isRoadLikeFeature} from './js/bridge_tunnel.mjs?v=2';
-import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature} from './js/generated_land_cover.mjs?v=10';
+import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature} from './js/generated_land_cover.mjs?v=11';
 import {magneticNorthRequestUrl, magneticNorthSummary} from './js/magnetic_north.mjs';
 import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextSupportedMapOrientation} from './js/map_orientation.mjs?v=3';
 import {createSmoothMapMarkerFactory, installMiddleButtonRotation} from './js/smooth_rotation.mjs?v=1';

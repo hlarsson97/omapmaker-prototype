@@ -542,6 +542,32 @@ class LandCoverTests(unittest.TestCase):
         authoritative={'type':'Feature','id':'lm','properties':{'restrictedKind':'small-house-property'},'geometry':geometry}
         self.assertEqual([item['id'] for item in server.merge_restricted_area_features([osm,industrial],[authoritative])],['industrial','lm'])
 
+    def test_industrial_property_with_closed_enclosure_becomes_520(self):
+        coordinates=[(18,59),(18.0004,59),(18.0004,59.0004),(18,59.0004),(18,59)]
+        parcel=self.feature('industrial-parcel',{'referenceKind':'parcel-area','sourceId':'lantmateriet-property/industrial','sourceAreaSquareMetres':1000},coordinates)
+        building=self.feature('factory',{'sourceObjectId':'lantmateriet-building/factory','buildingPurposes':['Industri']},[(18.0001,59.0001),(18.0002,59.0001),(18.0002,59.0002),(18.0001,59.0002),(18.0001,59.0001)])
+        enclosure=self.feature('fence',{'sourceId':'way/99','restrictedKind':'closed-barrier-evidence'},coordinates)
+        features=server.lantmateriet_property_restricted_areas({'features':[parcel]},{'features':[building]},[17.99,58.99,18.01,59.01],enclosure_features=[enclosure])
+        self.assertEqual(len(features),1)
+        self.assertEqual(features[0]['properties']['restrictedKind'],'industrial-property-enclosure')
+        self.assertEqual(features[0]['properties']['boundary'],'clear')
+        self.assertGreaterEqual(features[0]['properties']['enclosureCoveragePercent'],80)
+        self.assertEqual(features[0]['geometry'],parcel['geometry'])
+
+    def test_industrial_property_requires_nearly_complete_closed_enclosure(self):
+        coordinates=[(18,59),(18.0004,59),(18.0004,59.0004),(18,59.0004),(18,59)]
+        parcel=self.feature('industrial-parcel',{'referenceKind':'parcel-area','sourceAreaSquareMetres':1000},coordinates)
+        building=self.feature('factory',{'buildingPurpose':'Industri'},[(18.0001,59.0001),(18.0002,59.0001),(18.0002,59.0002),(18.0001,59.0002),(18.0001,59.0001)])
+        partial=self.feature('partial-fence',{'restrictedKind':'industrial-enclosure'},[(18,59),(18.0002,59),(18.0002,59.0004),(18,59.0004),(18,59)])
+        self.assertEqual(server.lantmateriet_property_restricted_areas({'features':[parcel]},{'features':[building]},[17.99,58.99,18.01,59.01],enclosure_features=[]),[])
+        self.assertEqual(server.lantmateriet_property_restricted_areas({'features':[parcel]},{'features':[building]},[17.99,58.99,18.01,59.01],enclosure_features=[partial]),[])
+
+    def test_lantmateriet_industrial_property_replaces_osm_enclosure(self):
+        geometry={'type':'Polygon','coordinates':[[(18,59),(18.001,59),(18.001,59.001),(18,59.001),(18,59)]]}
+        osm={'type':'Feature','id':'osm-industrial','properties':{'restrictedKind':'industrial-enclosure'},'geometry':geometry}
+        authoritative={'type':'Feature','id':'lm-industrial','properties':{'restrictedKind':'industrial-property-enclosure'},'geometry':geometry}
+        self.assertEqual([item['id'] for item in server.merge_restricted_area_features([osm],[authoritative])],['lm-industrial'])
+
     def test_water_area_and_stream_are_distinguished(self):
         self.assertEqual(server.land_cover_classification({'natural': 'water'}, True)[:2], ('water_301', '301'))
         self.assertEqual(server.land_cover_classification({'waterway': 'stream'}, False)[:2], ('watercourse_305', '305'))

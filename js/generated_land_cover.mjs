@@ -65,7 +65,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
   function popup(feature) {
     const properties = feature.properties || {};
     const confidence = {high: 'hög', medium: 'medel', low: 'låg'};
-    const restrictedNames = {'industrial-enclosure': 'Inhägnat industriområde', 'industrial-private': 'Privat industriområde', 'residential-enclosure': 'Avgränsad hemfridszon', 'residential-boundary': 'Möjlig hemfridszon', 'residential-estimate': 'Uppskattad hemfridszon', 'small-house-property': 'Fastighet med småhus'};
+    const restrictedNames = {'industrial-enclosure': 'Inhägnat industriområde', 'industrial-private': 'Privat industriområde', 'industrial-property-enclosure': 'Inhägnad industrifastighet', 'residential-enclosure': 'Avgränsad hemfridszon', 'residential-boundary': 'Möjlig hemfridszon', 'residential-estimate': 'Uppskattad hemfridszon', 'small-house-property': 'Fastighet med småhus'};
     const names = {forest: 'Skog', orchard: 'Fruktodling', cultivated_land: 'Odlad mark', open_land: 'Öppen mark', rough_open_land: 'Öppen naturmark', restricted_area: restrictedNames[properties.restrictedKind] || 'ISOM 520-underlag'};
     const water = isWaterFeature(feature);
     const title = properties.name || (water ? WATER_SYMBOL_NAMES[String(properties.isomSymbol)] : names[properties.mapClass]) || 'Markyta';
