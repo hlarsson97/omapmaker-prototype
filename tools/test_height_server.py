@@ -162,8 +162,8 @@ class GeotorgetDownloadTests(unittest.TestCase):
             target=Path(temporary)/'ledningar_sverige.zip';target.write_bytes(b'power')
             geotorget.save_download_metadata(temporary,{'schemaVersion':1,'files':{'ledningar_sverige.zip':{'length':5,'downloadedAt':'2026-09-04T10:00:00+00:00','deliveryUpdated':'2026-09-01'}}})
             result=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary)
-        self.assertTrue(result['files'][0]['cached']);fetch.assert_not_called()
-        self.assertEqual(geotorget.load_download_metadata(temporary)['files']['ledningar_sverige.zip']['deliveryId'],'delivery-1')
+            self.assertTrue(result['files'][0]['cached']);fetch.assert_not_called()
+            self.assertEqual(geotorget.load_download_metadata(temporary)['files']['ledningar_sverige.zip']['deliveryId'],'delivery-1')
 
     def test_land_theme_can_be_queued_for_download_and_extraction(self):
         previous_session=dict(server.LM_SESSION)
