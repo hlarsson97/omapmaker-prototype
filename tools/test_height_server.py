@@ -47,9 +47,9 @@ class LantmaterietVectorTests(unittest.TestCase):
         self.assertEqual([item[1] for item in lm_vector.vector_asset_candidates(result)],['data','archive'])
 
     def test_automatic_building_source_prefers_configured_oauth(self):
-        with patch.object(server,'lantmateriet_auth_mode',return_value='oauth2'):
+        with patch.object(server,'topography_theme_available',return_value=False), patch.object(server,'lantmateriet_auth_mode',return_value='oauth2'):
             self.assertEqual(server.building_source({'source':'automatic'}),'lantmateriet')
-        with patch.object(server,'lantmateriet_auth_mode',return_value='not-configured'):
+        with patch.object(server,'topography_theme_available',return_value=False), patch.object(server,'lantmateriet_auth_mode',return_value='not-configured'):
             self.assertEqual(server.building_source({'source':'automatic'}),'osm')
 
     def test_geopackage_building_is_clipped_and_reprojected(self):

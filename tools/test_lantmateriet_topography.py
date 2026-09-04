@@ -62,7 +62,7 @@ class TopographyImportTests(unittest.TestCase):
             "ralstrafik": [("1", 0, {"objektidentitet": "rail", "objekttyp": "Järnväg", "status": "Öppen", "under_byggnad": "Nej", "bro_och_tunnel": "Ingen information"}, LINE)],
             "ledningslinje": [("2", 0, {"objektidentitet": "power", "objekttypnr": 1703, "objekttyp": "Kraftledning region"}, LINE)],
         }
-        with patch.object(topo, "ensure_geopackage", side_effect=[Path("communication.gpkg"), Path("utilities.gpkg")]), patch.object(topo, "_line_features", side_effect=lambda package, layer, bbox: layers[layer]):
+        with patch.object(topo, "ensure_geopackage", side_effect=[Path("communication.gpkg"), Path("utilities.gpkg")]), patch.object(topo, "theme_available", return_value=False), patch.object(topo, "_line_features", side_effect=lambda package, layer, bbox: layers[layer]):
             result = topo.infrastructure([17.9, 58.9, 18.1, 59.1])
         self.assertEqual([item["properties"]["isomSymbol"] for item in result["features"]], ["509", "511"])
 
