@@ -8,6 +8,15 @@ from map_store import MapStore, contributor_hash
 
 
 class CentralMapStoreTests(unittest.TestCase):
+    def test_source_refresh_marks_only_affected_central_layers_stale(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=MapStore(Path(temporary)/'map.sqlite3');bbox=[18,59,18.1,59.1]
+            empty={'type':'FeatureCollection','properties':{'source':'test'},'features':[]}
+            store.store_layer('roads',bbox,{'version':1},empty);store.store_layer('buildings',bbox,{'version':1},empty)
+            self.assertEqual(store.invalidate_layers(['roads']),1)
+            self.assertFalse(store.resolve_layer('roads',bbox,{'version':1})['found'])
+            self.assertTrue(store.resolve_layer('buildings',bbox,{'version':1})['found'])
+
     def feature(self, observation_id=None, version=1, longitude=18.0, latitude=59.0, object_type='boulder', symbol='206', source='gps', accuracy=3):
         observation_id=observation_id or str(uuid.uuid4())
         return {'type':'Feature','id':observation_id,'properties':{'clientObservationId':observation_id,'version':version,'category':'point','objectType':object_type,'symbol':symbol,'source':source,'quality':'unverified','accuracy':accuracy,'createdAt':'2026-08-23T12:00:00Z'},'geometry':{'type':'Point','coordinates':[longitude,latitude]}}

@@ -402,6 +402,16 @@ class MapStore:
             rows = connection.execute(query, parameters).fetchall()
         return [self._row_metadata(row) for row in rows]
 
+    def invalidate_layers(self, layer_types):
+        """Mark derived snapshots stale after their explicitly refreshed source changes."""
+        layer_types = list(dict.fromkeys(str(value) for value in layer_types if value))
+        if not layer_types:
+            return 0
+        placeholders = ','.join('?' for _ in layer_types)
+        with self.connection() as connection:
+            cursor = connection.execute(f"UPDATE map_layers SET status='stale' WHERE status='active' AND layer_type IN ({placeholders})", layer_types)
+            return cursor.rowcount
+
     def resolve_layer(self, layer_type, bbox, parameters=None, max_age_seconds=None, include_layer=True):
         """Find the smallest current snapshot that fully covers a work area."""
         west, south, east, north = self._normalized_bbox(bbox)

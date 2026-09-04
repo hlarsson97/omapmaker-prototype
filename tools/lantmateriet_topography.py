@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import shutil
 import threading
@@ -39,15 +40,32 @@ class TopographyDataUnavailable(ValueError):
     pass
 
 
+def _file_time(path):
+    return datetime.datetime.fromtimestamp(path.stat().st_mtime, datetime.timezone.utc).isoformat() if path.is_file() else None
+
+
+def delivery_metadata():
+    try:
+        value = json.loads((TOPOGRAPHY_ROOT / "delivery-metadata.json").read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) and isinstance(value.get("files"), dict) else {"files": {}}
+    except (OSError, ValueError, TypeError):
+        return {"files": {}}
+
+
 def cache_status():
-    return {
-        theme: {
-            "archive": (TOPOGRAPHY_ROOT / archive).is_file(),
-            "extracted": (EXTRACTED_ROOT / package).is_file(),
-            "available": (TOPOGRAPHY_ROOT / archive).is_file() or (EXTRACTED_ROOT / package).is_file(),
+    metadata = delivery_metadata()
+    result = {}
+    for theme, (archive, package) in THEMES.items():
+        archive_path, extracted_path = TOPOGRAPHY_ROOT / archive, EXTRACTED_ROOT / package
+        record = metadata.get("files", {}).get(archive, {})
+        result[theme] = {
+            "archive": archive_path.is_file(), "extracted": extracted_path.is_file(),
+            "available": archive_path.is_file() or extracted_path.is_file(),
+            "deliveryId": record.get("deliveryId"), "deliveryUpdated": record.get("deliveryUpdated"),
+            "downloadedAt": record.get("downloadedAt") or _file_time(archive_path),
+            "extractedAt": _file_time(extracted_path),
         }
-        for theme, (archive, package) in THEMES.items()
-    }
+    return result
 
 
 def theme_available(theme):
@@ -59,13 +77,13 @@ def ensure_geopackage(theme):
         raise ValueError(f"Okänt Topografi 10-tema: {theme}")
     archive_name, package_name = THEMES[theme]
     target = EXTRACTED_ROOT / package_name
-    if target.is_file():
-        return target
     archive = TOPOGRAPHY_ROOT / archive_name
+    if target.is_file() and (not archive.is_file() or target.stat().st_mtime >= archive.stat().st_mtime):
+        return target
     if not archive.is_file():
         raise TopographyDataUnavailable(f"{archive_name} har inte hämtats till servern")
     with IMPORT_LOCK:
-        if target.is_file():
+        if target.is_file() and target.stat().st_mtime >= archive.stat().st_mtime:
             return target
         EXTRACTED_ROOT.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + ".part")
@@ -217,7 +235,7 @@ def roads(bbox_wgs84):
                 "renderWidthMetres": 6 if symbol == "502" else None,
             })
             features.append({"type": "Feature", "id": f"lm-road-{source_id}-{part}", "properties": properties, "geometry": geometry})
-    return _collection("roads", bbox_wgs84, features, 5)
+    return _collection("roads", bbox_wgs84, features, 5, ("communication",))
 
 
 def infrastructure(bbox_wgs84):
@@ -291,7 +309,8 @@ def infrastructure(bbox_wgs84):
                 properties.update({"featureKind": "point", "isomSymbol": symbol, "omapType": omap_type, "automaticIsomSymbol": symbol, "automaticOmapType": omap_type, "name": values.get("objekttyp"), "heightMetres": values.get("hojd"), "orientationDegrees": values.get("rotation"), "legendDefinition": values.get("objekttyp")})
                 features.append({"type": "Feature", "id": f"lm-structure-point-{source_id}", "properties": properties, "geometry": geometry})
 
-    return _collection("infrastructure", bbox_wgs84, features, 3)
+    themes = ["communication", "utilities"] + (["structures"] if theme_available("structures") else [])
+    return _collection("infrastructure", bbox_wgs84, features, 3, themes)
 
 
 def buildings(bbox_wgs84):
@@ -304,7 +323,7 @@ def buildings(bbox_wgs84):
         properties = _properties(source_id, values.get("objekttyp"), "high")
         properties.update({"sourceType": "lantmateriet", "building": str(values.get("objekttyp") or "yes").casefold(), "buildingPurpose": purposes[0] if purposes else values.get("objekttyp"), "buildingPurposes": purposes, "name": name, "houseNumber": values.get("husnummer"), "mainBuilding": values.get("huvudbyggnad")})
         features.append({"type": "Feature", "id": f"lm-topo-building-{source_id}-{part}", "properties": properties, "geometry": geometry})
-    return _collection("buildings", bbox_wgs84, features, 5)
+    return _collection("buildings", bbox_wgs84, features, 5, ("structures",))
 
 
 FACILITY_520_CANDIDATES = {"Skjutbaneområde", "Täkt", "Avfallsanläggning", "Kriminalvårdsanstalt", "Testbana", "Gruvområde"}
@@ -328,7 +347,7 @@ def facility_references(bbox_wgs84):
             properties = _properties(source_id, values.get("objekttyp"), "medium")
             properties.update({"featureKind": "point", "facilityType": values.get("objekttyp"), "purpose": purpose, "name": purpose, "referenceOnly": True, "reviewRequired": True})
             features.append({"type": "Feature", "id": f"lm-facility-point-{source_id}", "properties": properties, "geometry": geometry})
-    result = _collection("facility-references", bbox_wgs84, features, 1)
+    result = _collection("facility-references", bbox_wgs84, features, 1, ("facility_areas",))
     result["properties"].update({"referenceOnly": True, "candidate520Count": sum(1 for item in features if item["properties"].get("candidateIsomSymbol") == "520"), "warning": "Anläggningsområde anger inte om marken får beträdas eller om ytan är hårdgjord. Kandidater måste granskas."})
     return result
 
@@ -370,7 +389,7 @@ def map_labels(bbox_wgs84):
             "referenceOnly": True, "reviewRequired": False,
         })
         features.append({"type": "Feature", "id": f"lm-label-{feature_id}", "properties": properties, "geometry": geometry})
-    result = _collection("map-labels", bbox_wgs84, features, 1)
+    result = _collection("map-labels", bbox_wgs84, features, 1, ("text",))
     result["properties"].update({"referenceOnly": True, "placement": "Topografi 10 textobjekt", "splitNamesPreserved": True})
     return result
 
@@ -401,7 +420,7 @@ def nature_references(bbox_wgs84):
         properties = _properties(source_id, object_type, "high")
         properties.update({"featureKind": "point", "referenceKind": "naturvardspunkt", "name": values.get("nvr_beskrivning") or object_type, "natureType": object_type, "natureRegisterId": values.get("nvid"), "orientationDegrees": values.get("rotation"), "referenceOnly": True, "reviewRequired": True})
         features.append({"type": "Feature", "id": f"lm-nature-point-{source_id}", "properties": properties, "geometry": geometry})
-    result = _collection("nature-references", bbox_wgs84, features, 1)
+    result = _collection("nature-references", bbox_wgs84, features, 1, ("nature",))
     result["properties"].update({"referenceOnly": True, "candidate520Count": 0, "warning": "Naturskydd eller aktivitetsrestriktion innebär inte automatiskt tillträdesförbud enligt ISOM 520."})
     return result
 
@@ -421,7 +440,7 @@ def military_references(bbox_wgs84):
             "referenceOnly": True, "reviewRequired": True,
         })
         features.append({"type": "Feature", "id": f"lm-military-{source_id}-{part}", "properties": properties, "geometry": geometry})
-    result = _collection("military-references", bbox_wgs84, features, 1)
+    result = _collection("military-references", bbox_wgs84, features, 1, ("military",))
     result["properties"].update({"referenceOnly": True, "candidate520Count": len(features), "warning": "Militärt område är endast 520-underlag. Aktuell avspärrning och faktiskt tillträdesförbud måste verifieras."})
     return result
 
@@ -439,7 +458,7 @@ def hydrography(bbox_wgs84):
             "watercourseId": values.get("vattendragsid"), "sizeClass": values.get("storleksklass"),
         })
         features.append({"type": "Feature", "id": f"lm-hydro-{source_id}-{part}", "properties": properties, "geometry": geometry})
-    return _collection("land-cover", bbox_wgs84, features, 11)
+    return _collection("land-cover", bbox_wgs84, features, 11, ("hydrography",))
 
 
 LAND_CLASSES = {
@@ -482,7 +501,7 @@ def land_cover(bbox_wgs84):
                 "shorelineSource": "mark-polygon-boundary" if object_number in {2631, 2632, 2633, 2634} else None,
             })
             features.append({"type": "Feature", "id": f"lm-land-{source_id}-{part}", "properties": properties, "geometry": geometry})
-    return _collection("land-cover", bbox_wgs84, features, 12)
+    return _collection("land-cover", bbox_wgs84, features, 12, ("land",))
 
 
 def compose_land_cover(imported_land, imported_hydro, restricted):
@@ -500,6 +519,7 @@ def compose_land_cover(imported_land, imported_hydro, restricted):
         "shorelineStrategy": "Exact boundaries of Topografi 10 water polygons",
         "restrictedAreaStrategy": restricted.get("properties", {}).get("strategy"),
         "restrictedAreaCount": len(restricted.get("features", [])),
+        **_source_provenance(("land", "hydrography")),
     })
     return {"type": "FeatureCollection", "properties": properties, "features": features}
 
@@ -515,11 +535,21 @@ def merge_hydrography(base, imported):
         "attribution": ATTRIBUTION + " · övriga ytor © OpenStreetMap contributors",
         "importVersion": 11,
         "hydrographySource": "Topografi 10 Nedladdning, vektor",
+        **{key: value for key, value in (imported.get("properties") or {}).items() if key in {"sourcePackages", "sourceDeliveryUpdated", "sourceDownloadedAt", "sourceExtractedAt"}},
     })
     return {"type": "FeatureCollection", "properties": properties, "features": features}
 
 
-def _collection(object_type, bbox_wgs84, features, import_version):
+def _source_provenance(themes):
+    statuses = cache_status()
+    packages = [{"theme": theme, **{key: statuses.get(theme, {}).get(key) for key in ("deliveryId", "deliveryUpdated", "downloadedAt", "extractedAt")}} for theme in themes]
+    def oldest(key):
+        values = [item.get(key) for item in packages if item.get(key)]
+        return min(values) if values else None
+    return {"sourcePackages": packages, "sourceDeliveryUpdated": oldest("deliveryUpdated"), "sourceDownloadedAt": oldest("downloadedAt"), "sourceExtractedAt": oldest("extractedAt")}
+
+
+def _collection(object_type, bbox_wgs84, features, import_version, themes=()):
     return {
         "type": "FeatureCollection",
         "properties": {
@@ -527,6 +557,7 @@ def _collection(object_type, bbox_wgs84, features, import_version):
             "attribution": ATTRIBUTION, "objectType": object_type, "importVersion": import_version,
             "bboxWgs84": list(bbox_wgs84),
             "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            **_source_provenance(themes),
         },
         "features": features,
     }

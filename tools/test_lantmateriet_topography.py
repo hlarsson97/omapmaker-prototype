@@ -24,6 +24,28 @@ class TopographyImportTests(unittest.TestCase):
                 self.assertEqual(target.read_bytes(), b"gpkg-test")
                 self.assertTrue(topo.cache_status()["communication"]["extracted"])
 
+    def test_newer_archive_replaces_stale_extracted_package(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);extracted=root/'extracted';extracted.mkdir()
+            target=extracted/'kommunikation_sverige.gpkg';target.write_bytes(b'old')
+            with zipfile.ZipFile(root/'kommunikation_sverige.zip','w') as package:package.writestr('kommunikation_sverige.gpkg',b'new')
+            target.touch();(root/'kommunikation_sverige.zip').touch()
+            archive_time=(root/'kommunikation_sverige.zip').stat().st_mtime+2
+            import os;os.utime(root/'kommunikation_sverige.zip',(archive_time,archive_time))
+            with patch.object(topo,'TOPOGRAPHY_ROOT',root),patch.object(topo,'EXTRACTED_ROOT',extracted):
+                result=topo.ensure_geopackage('communication')
+            self.assertEqual(result.read_bytes(),b'new')
+
+    def test_collection_exposes_delivery_and_server_download_dates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'kommunikation_sverige.zip').write_bytes(b'zip')
+            (root/'delivery-metadata.json').write_text('{"files":{"kommunikation_sverige.zip":{"deliveryId":"delivery-1","deliveryUpdated":"2026-09-01","downloadedAt":"2026-09-03T10:00:00+00:00"}}}',encoding='utf-8')
+            with patch.object(topo,'TOPOGRAPHY_ROOT',root),patch.object(topo,'EXTRACTED_ROOT',root/'extracted'),patch.object(topo,'ensure_geopackage',return_value=Path('communication.gpkg')),patch.object(topo,'_line_features',return_value=[]):
+                result=topo.roads([17.9,58.9,18.1,59.1])
+        self.assertEqual(result['properties']['sourceDeliveryUpdated'],'2026-09-01')
+        self.assertEqual(result['properties']['sourceDownloadedAt'],'2026-09-03T10:00:00+00:00')
+        self.assertEqual(result['properties']['sourcePackages'][0]['theme'],'communication')
+
     def test_road_object_types_map_to_isom(self):
         values = {
             "vaglinje": [("1", 0, {"objektidentitet": "road", "objekttypnr": 1801, "objekttyp": "Motorväg", "bro_och_tunnel": "överfart", "gatunamn": "E4"}, LINE)],

@@ -47,6 +47,14 @@ filerna packas upp en gång i den privata servercachen. Därefter används deras
 spatiala index så att endast objekt som berör arbetsområdet läses, klipps och
 omprojiceras från SWEREF 99 TM till WGS 84.
 
+Ingen leverans hämtas eller ersätts automatiskt. Vid en uttrycklig hämtning sparas
+leverans-ID, Lantmäteriets leveransdatum och serverns nedladdningstid i den privata
+filen `delivery-metadata.json` med rättighet `0600`. Kartlagrens status visar både
+datadatum och nedladdningsdatum. Om användaren senare väljer att hämta en ny
+leverans laddas filen om även om filnamn och storlek råkar vara oförändrade.
+Endast kartlager som beror på en manuellt utbytt fil märks då inaktuella; de
+byggs om nästa gång användaren uttryckligen hämtar lagret till arbetsområdet.
+
 Kommunikation ger vägar och stigar (ISOM 502–506), bro-/tunnelunderlag och
 järnvägar (509). Ledningar ger fördelningsledningar (510) och region-/stamledningar
 (511). Hydrografins linjer ersätter motsvarande OSM-vattendrag som försiktiga

@@ -1149,10 +1149,19 @@ def run_topography_job(job_id,order_id,username,password,themes):
             percent=round(100*transferred/total,1) if total else 0
             update_topography_job(job_id,stage='downloading',message=f'Hämtar {title}…',transferredBytes=transferred,totalBytes=total,progressPercent=percent)
         result=geotorget_download_theme_files(order_id,themes,DATA/'topografi10',username=username,password=password,progress=progress,cancelled=event.is_set)
+        refreshed_themes={item.get('theme') for item in result.get('files',[]) if not item.get('cached')}
         update_topography_job(job_id,stage='extracting',message='Packar upp valda Topografi 10-teman för områdesvis import…',progressPercent=99)
         for theme in themes:
             if event.is_set():raise InterruptedError('Nedladdningen avbröts.')
             ensure_topography_geopackage(theme)
+        affected={
+            'communication':{'roads','infrastructure'},'hydrography':{'land-cover'},'utilities':{'infrastructure'},
+            'land':{'land-cover'},'facility_areas':{'facility-references'},'structures':{'buildings','infrastructure'},
+            'text':{'map-labels'},'nature':{'nature-references'},'military':{'military-references'},
+        }
+        invalidated=sorted(set().union(*(affected.get(theme,set()) for theme in refreshed_themes))) if refreshed_themes else []
+        if invalidated:MAP_STORE.invalidate_layers(invalidated)
+        result['invalidatedLayerTypes']=invalidated
         result['cacheStatus']=topography_cache_status()
         update_topography_job(job_id,status='complete',stage='complete',message='Topografi 10-filerna finns i serverns cache.',progressPercent=100,result=result)
     except InterruptedError:update_topography_job(job_id,status='cancelled',stage='cancelled',message='Nedladdningen avbröts.')

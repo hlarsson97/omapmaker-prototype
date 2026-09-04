@@ -692,7 +692,7 @@ assert(fieldHtml.includes('styles.css?v=17'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=21'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=55"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=56"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -720,6 +720,7 @@ assert(appSource.includes('tool-symbol-preview'), 'Ritverktygen ska visa vald sy
 assert(appSource.includes("map.on('popupopen'"), 'Popupen ska bygga en växlare för överlappande objekt');
 assert(appSource.includes('keepPopupClearOfControls(popup)'), 'Popupen ska hållas fri från de fasta mobilkontrollerna');
 assert(appSource.includes('function clearGeotorgetForm()'), 'Geotorget-formuläret ska tömmas utan en förgänglig eventreferens');
+assert(appSource.includes('sourceDeliveryUpdated')&&appSource.includes('sourceDownloadedAt'), 'Lagren ska visa både leveransdatum och serverns nedladdningsdatum');
 assert(!appSource.includes("$('#lantmaterietLoginForm').reset()"), 'Geotorget-flödet får inte förlita sig på en formulärreferens efter await');
 assert(styles.includes('.object-popup-info'), 'Popupen ska kunna visa unikt ID och tekniska detaljer på begäran');
 const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={getPopup:()=>({getContent:()=>'<div>B</div>'})},popupContainer={},popupElement={_leaflet_id:12,parentElement:popupContainer},popupMap={_targets:{12:popupLayerB},getContainer:()=>popupContainer};

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import datetime
 import json
 import os
 import re
@@ -17,6 +18,28 @@ from lantmateriet_height import ApiError, oauth_token
 
 API_ROOT = "https://api.lantmateriet.se/geotorget/nedladdning/v1"
 ORDER_PATTERN = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+DOWNLOAD_METADATA_FILE = "delivery-metadata.json"
+
+
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def load_download_metadata(destination):
+    path = Path(destination) / DOWNLOAD_METADATA_FILE
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) and isinstance(value.get("files"), dict) else {"schemaVersion": 1, "files": {}}
+    except (OSError, ValueError, TypeError):
+        return {"schemaVersion": 1, "files": {}}
+
+
+def save_download_metadata(destination, metadata):
+    path = Path(destination) / DOWNLOAD_METADATA_FILE
+    temporary = path.with_name(path.name + ".part")
+    temporary.write_text(json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(path)
 
 
 def _url(order_id, path=""):
@@ -124,8 +147,9 @@ def select_theme_files(manifest, themes):
     for item in manifest.get("files", []):
         title = Path(str(item.get("title") or "")).name
         normalized = title.lower()
-        if any(normalized.startswith(THEME_PREFIXES[theme]) for theme in requested):
-            selected.append({**item, "title": title})
+        theme = next((theme for theme in requested if normalized.startswith(THEME_PREFIXES[theme])), None)
+        if theme:
+            selected.append({**item, "title": title, "theme": theme})
     missing = [theme for theme in requested if not any(item["title"].lower().startswith(THEME_PREFIXES[theme]) for item in selected)]
     if missing:
         raise ApiError("Leveransen saknar valda teman: " + ", ".join(missing))
@@ -138,8 +162,17 @@ def download_theme_files(order_id, themes, destination, bearer_token="", usernam
     files = select_theme_files(manifest, themes)
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
+    metadata = load_download_metadata(destination)
+    file_metadata = metadata.setdefault("files", {})
     required = sum(max(0, int(item.get("length") or 0)) for item in files)
-    missing_bytes = sum(max(0, int(item.get("length") or 0)) for item in files if not (destination / item["title"]).is_file() or (item.get("length") and (destination / item["title"]).stat().st_size != int(item["length"])))
+    current_delivery = str(manifest.get("deliveryId") or "")
+    def needs_download(item):
+        target = destination / item["title"]
+        expected = max(0, int(item.get("length") or 0))
+        previous = file_metadata.get(item["title"])
+        same_delivery = not isinstance(previous, dict) or not current_delivery or previous.get("deliveryId") == current_delivery
+        return not target.is_file() or bool(expected and target.stat().st_size != expected) or not same_delivery
+    missing_bytes = sum(max(0, int(item.get("length") or 0)) for item in files if needs_download(item))
     if shutil.disk_usage(destination).free < missing_bytes + 512 * 1024 * 1024:
         raise OSError("Servern saknar tillräckligt diskutrymme för de valda Topografi 10-filerna.")
     transferred = 0
@@ -149,32 +182,47 @@ def download_theme_files(order_id, themes, destination, bearer_token="", usernam
             raise InterruptedError("Nedladdningen avbröts.")
         target = destination / item["title"]
         expected = max(0, int(item.get("length") or 0))
-        if target.is_file() and (not expected or target.stat().st_size == expected):
+        previous = file_metadata.get(item["title"]) if isinstance(file_metadata.get(item["title"]), dict) else None
+        reusable_delivery = not previous or not current_delivery or previous.get("deliveryId") == current_delivery
+        cached = target.is_file() and (not expected or target.stat().st_size == expected) and reusable_delivery
+        if cached:
             transferred += target.stat().st_size
-            results.append({"title": item["title"], "length": target.stat().st_size, "cached": True})
+            results.append({"title": item["title"], "theme": item["theme"], "length": target.stat().st_size, "cached": True})
             if progress:
                 progress(item["title"], transferred, required)
-            continue
-        temporary = target.with_name(target.name + ".part")
-        temporary.unlink(missing_ok=True)
-        try:
-            with api_response(order_id, item["path"], bearer_token, username, password) as response, temporary.open("wb") as output:
-                while True:
-                    if cancelled and cancelled():
-                        raise InterruptedError("Nedladdningen avbröts.")
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    output.write(chunk)
-                    transferred += len(chunk)
-                    if progress:
-                        progress(item["title"], transferred, required)
-            if expected and temporary.stat().st_size != expected:
-                raise ApiError(f"{item['title']} blev ofullständig ({temporary.stat().st_size} av {expected} byte).")
-            temporary.replace(target)
-            results.append({"title": item["title"], "length": target.stat().st_size, "cached": False})
-        finally:
+        else:
+            temporary = target.with_name(target.name + ".part")
             temporary.unlink(missing_ok=True)
+            try:
+                with api_response(order_id, item["path"], bearer_token, username, password) as response, temporary.open("wb") as output:
+                    while True:
+                        if cancelled and cancelled():
+                            raise InterruptedError("Nedladdningen avbröts.")
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        output.write(chunk)
+                        transferred += len(chunk)
+                        if progress:
+                            progress(item["title"], transferred, required)
+                if expected and temporary.stat().st_size != expected:
+                    raise ApiError(f"{item['title']} blev ofullständig ({temporary.stat().st_size} av {expected} byte).")
+                temporary.replace(target)
+                results.append({"title": item["title"], "theme": item["theme"], "length": target.stat().st_size, "cached": False})
+            finally:
+                temporary.unlink(missing_ok=True)
+        if cached:
+            downloaded_at = (previous.get("downloadedAt") if previous else None) or datetime.datetime.fromtimestamp(
+                target.stat().st_mtime, datetime.timezone.utc
+            ).isoformat()
+        else:
+            downloaded_at = _now()
+        file_metadata[item["title"]] = {
+            "length": target.stat().st_size, "downloadedAt": downloaded_at,
+            "deliveryId": current_delivery, "deliveryUpdated": manifest.get("deliveryUpdated"),
+        }
+        metadata.update({"schemaVersion": 1, "deliveryId": current_delivery, "deliveryUpdated": manifest.get("deliveryUpdated"), "checkedAt": _now()})
+        save_download_metadata(destination, metadata)
     return {"deliveryId": manifest.get("deliveryId"), "deliveryUpdated": manifest.get("deliveryUpdated"), "totalBytes": required, "files": results}
 
 

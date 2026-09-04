@@ -139,8 +139,22 @@ class GeotorgetDownloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, patch.object(geotorget,'delivery_manifest',return_value=manifest), patch.object(geotorget,'api_response',return_value=io.BytesIO(b'power')) as fetch:
             first=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary,username='user',password='secret',progress=lambda *args:progress.append(args))
             second=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary,username='user',password='secret')
-        self.assertFalse(first['files'][0]['cached']);self.assertTrue(second['files'][0]['cached'])
-        self.assertEqual(progress[-1],('ledningar_sverige.zip',5,5));fetch.assert_called_once()
+            self.assertFalse(first['files'][0]['cached']);self.assertTrue(second['files'][0]['cached'])
+            self.assertEqual(progress[-1],('ledningar_sverige.zip',5,5));fetch.assert_called_once()
+            metadata=json.loads((Path(temporary)/'delivery-metadata.json').read_text(encoding='utf-8'))
+            self.assertEqual(metadata['files']['ledningar_sverige.zip']['deliveryUpdated'],'2026-09-01')
+            self.assertTrue(metadata['files']['ledningar_sverige.zip']['downloadedAt'])
+            if os.name=='posix':self.assertEqual((Path(temporary)/'delivery-metadata.json').stat().st_mode&0o777,0o600)
+
+    def test_new_delivery_redownloads_even_when_file_size_is_unchanged(self):
+        manifests=[
+            {'deliveryId':'delivery-1','deliveryUpdated':'2026-09-01','files':[{'title':'ledningar_sverige.zip','length':5,'path':'/first'}]},
+            {'deliveryId':'delivery-2','deliveryUpdated':'2026-10-01','files':[{'title':'ledningar_sverige.zip','length':5,'path':'/second'}]},
+        ]
+        with tempfile.TemporaryDirectory() as temporary,patch.object(geotorget,'delivery_manifest',side_effect=manifests),patch.object(geotorget,'api_response',side_effect=[io.BytesIO(b'first'),io.BytesIO(b'later')]) as fetch:
+            geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary)
+            result=geotorget.download_theme_files('cc4cbb38-d8c6-4859-b271-592a7477e374',['utilities'],temporary)
+        self.assertFalse(result['files'][0]['cached']);self.assertEqual(fetch.call_count,2)
 
     def test_land_theme_can_be_queued_for_download_and_extraction(self):
         previous_session=dict(server.LM_SESSION)
