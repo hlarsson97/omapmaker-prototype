@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=17"></head>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMapMaker Field</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css?v=18"></head>
 <body class="gps-mode">
 <header><a id="homeButton" href="index.html" aria-label="Hem">‹</a><div><small id="mapContext">GLOBAL KARTA</small><h1 id="mapTitle">Fältkarta</h1></div><div class="header-actions"><button id="fieldSurveyToggle" type="button">Fältläge</button><button id="export">Exportera</button></div></header>
 <main id="map"></main>
@@ -70,7 +70,7 @@
     <label><input id="surfacePaved" type="checkbox"><span><b>Hårdgjorda ytor</b><small>ISOM 501 · betydande ytor</small></span></label>
     <label><input id="surfaceRestricted" type="checkbox"><span><b>Område som inte får beträdas</b><small>ISOM 520</small></span></label>
   </fieldset>
-  <details class="generation-advanced"><summary>Avancerat · välj datakälla</summary><label class="generation-select">Byggnader<select id="buildingDataSource"><option value="automatic">Automatiskt · rekommenderad</option><option value="lantmateriet">Lantmäteriet</option><option value="osm">OpenStreetMap</option></select><small>Automatiskt använder Lantmäteriet när servern har behörighet, annars OpenStreetMap.</small></label></details>
+  <details class="generation-advanced"><summary>Avancerat</summary><label class="generation-select">Byggnader<select id="buildingDataSource"><option value="automatic">Automatiskt · rekommenderad</option><option value="lantmateriet">Lantmäteriet</option><option value="osm">OpenStreetMap</option></select><small>Automatiskt använder Lantmäteriet när servern har behörighet, annars OpenStreetMap.</small></label><label class="generation-select">Hel 520-fastighet med småhus, högst<input id="maxSmallHousePropertyArea" type="number" min="500" max="20000" step="100" inputmode="numeric" value="4000"><small>m² · större fastigheter får i stället en uppskattad hemfridszon runt huset.</small></label></details>
   <label class="generation-select">Tolkning av ISOM 520<select id="surfaceRestrictedMode"><option value="cautious">Försiktig · endast tydligare gränser</option><option value="balanced">Balanserad · rekommenderad</option><option value="detailed">Fördjupad · även osäkrare uppskattningar</option></select><small>Små fastigheter med småhus klassas i sin helhet; på större fastigheter uppskattas en hemfridszon runt huset. Inhägnade industrifastigheter klassas separat.</small></label>
   <div class="generation-note"><b>Regenerering är säker</b><span>Centrala källdata återanvänds när de finns. Lokala korrigeringar och uteslutningar bevaras.</span></div>
   <button id="runSurfaceGeneration" class="generation-primary" type="submit">Generera valda ytor</button><p id="surfaceGenerationStatus" class="generation-status" role="status"></p>
@@ -163,4 +163,4 @@
 <div id="printPrototypeMark">OMAPMAKER PROTOTYP · EJ KARTKONTROLLERAD</div>
 <div id="printAttribution">Höjddata © Lantmäteriet · övrigt underlag © OpenStreetMap contributors · egen fältdata</div>
 <div id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=16"></script><script src="isom_renderer.js?v=21"></script><script type="module" src="app.mjs?v=59"></script></body></html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js"></script><script src="isom_symbols.js?v=16"></script><script src="isom_renderer.js?v=21"></script><script type="module" src="app.mjs?v=60"></script></body></html>

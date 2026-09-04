@@ -1,11 +1,11 @@
-export function centralLayerParameters(layerType, {workspace, symbolRegistryVersion, sources = {}}) {
+export function centralLayerParameters(layerType, {workspace, symbolRegistryVersion, sources = {}, maxSmallHousePropertyArea = 4000}) {
   const parameters = {
     contours: () => ({interval: Number(workspace?.contourInterval || 5), generalization: 'detailed', baseElevation: 0, verticalDatum: 'RH 2000', symbolRegistryVersion}),
     buildings: () => ({importVersion: 5, source: sources.buildings || 'automatic', symbolRegistryVersion}),
     roads: () => ({importVersion: 5, source: sources.roads || 'automatic', symbolRegistryVersion}),
     infrastructure: () => ({importVersion: 3, source: 'automatic', symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
-    'land-cover': () => ({importVersion: 15, source: 'automatic', printScale: Number(workspace?.scale || 10000), symbolRegistryVersion}),
+    'land-cover': () => ({importVersion: 16, source: 'automatic', printScale: Number(workspace?.scale || 10000), maxSmallHousePropertyArea: Number(maxSmallHousePropertyArea) || 4000, symbolRegistryVersion}),
     'property-boundaries': () => ({importVersion: 1}),
     'facility-references': () => ({importVersion: 1}),
     'map-labels': () => ({importVersion: 1}),
@@ -24,12 +24,12 @@ export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = l
     body: JSON.stringify(payload)
   }));
 
-  async function resolveCentralLayer(layerType, {bbox, workspace, symbolRegistryVersion, sources, maxAgeSeconds, includeLayer = true} = {}) {
+  async function resolveCentralLayer(layerType, {bbox, workspace, symbolRegistryVersion, sources, maxSmallHousePropertyArea, maxAgeSeconds, includeLayer = true} = {}) {
     if (!bbox || hostname.includes('github.io')) return null;
     const payload = {
       bbox,
       layerType,
-      parameters: centralLayerParameters(layerType, {workspace, symbolRegistryVersion, sources}),
+      parameters: centralLayerParameters(layerType, {workspace, symbolRegistryVersion, sources, maxSmallHousePropertyArea}),
       includeLayer
     };
     if (maxAgeSeconds !== undefined) payload.maxAgeSeconds = maxAgeSeconds;
@@ -38,14 +38,17 @@ export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = l
     return data.found ? data : null;
   }
 
-  async function centralOrSource(layerType, endpoint, {bbox, workspace, symbolRegistryVersion, sources}) {
-    const central = await resolveCentralLayer(layerType, {bbox, workspace, symbolRegistryVersion, sources, maxAgeSeconds: 86400});
+  async function centralOrSource(layerType, endpoint, {bbox, workspace, symbolRegistryVersion, sources, maxSmallHousePropertyArea}) {
+    const central = await resolveCentralLayer(layerType, {bbox, workspace, symbolRegistryVersion, sources, maxSmallHousePropertyArea, maxAgeSeconds: 86400});
     if (central) return {data: central.layer, reused: true};
     const payload = {bbox};
     if (layerType === 'buildings') payload.source = sources?.buildings || 'automatic';
     if (layerType === 'roads') payload.source = sources?.roads || 'automatic';
     if (layerType === 'infrastructure' || layerType === 'land-cover') payload.source = 'automatic';
-    if (layerType === 'land-cover') payload.printScale = Number(workspace?.scale || 10000);
+    if (layerType === 'land-cover') {
+      payload.printScale = Number(workspace?.scale || 10000);
+      payload.maxSmallHousePropertyArea = Number(maxSmallHousePropertyArea) || 4000;
+    }
     return {data: await postJson(endpoint, payload), reused: false};
   }
 

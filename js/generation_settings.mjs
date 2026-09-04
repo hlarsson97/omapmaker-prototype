@@ -6,6 +6,12 @@ export const generationProfileLabels = {
 };
 
 export const defaultGenerationSources = Object.freeze({buildings: 'automatic', roads: 'automatic'});
+export const defaultMaxSmallHousePropertyArea = 4000;
+
+export function normalizeMaxSmallHousePropertyArea(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(500, Math.min(20000, Math.round(number))) : defaultMaxSmallHousePropertyArea;
+}
 
 export const generationPresets = {
   surface: {
@@ -28,14 +34,15 @@ export function readGenerationSettings(storage, storageKey) {
   const surfaceProfile = generationPresets.surface[saved.surface?.profile] ? saved.surface.profile : 'standard';
   const lineProfile = generationPresets.line[saved.line?.profile] ? saved.line.profile : 'standard';
   return {
-    surface: {profile: surfaceProfile, ...generationPresets.surface[surfaceProfile], ...(saved.surface || {})},
+    surface: {profile: surfaceProfile, ...generationPresets.surface[surfaceProfile], ...(saved.surface || {}), maxSmallHousePropertyArea: normalizeMaxSmallHousePropertyArea(saved.surface?.maxSmallHousePropertyArea)},
     line: {profile: lineProfile, ...generationPresets.line[lineProfile], ...(saved.line || {})},
     sources: {...defaultGenerationSources, ...(saved.sources || {})}
   };
 }
 
 export function applyGenerationProfile(settings, category, profile) {
-  settings[category] = {profile, ...generationPresets[category][profile]};
+  const advanced = category === 'surface' ? {maxSmallHousePropertyArea: normalizeMaxSmallHousePropertyArea(settings.surface?.maxSmallHousePropertyArea)} : {};
+  settings[category] = {profile, ...generationPresets[category][profile], ...advanced};
 }
 
 export function generationSummary(settings, category) {

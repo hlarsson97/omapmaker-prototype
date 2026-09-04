@@ -514,12 +514,13 @@ def compose_land_cover(imported_land, imported_hydro, restricted):
         "source": "Lantmäteriet + OpenStreetMap",
         "sourceType": "mixed-lantmateriet-osm",
         "attribution": ATTRIBUTION + " · " + restricted_attribution,
-        "importVersion": 15,
+        "importVersion": 16,
         "landSource": "Topografi 10 Nedladdning, vektor",
         "hydrographySource": "Topografi 10 Nedladdning, vektor",
         "shorelineStrategy": "Exact boundaries of Topografi 10 water polygons",
         "restrictedAreaStrategy": restricted.get("properties", {}).get("strategy"),
         "restrictedAreaCount": len(restricted.get("features", [])),
+        "maxSmallHousePropertyArea": restricted.get("properties", {}).get("maxSmallHousePropertyArea"),
         **_source_provenance(("land", "hydrography")),
     })
     return {"type": "FeatureCollection", "properties": properties, "features": features}

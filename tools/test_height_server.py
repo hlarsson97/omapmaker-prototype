@@ -260,6 +260,18 @@ class CentralStorageApiTests(unittest.TestCase):
         self.assertTrue(result['properties']['centralStorage'])
         fetch.assert_called_once_with([18.0,59.0,18.01,59.01],'secret-token')
 
+    def test_land_cover_endpoint_uses_adjustable_small_house_area_limit(self):
+        collection={'type':'FeatureCollection','properties':{},'features':[]}
+        with patch.object(server,'generated_land_cover',return_value=collection) as generate:
+            status,result=self.request('/api/land-cover',{'bbox':[18,59,18.01,59.01],'printScale':10000,'maxSmallHousePropertyArea':6500})
+        self.assertEqual(status,200)
+        generate.assert_called_once_with([18.0,59.0,18.01,59.01],10000,'automatic',6500.0)
+
+    def test_land_cover_endpoint_rejects_unsafe_small_house_area_limit(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.request('/api/land-cover',{'bbox':[18,59,18.01,59.01],'maxSmallHousePropertyArea':50000})
+        self.assertEqual(caught.exception.code,400)
+
     def test_submission_endpoint_creates_scored_global_candidate(self):
         device=str(uuid.uuid4());observation=str(uuid.uuid4());submission=str(uuid.uuid4())
         feature={'type':'Feature','id':observation,'properties':{'clientObservationId':observation,'version':1,'category':'point','objectType':'boulder','symbol':'206','source':'manual','quality':'unverified','accuracy':0},'geometry':{'type':'Point','coordinates':[18,59]}}
@@ -540,6 +552,9 @@ class LandCoverTests(unittest.TestCase):
         self.assertLessEqual(features[0]['properties']['bufferMetres'][0],30)
         self.assertLess(features[0]['properties']['propertyCoveragePercent'],100)
         self.assertNotEqual(features[0]['geometry'],large['geometry'])
+        whole=server.lantmateriet_property_restricted_areas({'features':[large]},{'features':[small_house]},[17.99,58.99,18.01,59.01],max_small_house_property_area=7000)
+        self.assertEqual(whole[0]['properties']['restrictedKind'],'small-house-property')
+        self.assertEqual(whole[0]['geometry'],large['geometry'])
         self.assertEqual(server.lantmateriet_property_restricted_areas({'features':[ordinary]},{'features':[apartment]},[17.99,58.99,18.01,59.01]),[])
 
     def test_lantmateriet_property_replaces_overlapping_osm_residential_guess(self):

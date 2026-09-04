@@ -456,7 +456,7 @@ body.object-placement-active .leaflet-interactive,body.object-placement-active .
 .generation-options label:has(input:checked){border-color:#9dc4ae;background:#f0f7f2}
 .generation-options .future-option{opacity:.55;cursor:not-allowed}
 .generation-select{display:grid;gap:6px;margin:0 0 14px;font-size:11px;font-weight:800}
-.generation-select select{width:100%;min-height:44px;padding:8px 10px;border:1px solid #cfd8d1;border-radius:10px;background:#fff;font:600 12px/1.2 system-ui,sans-serif}
+.generation-select select,.generation-select input{width:100%;min-height:44px;padding:8px 10px;border:1px solid #cfd8d1;border-radius:10px;background:#fff;font:600 12px/1.2 system-ui,sans-serif}
 .generation-advanced{margin:0 0 14px;border:1px solid #d9e1db;border-radius:11px;background:#fafbf8}
 .generation-advanced summary{padding:11px 12px;color:#315645;font-size:10px;font-weight:800;cursor:pointer}
 .generation-advanced[open] summary{border-bottom:1px solid #e1e7e2}
