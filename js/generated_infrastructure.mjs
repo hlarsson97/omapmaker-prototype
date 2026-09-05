@@ -1,4 +1,4 @@
-import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 import {bridgeTunnelCurveSegments, parallelLineCoordinates} from './symbol_object_settings.mjs?v=9';
 
 export const INFRASTRUCTURE_TYPES = Object.freeze({

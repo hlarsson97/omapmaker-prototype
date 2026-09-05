@@ -1,4 +1,4 @@
-import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const PAVED_AREA_ATTRIBUTION = 'Hårdgjorda ytor © OpenStreetMap contributors';
 

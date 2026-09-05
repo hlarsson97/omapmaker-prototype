@@ -1,4 +1,4 @@
-import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const LAND_COVER_ATTRIBUTION = 'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors';
 

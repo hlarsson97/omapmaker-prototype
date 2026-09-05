@@ -1,4 +1,4 @@
-import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const ROAD_TYPES = Object.freeze({
   '502': ['wide_road', 'Bred väg'],

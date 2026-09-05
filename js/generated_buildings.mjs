@@ -1,4 +1,4 @@
-import {generatedMapObject, mapObjectPopup} from './map_objects.mjs';
+import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const BUILDING_ATTRIBUTION = 'Byggnader © OpenStreetMap contributors';
 export const LANTMATERIET_BUILDING_ATTRIBUTION = 'Byggnad Nedladdning, vektor © Lantmäteriet · bearbetad av OMapMaker · CC BY 4.0';
@@ -27,7 +27,7 @@ export function createGeneratedBuildingLayer({Leaflet, map, getData, isVisible, 
 
   function popup(feature) {
     const properties = feature.properties || {};
-    const object = generatedMapObject('buildings', feature, {symbol: '521', statusLabel: generatedStatusLabel(feature), source: properties.sourceType || 'osm'});
+    const object = generatedMapObject('buildings', feature, {symbol: '521', statusLabel: generatedStatusLabel(feature)});
     return mapObjectPopup(object, {title: properties.name || 'Byggnad', isomClaim, escapeHtml, actionsHtml: generatedActionHtml('buildings', feature), className: 'building-popup'});
   }
 

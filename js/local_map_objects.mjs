@@ -1,4 +1,4 @@
-import {localMapObject, mapObjectActionHtml, mapObjectPopup, mapObjectSource} from './map_objects.mjs';
+import {localMapObject, mapObjectActionHtml, mapObjectPopup, mapObjectSource} from './map_objects.mjs?v=5';
 import {symbolObjectControlsHtml} from './symbol_object_settings.mjs';
 
 const TYPE_SPECIFIC_PROPERTIES = Object.freeze(['boundary', 'downhillSide', 'tagSide', 'lowerSide', 'supports', 'closedBoundary', 'parentObjectId', 'parentSymbol', 'breakBarrier', 'breakBarrierMode']);

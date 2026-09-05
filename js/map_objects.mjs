@@ -62,7 +62,8 @@ export function restoreLocalFromTrash(object) {
 }
 
 export function mapObjectSource(source, sourceId = '') {
-  const type = String(source || 'unknown');
+  const value = String(source || 'unknown');
+  const type = ({OpenStreetMap: 'osm', 'Lantmäteriet': 'lantmateriet'})[value] || value;
   return {type, label: SOURCE_LABELS[type] || type, id: String(sourceId || '')};
 }
 
@@ -84,7 +85,7 @@ export function localMapObject(cat, object, symbol) {
   };
 }
 
-export function generatedMapObject(layerType, feature, {symbol, statusLabel, source = 'osm'} = {}) {
+export function generatedMapObject(layerType, feature, {symbol, statusLabel, source} = {}) {
   const properties = feature.properties || {};
   return {
     id: String(feature.id),
@@ -92,7 +93,7 @@ export function generatedMapObject(layerType, feature, {symbol, statusLabel, sou
     objectType: properties.objectType || properties.mapClass || properties.featureKind || layerType,
     symbol: String(symbol ?? properties.isomSymbol ?? ''),
     geometryType: feature.geometry?.type || '',
-    source: mapObjectSource(source, properties.sourceId),
+    source: mapObjectSource(source || properties.source || properties.sourceType, properties.sourceId),
     status: {type: properties.status || 'automatic-unverified', label: statusLabel},
     capabilities: {...MAP_OBJECT_CAPABILITIES},
     canReset: Boolean(properties.originalGeometry || properties.status && properties.status !== 'automatic-unverified')
