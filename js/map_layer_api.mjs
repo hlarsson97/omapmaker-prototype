@@ -3,7 +3,7 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
     contours: () => ({interval: Number(workspace?.contourInterval || 5), generalization: 'detailed', baseElevation: 0, verticalDatum: 'RH 2000', symbolRegistryVersion}),
     buildings: () => ({importVersion: 5, source: sources.buildings || 'automatic', symbolRegistryVersion}),
     roads: () => ({importVersion: 5, source: sources.roads || 'automatic', symbolRegistryVersion}),
-    infrastructure: () => ({importVersion: 3, source: 'automatic', symbolRegistryVersion}),
+    infrastructure: () => ({importVersion: 4, source: 'automatic', symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
     'land-cover': () => ({importVersion: 16, source: 'automatic', printScale: Number(workspace?.scale || 10000), maxSmallHousePropertyArea: Number(maxSmallHousePropertyArea) || 4000, symbolRegistryVersion}),
     'property-boundaries': () => ({importVersion: 1}),

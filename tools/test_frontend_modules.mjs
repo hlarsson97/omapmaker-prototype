@@ -583,7 +583,7 @@ assert.equal(typeof scheduledPatternInstall, 'function');
 assert.deepEqual(landCoverEvents.at(-1), ['addAttribution', LAND_COVER_ATTRIBUTION]);
 assert.deepEqual(centralLayerParameters('land-cover', {workspace: {scale: 15000}, symbolRegistryVersion: 6, maxSmallHousePropertyArea: 6500}), {importVersion: 16, source: 'automatic', printScale: 15000, maxSmallHousePropertyArea: 6500, symbolRegistryVersion: 6});
 assert.deepEqual(centralLayerParameters('roads', {workspace: {scale: 15000}, symbolRegistryVersion: 13}), {importVersion: 5, source: 'automatic', symbolRegistryVersion: 13});
-assert.deepEqual(centralLayerParameters('infrastructure', {symbolRegistryVersion: 13}), {importVersion: 3, source: 'automatic', symbolRegistryVersion: 13});
+assert.deepEqual(centralLayerParameters('infrastructure', {symbolRegistryVersion: 13}), {importVersion: 4, source: 'automatic', symbolRegistryVersion: 13});
 assert.deepEqual(centralLayerParameters('buildings', {symbolRegistryVersion: 13, sources: {buildings: 'lantmateriet'}}), {importVersion: 5, source: 'lantmateriet', symbolRegistryVersion: 13});
 assert.deepEqual(centralLayerParameters('property-boundaries', {symbolRegistryVersion: 13}), {importVersion: 1});
 assert(CENTRAL_LAYER_TYPES.includes('property-boundaries'));
@@ -698,7 +698,7 @@ assert(fieldHtml.includes('styles.css?v=18'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=21'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=60"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=61"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet','maxSmallHousePropertyArea']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -733,6 +733,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=11','map_setup.mjs?v=6','account_api.mjs?v=3','generated_buildings.mjs?v=2','generated_roads.mjs?v=2','generated_infrastructure.mjs?v=16','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=12','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=6','account_api.mjs?v=3','generated_buildings.mjs?v=2','generated_roads.mjs?v=2','generated_infrastructure.mjs?v=16','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=12','local_map_objects.mjs?v=3','map_objects.mjs?v=4','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

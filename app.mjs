@@ -2,7 +2,7 @@ import {$, cloneJson, escapeHtml, formatBytes, jsonResponse, uuidPattern, wait} 
 import {applyGenerationProfile, generationSummary, normalizeMaxSmallHousePropertyArea, readGenerationSettings} from './js/generation_settings.mjs?v=1';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 import {createFieldMap} from './js/map_setup.mjs?v=6';
-import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs?v=11';
+import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs?v=12';
 import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs?v=2';
 import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs';
 import {ROAD_TYPES, createGeneratedRoadLayer} from './js/generated_roads.mjs?v=2';

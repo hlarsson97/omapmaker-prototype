@@ -88,7 +88,42 @@ def generated_roads(bbox,source):
     return lantmateriet_roads(bbox) if source=='lantmateriet' else osm_roads(bbox)
 
 def generated_infrastructure(bbox,source):
-    return lantmateriet_infrastructure(bbox) if source=='lantmateriet' else osm_infrastructure(bbox)
+    if source!='lantmateriet':return osm_infrastructure(bbox)
+    base=lantmateriet_infrastructure(bbox)
+    if not any(f.get('properties',{}).get('power') in {'line','minor_line'} for f in base['features']):return base
+    return supplement_power_supports(base,osm_infrastructure(bbox))
+
+def supplement_power_supports(base,osm):
+    """Keep surveyed OSM support positions; associate only with nearby LM power lines."""
+    project=Transformer.from_crs('EPSG:4326','EPSG:3006',always_xy=True).transform
+    lines=[]
+    for feature in base['features']:
+        props=feature.get('properties',{})
+        if props.get('power') in {'line','minor_line'} and feature.get('geometry',{}).get('type')=='LineString':
+            lines.append((feature,transform_geometry(project,geometry_shape(feature['geometry']))))
+    supports=[]
+    seen={f.get('id') for f in base['features']}
+    for feature in osm.get('features',[]):
+        props=feature.get('properties',{})
+        if props.get('featureKind')!='support' or feature.get('id') in seen:continue
+        point=transform_geometry(project,geometry_shape(feature['geometry']))
+        candidates=[(point.distance(line),parent,line) for parent,line in lines]
+        if not candidates:continue
+        distance,parent,line=min(candidates,key=lambda item:item[0])
+        if distance>20:continue
+        symbol=parent['properties']['isomSymbol']
+        coordinates=parent['geometry']['coordinates']
+        # Orient the symbol along the closest segment without moving the mapped point.
+        index=min(range(len(coordinates)-1),key=lambda i:point.distance(transform_geometry(project,LineString(coordinates[i:i+2]))))
+        angle=infrastructure_line_angle(coordinates[index:index+2],0)
+        kind='major_power_support' if symbol=='511' else 'power_support'
+        support_props={**props,'osmParentSourceId':props.get('parentSourceId'),'parentSourceId':parent['properties']['sourceId'],'isomSymbol':symbol,'automaticIsomSymbol':symbol,'omapType':kind,'automaticOmapType':kind,'angleDegrees':round(angle,2),'largeMast':symbol=='511','parentMatchDistanceMetres':round(distance,2)}
+        supports.append({**feature,'properties':support_props})
+        seen.add(feature.get('id'))
+    properties={**base.get('properties',{}),'importVersion':4}
+    if supports:
+        properties.update({'source':'Lantmäteriet + OpenStreetMap','sourceType':'mixed-lantmateriet-osm','license':'CC BY 4.0 + ODbL','attribution':properties.get('attribution','© Lantmäteriet')+'; © OpenStreetMap contributors'})
+    return {**base,'properties':properties,'features':[*base['features'],*supports]}
 
 def generated_land_cover(bbox,print_scale,requested_source,max_small_house_property_area=4000.0):
     if requested_source not in {'automatic','osm','lantmateriet'}:raise ValueError('Ogiltig datakälla för mark och vatten')
@@ -1835,7 +1870,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(200,centralize_layer('roads',bbox,generated_roads(bbox,source),{'importVersion':5,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/infrastructure':
                 requested_source=str(request.get('source') or 'automatic').lower();communication=topography_source('communication',request);utilities=topography_source('utilities',request);source='lantmateriet' if communication=='lantmateriet' and utilities=='lantmateriet' else 'osm'
-                return self.send_json(200,centralize_layer('infrastructure',bbox,generated_infrastructure(bbox,source),{'importVersion':3,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
+                return self.send_json(200,centralize_layer('infrastructure',bbox,generated_infrastructure(bbox,source),{'importVersion':4,'source':requested_source,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/paved-areas':return self.send_json(200,centralize_layer('paved-areas',bbox,osm_paved_areas(bbox),{'importVersion':1,'symbolRegistryVersion':REGISTRY_VERSION}))
             if path=='/api/land-cover':
                 print_scale=int(request.get('printScale') or 10000)

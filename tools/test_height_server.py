@@ -500,6 +500,25 @@ class InfrastructureTests(unittest.TestCase):
         self.assertEqual(support['properties']['parentSourceId'],'way/10')
         self.assertTrue(support['properties']['largeMast'])
 
+    def test_lantmateriet_keeps_osm_supports_without_duplicate_lines(self):
+        line={'type':'Feature','id':'lm-line','properties':{'power':'minor_line','isomSymbol':'510','sourceId':'lm/1'},'geometry':{'type':'LineString','coordinates':[[18,59],[18.002,59]]}}
+        def support(identifier,latitude):
+            return {'type':'Feature','id':identifier,'properties':{'featureKind':'support','source':'OpenStreetMap','parentSourceId':'way/10','isomSymbol':'511'},'geometry':{'type':'Point','coordinates':[18.001,latitude]}}
+        near=support('near',59.00005)
+        base={'type':'FeatureCollection','properties':{'source':'Lantmäteriet'},'features':[line]}
+        osm={'features':[line,near,support('far',59.01),near]}
+        with patch.object(server,'lantmateriet_infrastructure',return_value=base), patch.object(server,'osm_infrastructure',return_value=osm):
+            result=server.generated_infrastructure([18,59,18.002,59.02],'lantmateriet')
+        self.assertEqual(len(result['features']),2)
+        added=result['features'][1]
+        self.assertEqual(added['geometry'],near['geometry'])
+        self.assertEqual(added['properties']['parentSourceId'],'lm/1')
+        self.assertEqual(added['properties']['isomSymbol'],'510')
+        self.assertFalse(added['properties']['largeMast'])
+        self.assertAlmostEqual(added['properties']['angleDegrees'],0)
+        self.assertIn('OpenStreetMap',result['properties']['attribution'])
+        self.assertEqual(len(base['features']),1)
+
 
 class PavedAreaTests(unittest.TestCase):
     def test_large_public_asphalt_parking_is_included(self):
