@@ -1,3 +1,4 @@
+import {refreshGeoJsonPresentation} from './layer_presentation.mjs?v=1';
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const PAVED_AREA_ATTRIBUTION = 'Hårdgjorda ytor © OpenStreetMap contributors';
@@ -47,5 +48,5 @@ export function createGeneratedPavedAreaLayer({Leaflet, map, getData, isVisible,
     metaElement().textContent = pavedAreaMetaText(getData(), generatedStatus, centralLayerLabel);
   }
 
-  return {render, refreshMeta};
+  return {render, refreshMeta, refreshPresentation: () => refreshGeoJsonPresentation(layer)};
 }

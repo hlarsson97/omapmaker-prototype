@@ -1,3 +1,4 @@
+import {refreshGeoJsonPresentation} from './layer_presentation.mjs?v=1';
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const ROAD_TYPES = Object.freeze({
@@ -24,6 +25,7 @@ export function roadMetaText(data, generatedStatus, centralLayerLabel) {
 
 export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, featureIsVisible, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, lineStyles, normContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, onRoadClick = null}) {
   let layer = null;
+  let presentationLayers = [];
   let currentAttribution = '';
 
   function style(feature) {
@@ -46,6 +48,7 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
   function render() {
     if (layer) map.removeLayer(layer);
     layer = null;
+    presentationLayers = [];
     if (currentAttribution) {
       map.attributionControl.removeAttribution(currentAttribution);
       currentAttribution = '';
@@ -54,6 +57,7 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
     if (!data || !isVisible()) return;
     const outer = Leaflet.geoJSON(data, {pane: 'foundationPane', filter: featureIsVisible, style, onEachFeature: (feature, featureLayer) => {featureLayer.bindPopup(popup(feature), {maxWidth: 320});if(onRoadClick)featureLayer.on('click', event => onRoadClick(feature, event, featureLayer))}});
     const inner = Leaflet.geoJSON(data, {pane: 'foundationPane', interactive: false, filter: feature => featureIsVisible(feature) && String(feature.properties?.isomSymbol) === '502' && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: feature => ({...lineStyles('502', feature.properties || {}, normContext()).inner, className: 'osm-road-fill'})});
+    presentationLayers = [outer, inner];
     layer = Leaflet.layerGroup([outer, inner]).addTo(map);
     currentAttribution = data.properties?.attribution || ROAD_ATTRIBUTION;
     map.attributionControl.addAttribution(currentAttribution);
@@ -63,5 +67,5 @@ export function createGeneratedRoadLayer({Leaflet, map, getData, isVisible, feat
     metaElement().textContent = roadMetaText(getData(), generatedStatus, centralLayerLabel);
   }
 
-  return {render, refreshMeta};
+  return {render, refreshMeta, refreshPresentation: () => presentationLayers.forEach(item => refreshGeoJsonPresentation(item))};
 }

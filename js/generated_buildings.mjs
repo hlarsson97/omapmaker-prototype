@@ -1,3 +1,4 @@
+import {refreshGeoJsonPresentation} from './layer_presentation.mjs?v=1';
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const BUILDING_ATTRIBUTION = 'Byggnader © OpenStreetMap contributors';
@@ -53,5 +54,5 @@ export function createGeneratedBuildingLayer({Leaflet, map, getData, isVisible, 
     metaElement().textContent = buildingMetaText(getData(), generatedStatus, centralLayerLabel);
   }
 
-  return {render, refreshMeta};
+  return {render, refreshMeta, refreshPresentation: () => refreshGeoJsonPresentation(layer)};
 }

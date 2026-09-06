@@ -715,7 +715,7 @@ assert(fieldHtml.includes('styles.css?v=19'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=21'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=63"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=64"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet','maxSmallHousePropertyArea']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -728,10 +728,10 @@ for (const category of ['point','line','area']) assert(styles.includes(`.map-${c
 const appSource = fs.readFileSync(path.join(root, 'app.mjs'), 'utf8');
 assert(appSource.includes('map-${geometryCategory(feature)}-object'), 'Genererade objekt ska få opacitetsklass efter geometri');
 assert(appSource.includes("workspace?.symbolDisplayMode||'print'"), 'Globalkartan ska använda skalenliga symboler när inget arbetsområde anger digitalt läge');
-assert(appSource.includes("if(symbolDisplayMode()==='print')refreshSymbolPresentation()"), 'Skalenliga punktsymboler ska renderas om efter zoom');
+assert(appSource.includes("if(symbolDisplayMode()==='print')refreshSymbolPresentation({zoomOnly:true})"), 'Skalenliga punktsymboler ska renderas om efter zoom');
 assert(appSource.includes('local-map-object map-point-object'), 'Lokala punkter ska behålla sin geometri- och opacitetsklass när ikonen renderas om');
 assert(appSource.includes("function pointNormContext(){return{...normContext(),mode:'print'}}"), 'Punktobjekt ska alltid använda skalenlig zoomrendering');
-assert(appSource.includes('refreshPointPresentation();renderRoads()'), 'Punktobjekt ska renderas om även när arbetsområdet använder digitalt läge');
+assert(appSource.includes('refreshPointPresentation();roadLayer.refreshPresentation()'), 'Punktobjekt ska renderas om även när arbetsområdet använder digitalt läge');
 assert(appSource.includes("map.on('zoom zoomanim'"), 'Punktobjekt ska skalas även under en pågående zoomgest');
 assert(styles.includes('scale(var(--point-zoom-scale,1))'), 'Punktsymbolernas visuella storlek ska följa zoomens mellanlägen');
 assert(styles.includes('.infrastructure-support-icon .symbol-svg{filter:none}'), 'Kraftledningsmaster ska inte få vit läsbarhetsskugga');
@@ -750,6 +750,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=7','account_api.mjs?v=3','generated_buildings.mjs?v=3','generated_roads.mjs?v=3','generated_infrastructure.mjs?v=17','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=13','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=7','account_api.mjs?v=3','generated_buildings.mjs?v=4','generated_roads.mjs?v=4','generated_infrastructure.mjs?v=18','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=14','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

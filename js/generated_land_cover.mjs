@@ -1,3 +1,4 @@
+import {refreshGeoJsonPresentation} from './layer_presentation.mjs?v=1';
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
 
 export const LAND_COVER_ATTRIBUTION = 'Mark, vatten och ISOM 520-underlag © OpenStreetMap contributors';
@@ -36,8 +37,16 @@ export function applyLandCoverPattern(path, patternId) {
 
 export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, isomLineStyle, isomAreaStyle, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement, getDeclination, documentObject = document, schedule = requestAnimationFrame}) {
   let layer = null;
+  let presentationLayers = [];
   let currentAttribution = '';
   let patternSerial = 0;
+  let patternsScheduled = false;
+
+  function schedulePatterns() {
+    if (patternsScheduled) return;
+    patternsScheduled = true;
+    schedule(() => { patternsScheduled = false; installPatterns(); });
+  }
 
   function style(feature) {
     const properties = feature.properties || {};
@@ -96,6 +105,8 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
         defs.classList.add('omap-water-patterns');
         svg.prepend(defs);
       }
+      // Replace obsolete definitions instead of accumulating them on every zoom.
+      defs.replaceChildren();
       const serial = ++patternSerial;
       symbols.forEach(symbol => {
         const definition = renderer.definition(symbol);
@@ -128,6 +139,7 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
   function render() {
     if (layer) map.removeLayer(layer);
     layer = null;
+    presentationLayers = [];
     if (currentAttribution) {
       map.attributionControl.removeAttribution(currentAttribution);
       currentAttribution = '';
@@ -136,8 +148,9 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     if (!data || !isVisible()) return;
     const base = Leaflet.geoJSON(data, {pane: 'landCoverPane', filter: feature => String(feature.properties?.isomSymbol) !== '520' && featureIsSelected(feature), style, pointToLayer: (feature, latlng) => mapMarker(latlng, {pane: 'landCoverMarkerPane', icon: pointIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
     const restricted = Leaflet.geoJSON(data, {pane: 'restrictedAreaPane', filter: feature => isCurrentLandCoverData(data) && String(feature.properties?.isomSymbol) === '520' && featureIsSelected(feature), style, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 310})});
+    presentationLayers = [base, restricted];
     layer = Leaflet.layerGroup([base, restricted]).addTo(map);
-    schedule(installPatterns);
+    schedulePatterns();
     currentAttribution = data.properties?.attribution || LAND_COVER_ATTRIBUTION;
     map.attributionControl.addAttribution(currentAttribution);
   }
@@ -146,5 +159,8 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     metaElement().textContent = landCoverMetaText(getData(), generatedStatus, centralLayerLabel);
   }
 
-  return {render, refreshMeta, installPatterns};
+  return {render, refreshMeta, installPatterns, refreshPresentation() {
+    presentationLayers.forEach(item => refreshGeoJsonPresentation(item, pointIcon));
+    schedulePatterns();
+  }};
 }
