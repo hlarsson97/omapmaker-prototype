@@ -1,11 +1,12 @@
-export function createFieldMap({Leaflet, initialCenter, hasWorkspace}) {
+export function createFieldMap({Leaflet, initialCenter, hasWorkspace, navigationContainer}) {
   const map = Leaflet.map('map', {zoomControl: false, rotate: true, bearing: 0, touchRotate: true, dragRotate: false, shiftKeyRotate: true}).setView(
     [initialCenter.lat, initialCenter.lng],
     hasWorkspace ? 14 : 15
   );
   for (const handler of ['touchGestures','dragRotate','shiftKeyRotate']) map[handler]?.disable?.();
   map.touchZoom?.enable?.();
-  Leaflet.control.zoom({position: 'bottomright'}).addTo(map);
+  const zoomControl = Leaflet.control.zoom({position: 'bottomright', zoomInTitle: 'Zooma in', zoomOutTitle: 'Zooma ut'}).addTo(map);
+  if (navigationContainer) navigationContainer.append(zoomControl.getContainer());
 
   const panes = {
     basemapPane: 200,

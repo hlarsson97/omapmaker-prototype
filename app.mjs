@@ -1,7 +1,7 @@
 import {$, cloneJson, escapeHtml, formatBytes, jsonResponse, uuidPattern, wait} from './js/utils.mjs';
 import {applyGenerationProfile, generationSummary, normalizeMaxSmallHousePropertyArea, readGenerationSettings} from './js/generation_settings.mjs?v=1';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
-import {createFieldMap} from './js/map_setup.mjs?v=6';
+import {createFieldMap} from './js/map_setup.mjs?v=7';
 import {createCentralLayerRestorer, createMapLayerApi} from './js/map_layer_api.mjs?v=12';
 import {createGeneratedBuildingLayer} from './js/generated_buildings.mjs?v=3';
 import {createGeneratedPavedAreaLayer} from './js/generated_paved_areas.mjs?v=1';
@@ -80,7 +80,7 @@ if(workspace&&workspace.showNorthLines===undefined)workspace.showNorthLines=true
 const queryCenter=urlParams.has('lat')&&urlParams.has('lng')?{lat:Number(urlParams.get('lat')),lng:Number(urlParams.get('lng'))}:null;
 const lastCenterKey=workspace?`omapmaker.lastCenter.workspace.${workspace.id}`:'omapmaker.lastCenter.global';
 const initialCenter=workspace?.center||queryCenter||JSON.parse(localStorage.getItem(lastCenterKey)||localStorage.getItem('omapmaker.lastCenter')||'{"lat":59.3293,"lng":18.0686}');
-const {map,baseMaps,contourReference}=createFieldMap({Leaflet:L,initialCenter,hasWorkspace:Boolean(workspace)});
+const {map,baseMaps,contourReference}=createFieldMap({Leaflet:L,initialCenter,hasWorkspace:Boolean(workspace),navigationContainer:$('#mapNavControls')});
 let popupHitLayers=[],popupStack=null,popupStackSwitching=false;
 function keepPopupClearOfControls(popup){requestAnimationFrame(()=>{const element=popup.getElement?.()||popup._container;if(!element)return;const rect=element.getBoundingClientRect(),safeTop=matchMedia('(max-width: 520px)').matches?170:90,toolbarTop=$('#toolbar')?.classList.contains('collapsed')?innerHeight-12:$('#toolbar')?.getBoundingClientRect().top||innerHeight-12,safeBottom=Math.min(innerHeight-12,toolbarTop-8),offset=rect.top<safeTop?rect.top-safeTop:rect.bottom>safeBottom?rect.bottom-safeBottom:0;if(Math.abs(offset)>1)map.panBy([0,offset],{animate:true,duration:.18})})}
 map.getContainer().addEventListener('pointerdown',event=>{if(event.target.closest?.('.leaflet-popup'))return;popupStack=null;popupHitLayers=popupLayersFromElements(document.elementsFromPoint(event.clientX,event.clientY),map)},true);
@@ -709,7 +709,7 @@ let activeContourJobId=null;
 function setContourControlsRunning(running){
   $('#runContourGeneration').disabled=running;$('#runContourGeneration').textContent=running?'Arbetar…':'Generera höjdkurvor';$('#cancelContourGeneration').hidden=!running;$('#cancelContourGeneration').disabled=false;$('#cancelContourGeneration').textContent='Avbryt';
 }
-const toolbar=$('#toolbar'),collapseToolbar=$('#collapseToolbar'),toolbarPreferenceKey='omapmaker.toolbarCollapsed.v2';function setToolbarCollapsed(collapsed,persist=true){toolbar.classList.toggle('collapsed',collapsed);collapseToolbar.setAttribute('aria-expanded',String(!collapsed));collapseToolbar.textContent=collapsed?'Ritverktyg':'Dölj';collapseToolbar.setAttribute('aria-label',collapsed?'Visa ritverktyg':'Dölj ritverktyg');if(persist)localStorage.setItem(toolbarPreferenceKey,String(collapsed))}const savedToolbarPreference=localStorage.getItem(toolbarPreferenceKey);setToolbarCollapsed(savedToolbarPreference===null?matchMedia('(max-width: 520px)').matches:savedToolbarPreference==='true',false);collapseToolbar.onclick=()=>{if(recording||selected||generatedEdit)return toast('Slutför eller avbryt pågående objekt först');setToolbarCollapsed(!toolbar.classList.contains('collapsed'))};
+const toolbar=$('#toolbar'),collapseToolbar=$('#collapseToolbar'),toolbarPreferenceKey='omapmaker.toolbarCollapsed.v2';function setToolbarCollapsed(collapsed,persist=true){toolbar.classList.toggle('collapsed',collapsed);collapseToolbar.setAttribute('aria-expanded',String(!collapsed));collapseToolbar.textContent=collapsed?'Visa':'Dölj';collapseToolbar.setAttribute('aria-label',collapsed?'Visa ritverktyg':'Dölj ritverktyg');if(persist)localStorage.setItem(toolbarPreferenceKey,String(collapsed))}const savedToolbarPreference=localStorage.getItem(toolbarPreferenceKey);setToolbarCollapsed(savedToolbarPreference===null?matchMedia('(max-width: 520px)').matches:savedToolbarPreference==='true',false);collapseToolbar.onclick=()=>{if(recording||selected||generatedEdit)return toast('Slutför eller avbryt pågående objekt först');setToolbarCollapsed(!toolbar.classList.contains('collapsed'))};
 function refreshContourSettingsSummary(){const interval=Number(workspace?.contourInterval||5);const summary=$('#contourSettingsSummary');summary.querySelector('div:first-child b').textContent=`${String(interval).replace('.',',')} meter`}
 function renderContourJob(job){
   const panel=$('#contourProgressPanel'),progress=$('#contourProgress'),value=$('#contourProgressValue'),transfer=$('#contourTransferText');panel.hidden=false;

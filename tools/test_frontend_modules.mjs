@@ -682,12 +682,15 @@ const fakeMap = {
     return panes.get(name);
   }
 };
+const zoomElement = {};
+let mountedZoom;
 const fakeLeaflet = {
   map: () => fakeMap,
-  control: {zoom: () => ({addTo() {}})},
+  control: {zoom: () => ({addTo() { return this; }, getContainer() { return zoomElement; }})},
   tileLayer: (url, options) => ({url, options})
 };
-const mapSetup = createFieldMap({Leaflet: fakeLeaflet, initialCenter: {lat: 59.2, lng: 18.1}, hasWorkspace: true});
+const mapSetup = createFieldMap({Leaflet: fakeLeaflet, initialCenter: {lat: 59.2, lng: 18.1}, hasWorkspace: true, navigationContainer: {append(element) { mountedZoom = element; }}});
+assert.equal(mountedZoom, zoomElement);
 assert.equal(mapSetup.map, fakeMap);
 assert.equal(fakeMap.touchGestures.disabled, true);
 assert.equal(fakeMap.touchZoom.enabled, true);
@@ -708,11 +711,11 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=18'));
+assert(fieldHtml.includes('styles.css?v=19'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=21'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=62"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=63"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet','maxSmallHousePropertyArea']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -747,6 +750,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=6','account_api.mjs?v=3','generated_buildings.mjs?v=3','generated_roads.mjs?v=3','generated_infrastructure.mjs?v=17','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=13','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=7','account_api.mjs?v=3','generated_buildings.mjs?v=3','generated_roads.mjs?v=3','generated_infrastructure.mjs?v=17','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=13','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');
