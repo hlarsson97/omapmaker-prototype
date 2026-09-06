@@ -54,18 +54,17 @@ def smooth_line(points, iterations):
     closed = np.linalg.norm(result[0] - result[-1]) < 1e-6
     for _ in range(iterations):
         source = result[:-1] if closed else result
-        smoothed = [] if closed else [source[0]]
-        pair_count = len(source) if closed else len(source) - 1
-        for index in range(pair_count):
-            first = source[index]
-            second = source[(index + 1) % len(source)]
-            smoothed.append(0.75 * first + 0.25 * second)
-            smoothed.append(0.25 * first + 0.75 * second)
-        if closed:
-            smoothed.append(smoothed[0])
-        else:
-            smoothed.append(source[-1])
-        result = np.asarray(smoothed)
+        first = source if closed else source[:-1]
+        second = np.roll(source, -1, axis=0) if closed else source[1:]
+        # Keep the arithmetic order and interleaving of the original Chaikin
+        # loop, but perform the operations on complete NumPy arrays.
+        left = 0.75 * first + 0.25 * second
+        right = 0.25 * first + 0.75 * second
+        smoothed = np.empty((len(first) * 2, source.shape[1]), dtype=left.dtype)
+        smoothed[0::2] = left
+        smoothed[1::2] = right
+        result = (np.concatenate((smoothed, smoothed[:1])) if closed else
+                  np.concatenate((source[:1], smoothed, source[-1:])))
     return result
 
 

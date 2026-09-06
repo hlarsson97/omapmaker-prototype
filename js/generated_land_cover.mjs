@@ -48,6 +48,8 @@ export function createGeneratedLandCoverLayer({Leaflet, map, mapMarker = Leaflet
     schedule(() => { patternsScheduled = false; installPatterns(); });
   }
 
+  map.on?.('viewportlayerschange', schedulePatterns);
+
   function style(feature) {
     const properties = feature.properties || {};
     const symbol = String(properties.isomSymbol || '');

@@ -520,13 +520,13 @@ const infrastructureView = createGeneratedInfrastructureLayer({
   metaElement: () => ({textContent: ''})
 });
 infrastructureView.render();
-assert.equal(infrastructureOptions.length, 4);
+assert.equal(infrastructureOptions.length, 5);
 assert(infrastructureOptions.every(options => options.pane === 'infrastructurePane'));
 assert.equal(infrastructureOptions[2].interactive, false);
 assert.equal(infrastructureOptions[2].filter({properties: {featureKind: 'line', isomSymbol: '509'}}), true);
 assert.equal(majorPowerLineData.features.length, 2, 'ISOM 511 ska skapa två separata Leaflet-linjer');
 assert.notEqual(majorPowerLineData.features[0].geometry.coordinates[0][1], majorPowerLineData.features[1].geometry.coordinates[0][1]);
-const supportMarker = infrastructureOptions[3].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
+const supportMarker = infrastructureOptions[4].pointToLayer({properties: {featureKind: 'support', isomSymbol: '511', angleDegrees: 30}}, [59, 18]);
 assert.equal(supportMarker.options.pane, 'infrastructureMarkerPane');
 assert.equal(supportMarker.options.rotateWithView, undefined);
 assert(supportMarker.options.icon.html.includes('map-symbol-svg'));
@@ -715,7 +715,7 @@ assert(fieldHtml.includes('styles.css?v=19'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=21'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=64"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=65"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet','maxSmallHousePropertyArea']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -750,6 +750,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=7','account_api.mjs?v=3','generated_buildings.mjs?v=4','generated_roads.mjs?v=4','generated_infrastructure.mjs?v=18','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=14','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=7','account_api.mjs?v=3','generated_buildings.mjs?v=4','generated_roads.mjs?v=4','generated_infrastructure.mjs?v=19','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=15','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

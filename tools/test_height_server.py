@@ -25,6 +25,7 @@ import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
 from magnetic_north import calculate_magnetic_north
 from test_map_store import CentralMapStoreTests
+from test_contour_smoothing import ContourSmoothingTests
 from map_store import MapStore
 from user_store import UserStore
 

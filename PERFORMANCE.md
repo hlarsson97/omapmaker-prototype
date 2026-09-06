@@ -1,5 +1,70 @@
 # Kartprestanda
 
+## Synligt område och NumPy, 2026-09-07
+
+De stora GeoJSON-lagren använder nu ett geografiskt sökträd. Bara objekt som
+berör skärmområdet med marginal skapas som Leaflet-objekt. Sökningen omfattar
+även linjer som korsar skärmen och polygoner som omger den utan hörn i vyn.
+Marginalen täcker skärmens hörn vid valfri rotation. Små förflyttningar inom
+marginalen återanvänder objekten; större förflyttningar byter bara dem som
+kommer in eller lämnar området. Öppna popupobjekt behålls tills de stängs.
+
+Det gäller genererade markytor, byggnader, vägar, hårdgjorda ytor,
+infrastruktur inklusive brodekorationer, höjdkurvor, globala punktobjekt,
+kartetiketter och referenslager. Kurvor grupperas nu även geografiskt så att
+avlägsna kurvor kan tas bort från renderingen oberoende av varandra.
+Ordningen mellan exempelvis vägarnas konturer och fyllningar återställs
+när nya objekt kommer in, och nytillkomna sankmarker får sina SVG-mönster.
+
+Originalgeometrin ligger kvar i datalagret för redigering, statistik och
+export. Detta minskar mängden ritobjekt, inte mängden nedladdad originaldata.
+Lokala redigerbara objekt och pågående ritning använder fortfarande sin
+tidigare rendering. När hela arbetsområdet syns finns mindre att sortera
+bort; den stora vinsten gäller detaljerade vyer av stora arbetsområden.
+
+`smooth_line()` använder nu NumPy-operationer på hela koordinatfält i stället
+för en Python-loop per punkt. Beräkningsordning, ändpunkter och slutning
+behålls. Tester jämför med den tidigare algoritmen för flera datatyper,
+linjelängder och antal utjämningspass, inklusive tomma, korta och upprepade
+linjer. Även ett komplett genereringsjobb jämförs som GeoJSON.
+
+Nya kontroller och mätningar:
+
+```text
+node tools/test_viewport_index.mjs
+python tools/test_contour_smoothing.py
+python tools/benchmark_contour_smoothing.py
+node tools/benchmark_map.cjs <resurskatalog> 7a4560ae1262390319371a8ba4ccf7df59476b7b
+```
+
+Webbläsartestet mäter också zoom 16–17 i en detaljerad vy. Det kontrollerar
+full täckning efter stora förflyttningar och rotationer, återanvändning av
+kvarvarande objekt, popupfönster, mönster, lagerreglage och att exportens
+objektantal är samma i detaljvy och översikt. `VIEWPORT_WIDTH=390` och
+`VIEWPORT_HEIGHT=844` testar en mobilstor vy i Chromium; det ersätter inte
+provning på en fysisk telefon eller i Safari.
+
+Uppmätt mot revision `7a4560a` i headless Edge (syntetiskt 10 × 10 km,
+1280 × 900, utskriftsläge; median av åtta uppdateringar i detaljvyn):
+
+| Mätvärde | Före | Efter |
+| --- | ---: | ---: |
+| Aktiva Leaflet-lager vid zoom 17 | 8 220 | 1 017 |
+| Zoom 16–17, inklusive två animationsramar | 331 ms | 111 ms |
+| Panorering i detaljvyn | 48 ms | 18 ms |
+| Zoom 13–14 med nästan hela området synligt | 414 ms | 431 ms |
+
+Detaljvyn blev snabbare; översikten fick en mindre merkostnad för index och
+hantering av synliga objekt. Ett separat 5 × 5 km-test i digitalt läge och
+390 × 844-vy klarade samma funktionskontroller, med 302 i stället för 2 094
+aktiva lager i den detaljerade vyn.
+
+Python-mätningen gav 213 → 1,45 ms för en öppen linje med 10 000 punkter och
+två utjämningspass (median av sju körningar). Ett komplett jobb med en
+syntetisk 512 × 512-höjdraster och 394 kurvor tog 3,54 → 1,96 sekunder,
+inklusive processstart. GeoJSON-filerna var identiska. Det kompletta jobbet
+mättes en gång per version; det är inte en prognos för andra höjdmodeller.
+
 ## Analys och ändringar, 2026-09-06
 
 `zoomend` byggde tidigare om genererade markytor, höjdkurvor, byggnader,
@@ -84,7 +149,7 @@ node tools/test_isom_renderer.js
 
 Leaflet behöver fortfarande projicera, klippa och rita synlig geometri och
 uppdatera punktmarkörer. Stora mängder SVG, etiketter och dekorerade lokala
-linjer kan därför fortfarande ge fördröjningar. Nästa större steg bör mätas
-med en representativ användarkarta: ett geografiskt index som begränsar
-skärmobjekten till synligt område med marginal, med fortsatt tillgång till
-hela originalgeometrin vid redigering och export.
+linjer kan därför fortfarande ge fördröjningar. Det geografiska indexet ovan
+begränsar nu de stora underlagslagren. Nästa utvärdering bör använda en
+representativ användarkarta för att mäta kvarvarande kostnad för lokala
+redigerbara objekt och geometrier som sträcker sig över stora områden.

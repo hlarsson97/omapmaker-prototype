@@ -30,7 +30,6 @@ export function infrastructureMetaText(data, generatedStatus, centralLayerLabel)
 export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Leaflet.marker, renderer, getData, isVisible, featureIsSelected, generatedStatus, generatedStatusLabel, generatedClass, generatedActionHtml, excludedStyle, symbolScale, normContext, pointNormContext, isomClaim, escapeHtml, centralLayerLabel, metaElement}) {
   let layer = null;
   let presentationLayers = [];
-  let refreshDecorations = () => {};
   let currentAttribution = '';
 
   function outerStyle(feature) {
@@ -71,7 +70,6 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     if (layer) map.removeLayer(layer);
     layer = null;
     presentationLayers = [];
-    refreshDecorations = () => {};
     if (currentAttribution) {
       map.attributionControl.removeAttribution(currentAttribution);
       currentAttribution = '';
@@ -87,11 +85,11 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
     })};
     const major = Leaflet.geoJSON(majorPowerLines, {pane: 'infrastructurePane', style: outerStyle, onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 320})});
     const inner = Leaflet.geoJSON(data, {pane: 'infrastructurePane', interactive: false, filter: feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '509' && !['excluded', 'deleted'].includes(generatedStatus(feature)), style: innerStyle});
-    const bridgeDecorations = data.features.filter(feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '512' && !['excluded', 'deleted'].includes(generatedStatus(feature))).flatMap(feature => bridgeTunnelCurveSegments(feature.geometry?.coordinates || [], renderer.definition('512'), 15000).map(segment => Leaflet.polyline(segment.map(coordinate => [coordinate[1], coordinate[0]]), {pane: 'infrastructurePane', interactive: false, ...renderer.lineStyles('512', feature.properties || {}, normContext()).outer, lineJoin: 'miter', className: generatedClass(feature, 'osm-infrastructure infrastructure-512 bridge-decoration')})));
+    const bridgeData = {type: 'FeatureCollection', features: data.features.filter(feature => lineFilter(feature) && String(feature.properties?.isomSymbol) === '512' && !['excluded', 'deleted'].includes(generatedStatus(feature))).flatMap(feature => bridgeTunnelCurveSegments(feature.geometry?.coordinates || [], renderer.definition('512'), 15000).map((coordinates, index) => ({...feature, id: `${feature.id}:decoration:${index}`, geometry: {type: 'LineString', coordinates}})))};
+    const bridgeDecorations = Leaflet.geoJSON(bridgeData, {pane: 'infrastructurePane', interactive: false, style: feature => ({...renderer.lineStyles('512', feature.properties || {}, normContext()).outer, lineJoin: 'miter', className: generatedClass(feature, 'osm-infrastructure infrastructure-512 bridge-decoration')})});
     const supports = Leaflet.geoJSON(data, {pane: 'infrastructurePane', filter: feature => ['support', 'point'].includes(feature.properties?.featureKind) && featureIsSelected(feature), pointToLayer: (feature, latlng) => mapMarker(latlng, {pane: 'infrastructureMarkerPane', icon: pointIcon(feature)}), onEachFeature: (feature, featureLayer) => featureLayer.bindPopup(popup(feature), {maxWidth: 300})});
-    presentationLayers = [outer, major, inner, supports];
-    refreshDecorations = () => bridgeDecorations.forEach(decoration => decoration.setStyle({...renderer.lineStyles('512', {}, normContext()).outer, lineJoin: 'miter'}));
-    layer = Leaflet.layerGroup([outer, major, inner, ...bridgeDecorations, supports]).addTo(map);
+    presentationLayers = [outer, major, inner, bridgeDecorations, supports];
+    layer = Leaflet.layerGroup([outer, major, inner, bridgeDecorations, supports]).addTo(map);
     currentAttribution = data.properties?.attribution || INFRASTRUCTURE_ATTRIBUTION;
     map.attributionControl.addAttribution(currentAttribution);
   }
@@ -102,6 +100,5 @@ export function createGeneratedInfrastructureLayer({Leaflet, map, mapMarker = Le
 
   return {render, refreshMeta, refreshPresentation() {
     presentationLayers.forEach(item => refreshGeoJsonPresentation(item, pointIcon));
-    refreshDecorations();
   }};
 }
