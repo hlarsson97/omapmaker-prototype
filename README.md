@@ -41,6 +41,10 @@ Exakta utgåvor, användningsområden, licenser och dokumentfingeravtryck finns 
 
 ## Integritet och gemensam karta
 
+Arbetslag kan dela arbetsområden med manuell, versionskontrollerad synkning,
+konfliktjämförelse och historik. Se [Arbetslag](ARBETSLAG.md) för arbetsflöde,
+offlinefunktioner och tester.
+
 - Nya GPS- och manuellt ritade objekt är alltid lokala utkast.
 - Appen skickar inga objekt eller GPS-spår automatiskt.
 - Frivillig publicering kräver val av objekt, förhandsgranskning och ett

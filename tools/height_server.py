@@ -17,10 +17,13 @@ from geotorget_download import delivery_manifest as geotorget_delivery_manifest,
 from lantmateriet_topography import buildings as topography_buildings, cache_status as topography_cache_status, compose_land_cover as compose_lantmateriet_land_cover, ensure_geopackage as ensure_topography_geopackage, facility_references as lantmateriet_facility_references, hydrography as lantmateriet_hydrography, infrastructure as lantmateriet_infrastructure, land_cover as lantmateriet_land_cover, map_labels as lantmateriet_map_labels, military_references as lantmateriet_military_references, merge_hydrography as merge_lantmateriet_hydrography, nature_references as lantmateriet_nature_references, roads as lantmateriet_roads, theme_available as topography_theme_available
 from map_store import MapStore
 from user_store import AuthenticationError, RevisionConflict, SESSION_DAYS, SyncConflict, UserStore
+from team_store import TeamStore
+from team_api import handle_team_request
 from isom_registry import REGISTRY_VERSION
 from magnetic_north import calculate_magnetic_north
 
 ROOT=Path(__file__).resolve().parents[1]; STATIC=(ROOT/'work'/'omapmaker-poc') if (ROOT/'work'/'omapmaker-poc'/'field.html').exists() else ROOT; DATA=ROOT/'data'/'lantmateriet'; CACHE=ROOT/'data'/'contour-cache'; GEOTORGET_CREDENTIAL_FILE=Path(os.environ.get('OMAP_GEOTORGET_CREDENTIAL_FILE',DATA/'geotorget-credentials.json')); GENERATOR=ROOT/'tools'/'generate_contours.py'; TILED_GENERATOR=ROOT/'tools'/'generate_contours_tiled.py'; MAP_DATABASE=Path(os.environ.get('OMAP_DATABASE',ROOT/'data'/'omapmaker.sqlite3')); MAP_STORE=MapStore(MAP_DATABASE); USER_STORE=UserStore(MAP_DATABASE)
+TEAM_STORE=TeamStore(MAP_DATABASE)
 LEVELS={'detailed':2,'normal':5,'soft':10}
 HEIGHT_VALIDATION_VERSION=1
 OVERPASS_SERVERS=('https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter')
@@ -1699,6 +1702,7 @@ class Handler(SimpleHTTPRequestHandler):
         raw=(query.get('bbox') or [''])[0]
         return validate_bbox({'bbox':raw.split(',')})[0]
     def do_GET(self):
+        if handle_team_request(self, TEAM_STORE, 'GET'):return
         path=urllib.parse.urlparse(self.path).path
         if path=='/api/health':return self.send_json(200,{'ok':True})
         if path=='/api/auth/session':
@@ -1789,6 +1793,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(202,job)
         return self.send_json(404,{'error':'Okänd API-adress'})
     def do_POST(self):
+        if handle_team_request(self, TEAM_STORE, 'POST'):return
         path=urllib.parse.urlparse(self.path).path
         if path=='/api/auth/login':
             address=self.client_address[0]

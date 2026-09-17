@@ -85,12 +85,17 @@ export function createAccountApi({fetchImpl = globalThis.fetch, storage = global
 
   async function listWorkspaces(userId) {
     const value = await request('/api/workspaces');
-    cacheWorkspaces(userId, value.workspaces);
-    return value.workspaces;
+    const shared = await request('/api/team-workspaces');
+    const activeIds = new Set(shared.workspaces.map(workspace => workspace.id));
+    const unavailable = cachedWorkspaces(userId).filter(workspace => workspace.teamId && !activeIds.has(workspace.id))
+      .map(workspace => ({...workspace, teamRole: 'viewer', teamAccessRevoked: true}));
+    const workspaces = [...value.workspaces, ...shared.workspaces, ...unavailable];
+    cacheWorkspaces(userId, workspaces);
+    return workspaces;
   }
 
   async function createWorkspace(userId, workspace) {
-    const value = await request('/api/workspaces', {method: 'POST', body: workspace, csrf: true});
+    const value = await request(workspace.teamId ? '/api/team-workspaces' : '/api/workspaces', {method: 'POST', body: workspace.teamId ? {teamId: workspace.teamId, workspace} : workspace, csrf: true});
     const workspaces = [value, ...cachedWorkspaces(userId).filter(item => item.id !== value.id)];
     cacheWorkspaces(userId, workspaces);
     return value;

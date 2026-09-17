@@ -34,3 +34,9 @@ jobs:
 
       - name: Test ISOM renderer
         run: node tools/test_isom_renderer.js
+
+      - name: Test durable team sync
+        run: node tools/test_team_sync.mjs
+
+      - name: Test team permissions and concurrency
+        run: python tools/test_team_store.py

@@ -381,8 +381,8 @@ class UserWorkspaceApiTests(unittest.TestCase):
         status,result,_=self.request('/api/lantmateriet-downloads/latest',headers={'Cookie':cookie});self.assertEqual(status,200);self.assertIn('job',result)
 
     def test_all_map_api_routes_require_login_and_writes_require_csrf(self):
-        get_paths=['/api/map-layers?bbox=18,59,18.01,59.01','/api/global-objects?bbox=18,59,18.01,59.01','/api/evidence?bbox=18,59,18.01,59.01','/api/height-status','/api/storage-status','/api/contour-jobs/unknown','/api/unknown']
-        post_paths=['/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/property-boundaries','/api/facility-references','/api/map-labels','/api/nature-references','/api/military-references','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw']
+        get_paths=['/api/teams','/api/team-workspaces','/api/teams/unknown/members','/api/team-workspaces/unknown/data','/api/team-workspaces/unknown/history','/api/map-layers?bbox=18,59,18.01,59.01','/api/global-objects?bbox=18,59,18.01,59.01','/api/evidence?bbox=18,59,18.01,59.01','/api/height-status','/api/storage-status','/api/contour-jobs/unknown','/api/unknown']
+        post_paths=['/api/teams','/api/teams/unknown/members','/api/team-workspaces','/api/team-workspaces/unknown/sync','/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/property-boundaries','/api/facility-references','/api/map-labels','/api/nature-references','/api/military-references','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw']
         for path in get_paths:
             with self.subTest(path=path):
                 status,result,_=self.request(path);self.assertEqual(status,401);self.assertEqual(result['code'],'authentication_required')

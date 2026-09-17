@@ -10,6 +10,7 @@
 __pycache__/
 *.py[cod]
 *.log
+.test-artifacts/
 
 # Downloaded Lantmäteriet data and generated caches can be large and may have
 # separate distribution terms. They remain on the server only.

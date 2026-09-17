@@ -1,6 +1,8 @@
-import {createAccountApi, readJsonStorage} from './js/account_api.mjs?v=4';
+import {createAccountApi, readJsonStorage} from './js/account_api.mjs?v=5';
+import './js/offline.mjs?v=1';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 
+import {mountTeamHome} from './js/team_home.mjs?v=1';
 const L = globalThis.L;
 const accountApi = createAccountApi();
 const mapDataStore = createIndexedDbStore({databaseName: 'omapmaker-mapdata', version: 1, storeName: 'contours'});
@@ -53,6 +55,7 @@ function openAreaPicker() {
 }
 
 function renderAccount() {
+  teamHome.render();
   const panel = document.querySelector('#accountPanel');
   panel.classList.toggle('authenticated', Boolean(accountUser && accountOnline));
   panel.classList.toggle('offline', Boolean(accountUser && !accountOnline));
@@ -72,8 +75,9 @@ function render() {
     const anchor = document.createElement('a'); anchor.className = 'workspace'; anchor.href = `field.html?workspace=${encodeURIComponent(workspace.id)}`;
     const content = document.createElement('div'), name = document.createElement('b'), meta = document.createElement('span'), arrow = document.createElement('i');
     name.textContent = workspace.name;
+    if(workspace.teamId)anchor.href+='&team=1';
     const mode = (workspace.symbolDisplayMode || 'print') === 'print' ? 'Utskriftsläge' : 'Digitalt läge';
-    meta.textContent = `1:${Number(workspace.scale).toLocaleString('sv-SE')} · ${workspace.contourInterval} m · ${workspace.sizeKm} × ${workspace.sizeKm} km · ${mode}`;
+    meta.textContent = `${workspace.teamAccessRevoked ? 'Åtkomst borttagen · lokal kopia' : workspace.teamId ? 'Arbetslag: '+(workspace.teamName||'Gemensamt') : 'Personligt'} · 1:${Number(workspace.scale).toLocaleString('sv-SE')} · ${workspace.contourInterval} m · ${workspace.sizeKm} × ${workspace.sizeKm} km · ${mode}`;
     arrow.textContent = '→'; content.append(name, meta); anchor.append(content, arrow); list.append(anchor);
   });
 }
@@ -135,7 +139,7 @@ async function offerMigration() {
 
 async function refreshServerWorkspaces() {
   workspaces = await accountApi.listWorkspaces(accountUser.id);
-  render(); offerMigration();
+  render(); offerMigration(); await teamHome.load();
 }
 
 async function initializeAccount() {
@@ -195,7 +199,8 @@ document.querySelector('#workspaceForm').onsubmit = async event => {
   const workspace = {id: crypto.randomUUID(), name: document.querySelector('#workspaceName').value.trim(), scale: Number(document.querySelector('#workspaceScale').value), contourInterval: Number(document.querySelector('#workspaceContour').value), symbolDisplayMode: document.querySelector('#workspaceSymbolMode').value, sizeKm: Number(document.querySelector('#workspaceSize').value), center: chosenCenter, createdAt: now, updatedAt: now, standard: 'ISOM 2017-2 v6'};
   button.disabled = true; button.textContent = 'Sparar…';
   try {
-    const saved = await accountApi.createWorkspace(accountUser.id, workspace); workspaces = [saved, ...workspaces.filter(item => item.id !== saved.id)]; location.href = `field.html?workspace=${encodeURIComponent(saved.id)}`;
+    workspace.teamId=document.querySelector('#workspaceTeam').value||undefined;
+    const saved = await accountApi.createWorkspace(accountUser.id, workspace); workspaces = [saved, ...workspaces.filter(item => item.id !== saved.id)]; location.href = `field.html?workspace=${encodeURIComponent(saved.id)}${saved.teamId?'&team=1':''}`;
   } catch (error) {
     document.querySelector('#chosenAreaSummary').textContent = `Kunde inte spara: ${error.message}`; button.disabled = false; button.textContent = 'Skapa och öppna';
   }
@@ -225,4 +230,5 @@ document.querySelector('#migrationForm').onsubmit = async event => {
   finally { button.disabled = false; button.textContent = 'Flytta till mitt konto'; }
 };
 
-renderAccount(); render(); initializeAccount();
+const teamHome=mountTeamHome({accountApi,getUser:()=>accountUser,refresh:refreshServerWorkspaces});
+renderAccount(); render(); initializeAccount().then(()=>teamHome.load());

@@ -1,0 +1,15 @@
+.team-sheet{width:min(960px,94vw);max-width:960px;max-height:90dvh;overflow:auto;padding:22px;border:1px solid #b9c9bd;border-radius:18px;color:#163424;background:#f9fcf8}
+.team-sheet .team-actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.team-sheet button{padding:10px 14px;min-height:42px;border:1px solid #aabdb0;border-radius:9px;background:#edf5ed;color:#163424;cursor:pointer}
+.team-sheet button:disabled{opacity:.5;cursor:default}
+.team-sheet pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font-size:12px}
+.team-conflict,.team-sheet [data-team-history-list]>article{border-top:1px solid #c7d4ca;padding:16px 0}
+.team-conflict>button{margin:6px 8px 0 0}
+.team-versions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.team-versions h4{margin:8px 0}.team-versions p{font-size:12px}
+.team-geometry{height:210px;background:#edf0e9;border:1px solid #c7d4ca;border-radius:8px}
+#teamSyncButton{font-size:12px;padding:8px;max-width:160px}
+#teamStorageError{position:fixed;top:80px;left:10px;right:10px;z-index:10000;padding:16px;background:#fff2ce;color:#722b10;border:2px solid #a94824;border-radius:10px}
+.team-readonly #toolbar,.team-readonly #modeSwitch,.team-readonly #fieldSurveyToggle,.team-readonly .generated-actions,.team-readonly .local-type-control,.team-readonly #workspaceSettingsButton{display:none!important}
+.team-workspace #draftHint{color:#18492c}
+@media(max-width:650px){.team-versions{grid-template-columns:1fr}.team-geometry{height:160px}.team-sheet{padding:14px}.team-workspace header h1{max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#teamSyncButton{max-width:100px;font-size:11px}}
