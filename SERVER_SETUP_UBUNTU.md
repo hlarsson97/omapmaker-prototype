@@ -19,6 +19,39 @@ Geotorget.
 
 ## Grundinstallation
 
+### Befintlig drift på labserver1
+
+Den aktiva installationen körs som **användartjänst** för `systemadmin`.
+Använd följande kommandon vid drift och omstart på denna server:
+
+```bash
+systemctl --user status omapmaker.service
+systemctl --user restart omapmaker.service
+systemctl --user is-enabled omapmaker.service
+loginctl show-user systemadmin -p Linger
+curl --fail http://127.0.0.1:8765/api/health
+```
+
+Användartjänstens autostart är aktiverad och `Linger=yes`, vilket gör att den
+kan starta vid uppstart utan en interaktiv inloggning. Starta inte ytterligare
+en server manuellt på port 8765.
+
+Det finns också en äldre systemtjänst med samma namn. Den ska vara stoppad
+och inaktiverad så att den inte konkurrerar om porten. Avstängningen kräver
+administratörsbehörighet och utförs en gång:
+
+```bash
+sudo systemctl disable --now omapmaker.service
+systemctl is-enabled omapmaker.service   # ska visa disabled
+systemctl is-active omapmaker.service    # ska visa inactive
+systemctl --user is-active omapmaker.service  # ska visa active
+```
+
+Det är avsiktligt att avstängningskommandot saknar `--user`: endast den äldre
+systemtjänsten ska stängas av. De generella installationsanvisningarna nedan
+beskriver även alternativet med systemtjänst och ska inte användas för att
+skapa en andra tjänst på labserver1.
+
 Kör från projektmappen:
 
 ```bash
