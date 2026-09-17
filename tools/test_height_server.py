@@ -429,7 +429,7 @@ class UserWorkspaceApiTests(unittest.TestCase):
                     request=urllib.request.Request(self.base+path,method=method)
                     with self.assertRaises(urllib.error.HTTPError) as caught:urllib.request.urlopen(request,timeout=3)
                     self.assertEqual(caught.exception.code,404)
-        for path in ['/','/index.html','/field.html','/app.mjs?v=66','/js/account_api.mjs?v=4']:
+        for path in ['/','/index.html','/field.html','/app.mjs?v=86','/js/account_api.mjs?v=5','/team.css?v=1','/sw.js']:
             with urllib.request.urlopen(self.base+path,timeout=3) as response:self.assertEqual(response.status,200);response.read()
 
     def test_workspaces_require_authentication_and_are_isolated(self):

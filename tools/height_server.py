@@ -1640,7 +1640,7 @@ class Handler(SimpleHTTPRequestHandler):
         try:relative=path.resolve().relative_to(root).as_posix()
         except ValueError:
             self.send_error(404);return None
-        public={'index.html','field.html','app.mjs','home.js','home.css','styles.css','isom_symbols.js','isom_renderer.js'}
+        public={'index.html','field.html','app.mjs','home.js','home.css','styles.css','isom_symbols.js','isom_renderer.js','team.css','sw.js'}
         if relative=='.':
             self.path='/index.html'
         elif relative not in public and not (relative.startswith('js/') and len(Path(relative).parts)==2 and relative.endswith('.mjs')):
