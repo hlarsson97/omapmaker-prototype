@@ -1,3 +1,4 @@
+// ISOM 2.9: generation uses the base scale; print enlargements keep the same content.
 export function centralLayerParameters(layerType, {workspace, symbolRegistryVersion, sources = {}, maxSmallHousePropertyArea = 4000}) {
   const parameters = {
     contours: () => ({interval: Number(workspace?.contourInterval || 5), generalization: 'detailed', baseElevation: 0, verticalDatum: 'RH 2000', symbolRegistryVersion}),
@@ -5,7 +6,7 @@ export function centralLayerParameters(layerType, {workspace, symbolRegistryVers
     roads: () => ({importVersion: 5, source: sources.roads || 'automatic', symbolRegistryVersion}),
     infrastructure: () => ({importVersion: 4, source: 'automatic', symbolRegistryVersion}),
     'paved-areas': () => ({importVersion: 1, symbolRegistryVersion}),
-    'land-cover': () => ({importVersion: 16, source: 'automatic', printScale: Number(workspace?.scale || 10000), maxSmallHousePropertyArea: Number(maxSmallHousePropertyArea) || 4000, symbolRegistryVersion}),
+    'land-cover': () => ({importVersion: 16, source: 'automatic', printScale: 15000, maxSmallHousePropertyArea: Number(maxSmallHousePropertyArea) || 4000, symbolRegistryVersion}),
     'property-boundaries': () => ({importVersion: 1}),
     'facility-references': () => ({importVersion: 1}),
     'map-labels': () => ({importVersion: 1}),
@@ -46,7 +47,7 @@ export function createMapLayerApi({fetchImpl = fetch, jsonResponse, hostname = l
     if (layerType === 'roads') payload.source = sources?.roads || 'automatic';
     if (layerType === 'infrastructure' || layerType === 'land-cover') payload.source = 'automatic';
     if (layerType === 'land-cover') {
-      payload.printScale = Number(workspace?.scale || 10000);
+      payload.printScale = 15000;
       payload.maxSmallHousePropertyArea = Number(maxSmallHousePropertyArea) || 4000;
     }
     return {data: await postJson(endpoint, payload), reused: false};

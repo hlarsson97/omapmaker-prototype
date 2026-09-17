@@ -15,7 +15,7 @@
   }
   function pixelsPerPaperMm(map,scale,mode='print'){
     if(mode!=='print')return 96/25.4;
-    return (number(scale)||10000)/(1000*metresPerPixel(map));
+    return (number(scale)||15000)/(1000*metresPerPixel(map));
   }
   function px(value,context){return Math.max(.35,paperMm(value,context.scale)*pixelsPerPaperMm(context.map,context.scale,context.mode))}
   function dashPixels(values,context){return (values||[]).map(value=>Math.max(.5,px(value,context))).join(' ')}
@@ -27,7 +27,7 @@
     if(d.kind==='dotted-line'){base.weight=px(d.dotDiameterMm,context);base.dashArray=`0 ${Math.max(.5,px((d.repeatMm||d.dotDiameterMm)-d.dotDiameterMm,context))}`;base.lineCap='round'}
     if(d.kind==='cased-line'){
       const sourceWidth=Math.max(0,number(properties.widthMetres||properties.renderWidthMetres||properties.estimatedWidthMetres));
-      const sourceMm=sourceWidth*1000/(number(context.scale)||10000),innerMm=Math.max(paperMm(d.minimumInnerWidthMm,context.scale),sourceMm),outlineMm=paperMm(d.outlineWidthMm,context.scale);
+      const sourceMm=sourceWidth*1000/(number(context.scale)||15000),innerMm=Math.max(paperMm(d.minimumInnerWidthMm,context.scale),sourceMm),outlineMm=paperMm(d.outlineWidthMm,context.scale);
       const unit=pixelsPerPaperMm(context.map,context.scale,context.mode);
       return{outer:{...base,color:colour(d.outline),weight:(innerMm+2*outlineMm)*unit},inner:{...base,color:colour(d.fill),weight:innerMm*unit}};
     }
@@ -119,7 +119,7 @@
   function symbolForFeature(feature){return String(feature?.properties?.isomSymbol||feature?.properties?.symbol||'')}
   function featureLabel(feature,index){const p=feature.properties||{};return p.name||p.omapType||p.objectType||`Objekt ${index+1}`}
   function preflight(features,options){
-    const scale=number(options.scale)||10000,context={...options,scale},issues=[];let tested=0;
+    const scale=number(options.scale)||15000,context={...options,scale},issues=[];let tested=0;
     if(options.declination===null||options.declination===''||!Number.isFinite(Number(options.declination)))issues.push({severity:'error',code:'declination-missing',message:'Magnetisk deklination saknas; kartrotation och 601-linjer kan inte verifieras.'});
     const checked=[];
     (features||[]).forEach((feature,index)=>{
@@ -227,7 +227,7 @@
     return elements;
   }
   function buildVectorSvg(features,options){
-    const context={...options,scale:number(options.scale)||10000,declination:number(options.declination),center:{lat:number(options.center.lat),lng:number(options.center.lng)},widthMm:number(options.widthMm),heightMm:number(options.heightMm)},groups=registry.colourOrder.map(()=>[]),north=registry.technical['601'],spacing=north.spacingGroundMetres*1000/context.scale,northWidth=paperMm(north.preferredColour==='blue'?north.lineWidthBlueMm:north.lineWidthBlackMm,context.scale),northColour=colour(north.preferredColour);
+    const context={...options,scale:number(options.scale)||15000,declination:number(options.declination),center:{lat:number(options.center.lat),lng:number(options.center.lng)},widthMm:number(options.widthMm),heightMm:number(options.heightMm)},groups=registry.colourOrder.map(()=>[]),north=registry.technical['601'],spacing=north.spacingGroundMetres*1000/context.scale,northWidth=paperMm(north.preferredColour==='blue'?north.lineWidthBlueMm:north.lineWidthBlackMm,context.scale),northColour=colour(north.preferredColour);
     for(let x=context.widthMm/2%spacing;x<context.widthMm;x+=spacing)groups[registry.colourOrder.indexOf(north.preferredColour)].push(`<path d="M${x},0V${context.heightMm}" stroke="${northColour}" stroke-width="${northWidth}"/>`);
     for(let x=context.widthMm/2%spacing-spacing;x>=0;x-=spacing)groups[registry.colourOrder.indexOf(north.preferredColour)].push(`<path d="M${x},0V${context.heightMm}" stroke="${northColour}" stroke-width="${northWidth}"/>`);
     const orderedFeatures=[...(features||[])].sort((a,b)=>(symbolForFeature(a)==='519'?1:0)-(symbolForFeature(b)==='519'?1:0));

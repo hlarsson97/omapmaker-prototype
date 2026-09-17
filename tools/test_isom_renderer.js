@@ -39,6 +39,7 @@ for (const [objectType, item] of Object.entries(registry.manualTypes)) {
   if (item.publishable) assert(renderer.definition(item.symbol), `${objectType} saknar renderer för ${item.symbol}`);
 }
 assert.strictEqual(renderer.paperMm(0.14, 15000), 0.14);
+assert.strictEqual(renderer.paperMm(0.14, 7500), 0.28);
 assert(Math.abs(renderer.paperMm(0.14, 10000) - 0.21) < 1e-9);
 assert.strictEqual(registry.technical['601'].spacingGroundMetres * 1000 / 10000, 30);
 assert.strictEqual(registry.technical['601'].preferredColour, 'black');
