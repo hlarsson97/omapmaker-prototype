@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from user_store import UserStore
+from access_policy import ROLE_PERMISSIONS, PLAN_FEATURES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,13 @@ def main():
     create.add_argument('--admin', action='store_true')
     reset = subparsers.add_parser('reset-password', help='Byt lösenord och logga ut alla enheter')
     reset.add_argument('username')
+    role = subparsers.add_parser('set-role', help='Ändra kontots behörighet')
+    role.add_argument('username')
+    role.add_argument('role', choices=sorted(ROLE_PERMISSIONS))
+    role.add_argument('--exclusive', action='store_true', help='Gör kontot till enda administratören')
+    plan = subparsers.add_parser('set-plan', help='Ange produktnivå utan att ändra behörighet')
+    plan.add_argument('username')
+    plan.add_argument('plan', choices=sorted(PLAN_FEATURES))
     subparsers.add_parser('list', help='Lista konton utan hemligheter')
     args = parser.parse_args()
     store = UserStore(args.database)
@@ -41,6 +49,12 @@ def main():
     elif args.command == 'reset-password':
         store.set_password(args.username, password_twice())
         print(f'Bytte lösenord för {args.username}; alla tidigare sessioner är utloggade')
+    elif args.command == 'set-role':
+        store.set_role(args.username, args.role, exclusive=args.exclusive)
+        print(f'Uppdaterade behörighet för {args.username}')
+    elif args.command == 'set-plan':
+        store.set_plan(args.username, args.plan)
+        print(f'Uppdaterade abonnemangsnivå för {args.username}')
     else:
         print(json.dumps(store.list_users(), ensure_ascii=False, indent=2))
 

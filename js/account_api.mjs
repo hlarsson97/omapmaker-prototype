@@ -39,6 +39,18 @@ export function createAccountApi({fetchImpl = globalThis.fetch, storage = global
   const cacheWorkspaces = (userId, workspaces) => storage?.setItem(workspaceCacheKey(userId), JSON.stringify(workspaces));
   const cachedWorkspaces = userId => readJsonStorage(storage, workspaceCacheKey(userId), []);
 
+  // Shared transport for map APIs: keep cookies and CSRF on the same origin.
+  async function authenticatedFetch(path, options = {}) {
+    if (typeof path !== 'string' || !path.startsWith('/api/') || /[\\\r\n]/.test(path)) throw new TypeError('Ogiltig API-adress');
+    const headers = new Headers(options.headers);
+    if (!['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) {
+      if (!csrfToken) await session();
+      if (!csrfToken) throw new AccountApiError('Logga in för att fortsätta', {status: 401, code: 'authentication_required'});
+      headers.set('X-OMapMaker-CSRF', csrfToken);
+    }
+    return fetchImpl(path, {...options, headers, credentials: 'same-origin'});
+  }
+
   async function request(path, {method = 'GET', body, csrf = false} = {}) {
     const headers = {'Accept': 'application/json'};
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -131,5 +143,5 @@ export function createAccountApi({fetchImpl = globalThis.fetch, storage = global
     return request('/api/lantmateriet-downloads/latest');
   }
 
-  return {session, login, logout, listWorkspaces, createWorkspace, updateWorkspace, importWorkspaces, userData, syncUserData, importUserData, lantmaterietSession, connectLantmateriet, disconnectLantmateriet, startLantmaterietDownload, lantmaterietDownloadStatus, cachedUser, cachedWorkspaces, cacheWorkspaces};
+  return {authenticatedFetch, session, login, logout, listWorkspaces, createWorkspace, updateWorkspace, importWorkspaces, userData, syncUserData, importUserData, lantmaterietSession, connectLantmateriet, disconnectLantmateriet, startLantmaterietDownload, lantmaterietDownloadStatus, cachedUser, cachedWorkspaces, cacheWorkspaces};
 }

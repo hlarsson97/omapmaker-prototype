@@ -211,3 +211,36 @@ Lösenorden lagras med Argon2id. Inloggningen använder tidsbegränsade,
 återkallningsbara sessioner i `HttpOnly`-cookies samt separat CSRF-skydd.
 Systemtjänsten sätter `OMAP_SECURE_COOKIES=1` eftersom den ska nås genom HTTPS.
 Vid helt lokal utveckling över vanlig HTTP lämnas variabeln avstängd.
+
+## Behörigheter och framtida abonnemang
+
+Kontots `role` styr administration: `user` är standard och `admin` får dessutom
+ändra/frånkoppla serverns Geotorget-anslutning och starta gemensamma Topografi
+10-nedladdningar. Vanliga användare kan använda kartlagren och generera höjdkurvor.
+Alla kart-API:er kräver inloggning; POST, DELETE och PATCH kräver även CSRF-token.
+Endast hälsokontrollen, sessionskontrollen, inloggningen och appens publika
+frontendfiler kan nås utan session. Runtime-data och serverfiler serveras aldrig.
+
+Kontots `plan` är separat: `free` (standard) eller `paid`. Båda ger samma
+kartfunktioner under betan. Ingen betalning, kvot eller betalvägg är aktiverad.
+`tools/access_policy.py` samlar rollbehörigheter och produktfunktioner, och
+servern härleder `capabilities` från aktuella databasvärden vid varje anrop.
+En framtida betalningsintegration kan ändra produktnivån utan att ge adminrättigheter;
+framtida funktionsbegränsningar måste kontrolleras på servern, inte bara i gränssnittet.
+
+```bash
+# Gör ett befintligt aktivt konto till enda administratör, atomiskt:
+.venv/bin/python tools/manage_users.py set-role herman admin --exclusive
+# Ändra en enskild roll eller produktnivå:
+.venv/bin/python tools/manage_users.py set-role kartlaggare user
+.venv/bin/python tools/manage_users.py set-plan kartlaggare free
+.venv/bin/python tools/manage_users.py list
+```
+
+Rolländringar gäller även befintliga sessioner direkt. Ladda om sidan för att
+uppdatera synliga administratörsknappar. Befintliga konton får `free` automatiskt
+vid databasuppgraderingen; lösenord, roller och privata kartdata bevaras.
+
+Betatestare får egna vanliga konton och separat, begränsad Tailscale-åtkomst till
+appens HTTPS-tjänst. Nätverksdelning och åtkomstregler konfigureras separat från
+kontobehörigheterna. Port 8765 ska fortsätta vara bunden till localhost.

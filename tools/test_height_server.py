@@ -24,6 +24,7 @@ import lantmateriet_topography as topography
 import generate_contours as contour_generator
 import generate_contours_tiled as tiled_generator
 from magnetic_north import calculate_magnetic_north
+from test_access_policy import AccessPolicyTests
 from test_map_store import CentralMapStoreTests
 from test_contour_smoothing import ContourSmoothingTests
 from map_store import MapStore
@@ -243,13 +244,16 @@ class QuietHandler(server.Handler):
 class CentralStorageApiTests(unittest.TestCase):
     def setUp(self):
         self.temporary=tempfile.TemporaryDirectory();self.previous_store=server.MAP_STORE;server.MAP_STORE=MapStore(Path(self.temporary.name)/'api.sqlite3')
+        self.previous_user_store=server.USER_STORE;server.USER_STORE=UserStore(Path(self.temporary.name)/'api.sqlite3')
+        user=server.USER_STORE.create_user('tester','test account password');session=server.USER_STORE.create_session(user['id'])
+        self.auth_headers={'Cookie':'omap_session='+session['token'],'X-OMapMaker-CSRF':session['csrfToken']}
         self.http=server.ThreadingHTTPServer(('127.0.0.1',0),QuietHandler);self.thread=threading.Thread(target=self.http.serve_forever,daemon=True);self.thread.start();self.base=f'http://127.0.0.1:{self.http.server_address[1]}'
 
     def tearDown(self):
-        self.http.shutdown();self.http.server_close();self.thread.join(timeout=2);server.MAP_STORE=self.previous_store;self.temporary.cleanup()
+        self.http.shutdown();self.http.server_close();self.thread.join(timeout=2);server.MAP_STORE=self.previous_store;server.USER_STORE=self.previous_user_store;self.temporary.cleanup()
 
     def request(self,path,payload=None,device=None):
-        data=json.dumps(payload).encode() if payload is not None else None;headers={'Content-Type':'application/json'}
+        data=json.dumps(payload).encode() if payload is not None else None;headers={'Content-Type':'application/json',**self.auth_headers}
         if device:headers['X-OMapMaker-Device']=device
         with urllib.request.urlopen(urllib.request.Request(self.base+path,data=data,headers=headers),timeout=3) as response:return response.status,json.load(response)
 
@@ -362,6 +366,7 @@ class UserWorkspaceApiTests(unittest.TestCase):
         _,session,_=self.request('/api/auth/session',headers={'Cookie':cookie});self.assertFalse(session['authenticated'])
 
     def test_geotorget_credentials_require_login_and_csrf_and_stay_out_of_response(self):
+        server.USER_STORE.set_role('anna','admin')
         payload={'username':'geotorget-user','password':'geotorget-secret','orderId':'cc4cbb38-d8c6-4859-b271-592a7477e374'}
         manifest={'orderId':payload['orderId'],'product':'Topografi 10 Nedladdning, vektor','orderStatus':'AKTIV','deliveryStatus':'LYCKAD','deliveryUpdated':'2026-09-01','totalBytes':42,'files':[{'title':'ledningar.zip','length':42,'path':'/signed?q=secret'}]}
         server.clear_geotorget_credentials()
@@ -374,6 +379,58 @@ class UserWorkspaceApiTests(unittest.TestCase):
         _,cleared,_=self.request('/api/lantmateriet-session',method='DELETE',headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf});self.assertFalse(cleared['connected']);self.assertEqual(server.LM_SESSION['password'],'')
         status,result,_=self.request('/api/lantmateriet-downloads',{'themes':['communication']},headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf});self.assertEqual(status,401);self.assertEqual(result['code'],'lantmateriet_credentials_required')
         status,result,_=self.request('/api/lantmateriet-downloads/latest',headers={'Cookie':cookie});self.assertEqual(status,200);self.assertIn('job',result)
+
+    def test_all_map_api_routes_require_login_and_writes_require_csrf(self):
+        get_paths=['/api/map-layers?bbox=18,59,18.01,59.01','/api/global-objects?bbox=18,59,18.01,59.01','/api/evidence?bbox=18,59,18.01,59.01','/api/height-status','/api/storage-status','/api/contour-jobs/unknown','/api/unknown']
+        post_paths=['/api/contours','/api/contour-jobs','/api/height-data','/api/height-coverage','/api/buildings','/api/property-boundaries','/api/facility-references','/api/map-labels','/api/nature-references','/api/military-references','/api/roads','/api/infrastructure','/api/paved-areas','/api/land-cover','/api/map-layers/resolve','/api/map-layers/mosaic','/api/submissions','/api/submissions/withdraw']
+        for path in get_paths:
+            with self.subTest(path=path):
+                status,result,_=self.request(path);self.assertEqual(status,401);self.assertEqual(result['code'],'authentication_required')
+        cookie,csrf,_=self.login()
+        for path in post_paths:
+            with self.subTest(path=path):
+                status,_,_=self.request(path,{});self.assertEqual(status,401)
+                status,result,_=self.request(path,{},headers={'Cookie':cookie});self.assertEqual(status,403);self.assertEqual(result['code'],'csrf_failed')
+        status,_,_=self.request('/api/contour-jobs/unknown',method='DELETE');self.assertEqual(status,401)
+        status,_,_=self.request('/api/contour-jobs/unknown',method='DELETE',headers={'Cookie':cookie});self.assertEqual(status,403)
+        status,_,_=self.request('/api/health');self.assertEqual(status,200)
+        headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf}
+        with patch.object(server,'create_contour_job',return_value={'id':'beta-job','status':'queued'}) as generate:
+            status,_,_=self.request('/api/contour-jobs',{'bbox':[18,59,18.01,59.01]},headers=headers)
+            self.assertEqual(status,202);generate.assert_called_once()
+        with patch.object(server,'cancel_contour_job',return_value={'id':'beta-job','status':'cancelling'}) as cancel:
+            status,_,_=self.request('/api/contour-jobs/beta-job',method='DELETE',headers=headers)
+            self.assertEqual(status,202);cancel.assert_called_once()
+        status,result,_=self.request('/api/height-coverage',{},headers={**headers,'Origin':'https://other.example'})
+        self.assertEqual(status,403);self.assertEqual(result['code'],'csrf_failed')
+
+    def test_paid_user_cannot_manage_server_and_role_changes_apply_to_live_sessions(self):
+        cookie,csrf,_=self.login();headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf}
+        server.USER_STORE.set_plan('anna','paid')
+        with patch.object(server,'set_geotorget_credentials') as connect, patch.object(server,'clear_geotorget_credentials') as disconnect, patch.object(server,'create_topography_job') as download:
+            for path,method in [('/api/lantmateriet-session','POST'),('/api/lantmateriet-session','DELETE'),('/api/lantmateriet-downloads','POST')]:
+                status,result,_=self.request(path,{},method=method,headers=headers)
+                self.assertEqual(status,403);self.assertEqual(result['code'],'permission_denied')
+            connect.assert_not_called();disconnect.assert_not_called();download.assert_not_called()
+        server.USER_STORE.set_role('anna','admin')
+        with patch.object(server,'create_topography_job',return_value={'id':'test'}) as download:
+            status,_,_=self.request('/api/lantmateriet-downloads',{'themes':['land']},headers=headers)
+            self.assertEqual(status,202);download.assert_called_once_with(['land'])
+        server.USER_STORE.set_role('berit','admin',exclusive=True)
+        status,_,_=self.request('/api/lantmateriet-downloads',{},headers=headers);self.assertEqual(status,403)
+        _,session,_=self.request('/api/auth/session',headers=headers)
+        self.assertEqual(session['user']['role'],'user');self.assertEqual(session['user']['plan'],'paid')
+        self.assertNotIn('server:manage',session['user']['capabilities'])
+
+    def test_static_server_exposes_only_public_assets_including_head(self):
+        for path in ['/data/omapmaker.sqlite3','/data/lantmateriet/geotorget-credentials.json','/.git/config','/tools/height_server.py','/js/','/%64ata/omapmaker.sqlite3','/js/../tools/user_store.py','/SERVER_SETUP_UBUNTU.md']:
+            for method in ['GET','HEAD']:
+                with self.subTest(path=path,method=method):
+                    request=urllib.request.Request(self.base+path,method=method)
+                    with self.assertRaises(urllib.error.HTTPError) as caught:urllib.request.urlopen(request,timeout=3)
+                    self.assertEqual(caught.exception.code,404)
+        for path in ['/','/index.html','/field.html','/app.mjs?v=66','/js/account_api.mjs?v=4']:
+            with urllib.request.urlopen(self.base+path,timeout=3) as response:self.assertEqual(response.status,200);response.read()
 
     def test_workspaces_require_authentication_and_are_isolated(self):
         workspace=self.workspace()

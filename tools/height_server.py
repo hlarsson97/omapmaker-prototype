@@ -1630,6 +1630,19 @@ def clear_login_failures(address):
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs):super().__init__(*args,directory=str(STATIC),**kwargs)
+    def send_head(self):
+        # Explicit public assets only, including for HEAD and encoded paths.
+        path=Path(self.translate_path(self.path))
+        root=STATIC.resolve()
+        try:relative=path.resolve().relative_to(root).as_posix()
+        except ValueError:
+            self.send_error(404);return None
+        public={'index.html','field.html','app.mjs','home.js','home.css','styles.css','isom_symbols.js','isom_renderer.js'}
+        if relative=='.':
+            self.path='/index.html'
+        elif relative not in public and not (relative.startswith('js/') and len(Path(relative).parts)==2 and relative.endswith('.mjs')):
+            self.send_error(404);return None
+        return super().send_head()
     def end_headers(self):
         # Development prototype: always serve the latest UI and scripts.
         self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0')
@@ -1669,13 +1682,16 @@ class Handler(SimpleHTTPRequestHandler):
         if not origin:return True
         parsed=urllib.parse.urlparse(origin)
         return parsed.netloc.lower()==self.headers.get('Host','').lower() and parsed.scheme in {'http','https'}
-    def require_session(self,csrf=False):
+    def require_session(self,csrf=False,permission='maps:use'):
         session=USER_STORE.session(self.session_token())
         if not session:
             self.send_json(401,{'error':'Logga in för att fortsätta','code':'authentication_required'})
             return None
         if csrf and (not self.same_origin() or not hmac.compare_digest(self.headers.get('X-OMapMaker-CSRF',''),session['csrfToken'])):
             self.send_json(403,{'error':'Säkerhetskontrollen misslyckades. Ladda om sidan och försök igen.','code':'csrf_failed'})
+            return None
+        if permission not in session['user']['capabilities']:
+            self.send_json(403,{'error':'Kontot saknar behörighet för den här funktionen','code':'permission_denied'})
             return None
         return session
     def query_bbox(self):
@@ -1689,6 +1705,7 @@ class Handler(SimpleHTTPRequestHandler):
             session=USER_STORE.session(self.session_token())
             if not session:return self.send_json(200,{'authenticated':False},headers={'Set-Cookie':self.session_cookie('',0)})
             return self.send_json(200,{'authenticated':True,'user':session['user'],'csrfToken':session['csrfToken'],'expiresAt':session['expiresAt']})
+        if path.startswith('/api/') and not self.require_session():return
         if path=='/api/lantmateriet-session':
             session=self.require_session()
             if not session:return
@@ -1752,8 +1769,9 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
     def do_DELETE(self):
         path=urllib.parse.urlparse(self.path).path
+        if not self.require_session(csrf=True):return
         if path=='/api/lantmateriet-session':
-            session=self.require_session(csrf=True)
+            session=self.require_session(csrf=True,permission='server:manage')
             if not session:return
             return self.send_json(200,clear_geotorget_credentials(forget=True))
         if path.startswith('/api/workspaces/'):
@@ -1782,13 +1800,14 @@ class Handler(SimpleHTTPRequestHandler):
             except AuthenticationError as exc:
                 record_login_failure(address);return self.send_json(401,{'error':str(exc),'code':'invalid_credentials'})
             except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
+        if not self.require_session(csrf=True):return
         if path=='/api/auth/logout':
             session=self.require_session(csrf=True)
             if not session:return
             USER_STORE.logout(self.session_token())
             return self.send_json(200,{'authenticated':False},headers={'Set-Cookie':self.session_cookie('',0)})
         if path=='/api/lantmateriet-session':
-            session=self.require_session(csrf=True)
+            session=self.require_session(csrf=True,permission='server:manage')
             if not session:return
             try:
                 request=self.read_json(64_000)
@@ -1796,7 +1815,7 @@ class Handler(SimpleHTTPRequestHandler):
             except LantmaterietApiError as exc:return self.send_json(401,{'error':str(exc),'code':'lantmateriet_credentials_rejected'})
             except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/lantmateriet-downloads':
-            session=self.require_session(csrf=True)
+            session=self.require_session(csrf=True,permission='server:manage')
             if not session:return
             try:return self.send_json(202,create_topography_job(self.read_json(64_000).get('themes')))
             except LantmaterietCredentialsRequired as exc:return self.send_json(401,{'error':str(exc),'code':'lantmateriet_credentials_required'})

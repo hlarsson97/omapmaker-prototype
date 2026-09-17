@@ -44,6 +44,21 @@ const accountFetch = async (url, options={}) => {
   return {ok:status<400,status,json:async()=>body};
 };
 const accountApi = createAccountApi({fetchImpl:accountFetch,storage:accountStorage});
+const protectedRequests=[];
+const protectedApi=createAccountApi({storage:new MemoryStorage(),fetchImpl:async(url,options={})=>{
+  protectedRequests.push({url,options});
+  return {ok:true,json:async()=>url==='/api/auth/session'?{authenticated:true,csrfToken:'map-csrf',user:{id:'map-user'}}:{ok:true}};
+}});
+await protectedApi.authenticatedFetch('/api/contour-jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+assert.equal(protectedRequests[0].url,'/api/auth/session');
+assert.equal(protectedRequests[1].options.headers.get('X-OMapMaker-CSRF'),'map-csrf');
+assert.equal(protectedRequests[1].options.headers.get('Content-Type'),'application/json');
+assert.equal(protectedRequests[1].options.credentials,'same-origin');
+await protectedApi.authenticatedFetch('/api/contour-jobs/id',{method:'DELETE'});
+assert.equal(protectedRequests[2].options.headers.get('X-OMapMaker-CSRF'),'map-csrf');
+await assert.rejects(protectedApi.authenticatedFetch('https://other.example/api/test',{method:'POST'}),TypeError);
+const anonymousApi=createAccountApi({storage:new MemoryStorage(),fetchImpl:async()=>({ok:true,json:async()=>({authenticated:false})})});
+await assert.rejects(anonymousApi.authenticatedFetch('/api/contour-jobs',{method:'POST'}),error=>error.code==='authentication_required');
 const accountSession = await accountApi.session();
 assert.equal(accountSession.user.id,'user-1');
 assert.equal(accountApi.cachedUser().username,'anna');
@@ -715,7 +730,7 @@ assert(fieldHtml.includes('styles.css?v=19'));
 assert(fieldHtml.includes('isom_symbols.js?v=16'));
 assert(fieldHtml.includes('isom_renderer.js?v=21'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=65"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=66"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet','maxSmallHousePropertyArea']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -750,6 +765,6 @@ const popupLayerA={getPopup:()=>({getContent:()=>'<div>A</div>'})},popupLayerB={
 assert.deepEqual(popupLayersFromElements([popupElement],popupMap,popupLayerA),[popupLayerA,popupLayerB]);
 assert.match(popupStackContent('<div>A</div>',1,2),/Objekt 2\/2/);
 assert.match(popupStackContent('<div>A</div>',1,2),/data-popup-stack-step="-1"/);
-for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=7','account_api.mjs?v=3','generated_buildings.mjs?v=4','generated_roads.mjs?v=4','generated_infrastructure.mjs?v=19','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=15','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
+for (const versionedModule of ['generation_settings.mjs?v=1','map_layer_api.mjs?v=12','map_setup.mjs?v=7','account_api.mjs?v=4','generated_buildings.mjs?v=4','generated_roads.mjs?v=4','generated_infrastructure.mjs?v=19','bridge_tunnel.mjs?v=2','generated_land_cover.mjs?v=15','local_map_objects.mjs?v=4','map_objects.mjs?v=5','popup_stack.mjs?v=1','symbol_object_settings.mjs?v=9']) assert(appSource.includes(versionedModule), `${versionedModule} ska cachebrytas`);
 
 console.log('Frontendmoduler: alla kontroller godkända');

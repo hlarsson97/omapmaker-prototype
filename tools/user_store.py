@@ -15,6 +15,7 @@ import uuid
 import zlib
 from contextlib import contextmanager
 from pathlib import Path
+from access_policy import ROLE_PERMISSIONS, PLAN_FEATURES, capabilities
 
 try:
     from argon2 import PasswordHasher
@@ -112,7 +113,7 @@ def token_hash(token):
 
 
 def public_user(row):
-    return {'id': row['id'], 'username': row['username'], 'displayName': row['display_name'], 'role': row['role']}
+    return {'id': row['id'], 'username': row['username'], 'displayName': row['display_name'], 'role': row['role'], 'plan': row['plan'], 'capabilities': capabilities(row['role'], row['plan'])}
 
 
 def _uuid(value, label):
@@ -297,6 +298,33 @@ class UserStore:
                 );
             ''')
 
+            columns = {row['name'] for row in connection.execute('PRAGMA table_info(users)')}
+            if 'plan' not in columns:
+                connection.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+
+    def set_role(self, username, role, *, exclusive=False):
+        """Optionally make one active account the sole admin, atomically."""
+        username = normalize_username(username)
+        if role not in ROLE_PERMISSIONS or (exclusive and role != 'admin'):
+            raise ValueError('Ogiltig användarroll')
+        with self.connection() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            row = connection.execute("SELECT id FROM users WHERE username=? AND status='active'", (username,)).fetchone()
+            if not row:
+                raise ValueError('Den aktiva användaren hittades inte')
+            now = iso_time(utc_now())
+            if exclusive:
+                connection.execute("UPDATE users SET role='user',updated_at=? WHERE id<>? AND role<>'user'", (now, row['id']))
+            connection.execute('UPDATE users SET role=?,updated_at=? WHERE id=?', (role, now, row['id']))
+
+    def set_plan(self, username, plan):
+        if plan not in PLAN_FEATURES:
+            raise ValueError('Okänd abonnemangsnivå')
+        with self.connection() as connection:
+            result = connection.execute('UPDATE users SET plan=?,updated_at=? WHERE username=?', (plan, iso_time(utc_now()), normalize_username(username)))
+            if result.rowcount != 1:
+                raise ValueError('Användaren hittades inte')
+
     def create_user(self, username, password, display_name=None, role='user'):
         username = normalize_username(username)
         display_name = str(display_name or username).strip()[:80]
@@ -309,10 +337,10 @@ class UserStore:
         encoded = hash_password(password)
         try:
             with self.connection() as connection:
-                connection.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?,?)', (identifier, username, display_name, encoded, role, 'active', now, now))
+                connection.execute('INSERT INTO users (id,username,display_name,password_hash,role,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)', (identifier, username, display_name, encoded, role, 'active', now, now))
         except sqlite3.IntegrityError:
             raise ValueError('Användarnamnet finns redan')
-        return {'id': identifier, 'username': username, 'displayName': display_name, 'role': role}
+        return {'id': identifier, 'username': username, 'displayName': display_name, 'role': role, 'plan': 'free', 'capabilities': capabilities(role, 'free')}
 
     def set_password(self, username, password):
         username = normalize_username(username)
@@ -325,8 +353,8 @@ class UserStore:
 
     def list_users(self):
         with self.connection() as connection:
-            rows = connection.execute('SELECT id,username,display_name,role,status,created_at FROM users ORDER BY username').fetchall()
-        return [{'id': row['id'], 'username': row['username'], 'displayName': row['display_name'], 'role': row['role'], 'status': row['status'], 'createdAt': row['created_at']} for row in rows]
+            rows = connection.execute('SELECT id,username,display_name,role,plan,status,created_at FROM users ORDER BY username').fetchall()
+        return [{**public_user(row), 'status': row['status'], 'createdAt': row['created_at']} for row in rows]
 
     def login(self, username, password):
         try:
@@ -359,14 +387,14 @@ class UserStore:
             return None
         now = utc_now()
         with self.connection() as connection:
-            row = connection.execute('''SELECT s.*,u.username,u.display_name,u.role,u.status FROM auth_sessions s JOIN users u ON u.id=s.user_id
+            row = connection.execute('''SELECT s.*,u.username,u.display_name,u.role,u.plan,u.status FROM auth_sessions s JOIN users u ON u.id=s.user_id
                 WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>? AND u.status='active' ''', (token_hash(raw_token), iso_time(now))).fetchone()
             if not row:
                 return None
             last_seen = datetime.datetime.fromisoformat(row['last_seen_at'])
             if now - last_seen > datetime.timedelta(hours=1):
                 connection.execute('UPDATE auth_sessions SET last_seen_at=? WHERE id=?', (iso_time(now), row['id']))
-        user={'id':row['user_id'],'username':row['username'],'displayName':row['display_name'],'role':row['role']}
+        user={**public_user(row), 'id': row['user_id']}
         return {'id': row['id'], 'csrfToken': row['csrf_token'], 'expiresAt': row['expires_at'], 'user': user}
 
     def logout(self, raw_token):

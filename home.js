@@ -1,4 +1,4 @@
-import {createAccountApi, readJsonStorage} from './js/account_api.mjs';
+import {createAccountApi, readJsonStorage} from './js/account_api.mjs?v=4';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 
 const L = globalThis.L;
