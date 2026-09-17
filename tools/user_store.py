@@ -12,6 +12,7 @@ import re
 import secrets
 import sqlite3
 import uuid
+import unicodedata
 import zlib
 from contextlib import contextmanager
 from pathlib import Path
@@ -25,7 +26,7 @@ except ImportError:  # Tests and old installations can verify a transitional scr
 
 
 SESSION_DAYS = 30
-USERNAME_PATTERN = re.compile(r'^[a-z0-9][a-z0-9._+@-]{2,79}$')
+USERNAME_PATTERN = re.compile(r'^[a-zåäö0-9][a-zåäö0-9._+@-]{2,79}$')
 ARGON2 = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=1, hash_len=32, salt_len=16) if PasswordHasher else None
 
 
@@ -54,7 +55,7 @@ def iso_time(value):
 
 
 def normalize_username(value):
-    username = str(value or '').strip().casefold()
+    username = unicodedata.normalize('NFC', str(value or '').strip().casefold())
     if not USERNAME_PATTERN.fullmatch(username):
         raise ValueError('Användarnamnet måste vara 3–80 tecken och får innehålla bokstäver, siffror, punkt, bindestreck, plus eller @')
     return username
