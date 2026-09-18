@@ -117,16 +117,26 @@
     for(const polygon of polygons)for(let ringIndex=0;ringIndex<polygon.length;ringIndex++){const points=polygon[ringIndex].map(point=>paperProject(point,context));let area=0;for(let i=0,j=points.length-1;i<points.length;j=i++)area+=points[j].x*points[i].y-points[i].x*points[j].y;total+=(ringIndex?-1:1)*Math.abs(area/2)}return Math.max(0,total);
   }
   function symbolForFeature(feature){return String(feature?.properties?.isomSymbol||feature?.properties?.symbol||'')}
+  const TECHNICAL_POINT_SYMBOLS=new Set(['602','603','701','702','703','704','706','710','712','713','715']);
+  const LINE_BOUND_POINT_SYMBOLS=new Set(['510','511','519']);
+  const CARTOGRAPHIC_POINT_SYMBOLS=new Set(Object.entries(registry.symbols||{}).filter(([symbol,metadata])=>metadata.geometry?.includes('Point')&&definition(symbol)?.colour&&!TECHNICAL_POINT_SYMBOLS.has(symbol)&&!LINE_BOUND_POINT_SYMBOLS.has(symbol)).map(([symbol])=>symbol));
+  function cartographicPointRadius(symbol,properties={},unit=registry.measurementBasis.baseScale/1000){
+    const d=definition(symbol);if(!d)return 0;
+    const scale=d.kind==='boulder-cluster'&&number(properties.sizePercent)===120?1.2:1;
+    const width=number(d.diameterMm||d.widthMm||d.supportWidthMm)*scale,height=number(d.diameterMm||d.heightMm||d.supportWidthMm||d.widthMm)*scale;
+    if(!width||!height)return 0;
+    return(d.diameterMm?width/2:Math.hypot(width,height)/2)*unit;
+  }
   // ISOM 2017-2 §2.6: gaps are measured between symbol edges, at base scale.
   // Work on presentation copies only. Survey geometry is never overwritten.
-  function layoutBoulders(features, options={}) {
+  function layoutPointSymbols(features, options={}) {
     const active=(features||[]).filter(f=>!['excluded','deleted','locally-excluded','locally-rejected','locally-deleted'].includes(f.properties?.mapStatus||f.properties?.status));
-    const stones=active.filter(f=>f.geometry?.type==='Point'&&['204','205'].includes(symbolForFeature(f)));
+    const points=active.filter(f=>f.geometry?.type==='Point'&&CARTOGRAPHIC_POINT_SYMBOLS.has(symbolForFeature(f)));
     const placements=new Map();
-    if(!stones.length)return placements;
+    if(!points.length)return placements;
     const unit=registry.measurementBasis.baseScale/1000, gap=registry.preflight.generalGapMm*unit;
     const maxShift=unit; // Do not invent a distant location in crowded terrain.
-    const ordered=[...stones].sort((a,b)=>String(a.id??JSON.stringify(a.geometry.coordinates)).localeCompare(String(b.id??JSON.stringify(b.geometry.coordinates))));
+    const ordered=[...points].sort((a,b)=>String(a.id??JSON.stringify(a.geometry.coordinates)).localeCompare(String(b.id??JSON.stringify(b.geometry.coordinates))));
     const latitude=ordered[0].geometry.coordinates[1], mx=111320*Math.cos(latitude*Math.PI/180);
     const project=c=>({x:c[0]*mx,y:c[1]*111320});
     const unproject=(p,original)=>[p.x/mx,p.y/111320,...original.slice(2)];
@@ -141,15 +151,20 @@
     function circle(feature,coordinate,radius){const p=project(coordinate);insert({feature,p,radius,left:p.x-radius,right:p.x+radius,bottom:p.y-radius,top:p.y+radius});}
     function segment(feature,a,b,radius){insert({feature,a,b,radius,left:Math.min(a.x,b.x)-radius,right:Math.max(a.x,b.x)+radius,bottom:Math.min(a.y,b.y)-radius,top:Math.max(a.y,b.y)+radius});}
     function nearest(p,o){if(o.p)return o.p;const dx=o.b.x-o.a.x,dy=o.b.y-o.a.y,t=Math.max(0,Math.min(1,((p.x-o.a.x)*dx+(p.y-o.a.y)*dy)/(dx*dx+dy*dy||1)));return{x:o.a.x+t*dx,y:o.a.y+t*dy};}
-    const stoneSet=new Set(stones);
+    const pointSet=new Set(points);
     for(const feature of active){
-      if(stoneSet.has(feature))continue;
+      if(pointSet.has(feature))continue;
       const symbol=symbolForFeature(feature),d=definition(symbol),geometry=feature.geometry;
-      if(!d||!geometry||['101','102','103','601'].includes(symbol))continue; // Contour/black point exception; north lines are not terrain.
+      if(!d||!geometry||TECHNICAL_POINT_SYMBOLS.has(symbol)||symbol==='601')continue;
       if(geometry.type==='Point'){
-        const w=d.widthMm||d.diameterMm||d.supportWidthMm,h=d.heightMm||d.diameterMm||w;
-        if(w&&h)circle(feature,geometry.coordinates,(d.diameterMm?d.diameterMm:Math.hypot(w,h)+number(d.strokeWidthMm))*unit/2);
+        const radius=cartographicPointRadius(symbol,feature.properties,unit);
+        if(radius)circle(feature,geometry.coordinates,radius);
         continue;
+      }
+      if(['line-with-supports','double-line-with-supports'].includes(d.kind))for(const support of feature.properties?.supports||[]){
+        if(!Array.isArray(support.coordinates))continue;
+        const large=support.largeMast===true,size=number(large?d.largeSupportSizeMm:d.supportWidthMm),stroke=number(large?d.largeSupportStrokeMm:d.supportStrokeMm);
+        const radius=(large?size/2+stroke/2:Math.hypot(size/2,stroke/2))*unit;if(radius)circle(feature,support.coordinates,radius);
       }
       const polygon=geometry.type.includes('Polygon'),outlined=d.outline&&(!d.outlineConditional||feature.properties?.boundary===d.outlineConditional);
       if(polygon&&!outlined&&!['206','521'].includes(symbol))continue;
@@ -163,12 +178,16 @@
       width=Math.max(width,number(d.lineCentreGapMm)*unit+number(d.lineWidthMm)*unit,number(d.tagLengthMm)*unit*2,number(d.dotDiameterMm)*unit);
       for(const line of coordinatesForGeometry(geometry)){for(let i=1;i<line.length;i++)segment(feature,project(line[i-1]),project(line[i]),width/2);}
     }
-    for(const stone of ordered){
-      const original=stone.geometry.coordinates,p=project(original),radius=definition(symbolForFeature(stone)).diameterMm*unit/2,reach=maxShift+radius+gap;
+    for(const point of ordered){
+      const symbol=symbolForFeature(point),pointColour=definition(symbol)?.colour,original=point.geometry.coordinates,p=project(original),radius=cartographicPointRadius(symbol,point.properties,unit),reach=maxShift+radius+gap;
       const nearSolids=solids.filter(o=>o.left<=p.x+reach&&o.right>=p.x-reach&&o.bottom<=p.y+reach&&o.top>=p.y-reach);
       const nearby=new Set(broad.filter(o=>o.left<=p.x+reach&&o.right>=p.x-reach&&o.bottom<=p.y+reach&&o.top>=p.y-reach));
       for(let x=Math.floor((p.x-reach)/cellSize);x<=Math.floor((p.x+reach)/cellSize);x++)for(let y=Math.floor((p.y-reach)/cellSize);y<=Math.floor((p.y+reach)/cellSize);y++)for(const o of cells.get(`${x}:${y}`)||[])nearby.add(o);
-      const obstacles=[...nearby].filter(o=>{const n=nearest(p,o);return Math.hypot(p.x-n.x,p.y-n.y)<=reach+o.radius;});
+      const obstacles=[...nearby].filter(o=>{
+        const obstacleSymbol=symbolForFeature(o.feature),obstacleColour=definition(obstacleSymbol)?.colour;
+        if(['101','102','103'].includes(obstacleSymbol)&&pointColour!==obstacleColour)return false;
+        const n=nearest(p,o);return Math.hypot(p.x-n.x,p.y-n.y)<=reach+o.radius;
+      });
       // Keep the measured side of the nearest segment of each neighbouring line/boundary.
       const sides=new Map();
       for(const o of obstacles){if(o.p)continue;const n=nearest(p,o),distance=Math.hypot(p.x-n.x,p.y-n.y);if(!sides.has(o.feature)||distance<sides.get(o.feature).distance)sides.set(o.feature,{o,distance,sign:(o.b.x-o.a.x)*(p.y-o.a.y)-(o.b.y-o.a.y)*(p.x-o.a.x)});}
@@ -188,17 +207,19 @@
         for(let distance=unit/100;distance<=Math.min(maxShift,bestDistance);distance+=unit/100){for(let angle=0;angle<64;angle++){const a=angle*Math.PI/32;consider({x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance});}if(best&&bestDistance<=distance)break;}
       }
       const position=best||p,coordinates=bestDistance===0||!best?original.slice():unproject(position,original);
-      placements.set(stone,{coordinates,displaced:Boolean(best&&bestDistance>0),unresolved:!best,distanceMetres:best?bestDistance:0});
-      circle(stone,coordinates,radius);
+      placements.set(point,{coordinates,displaced:Boolean(best&&bestDistance>0),unresolved:!best,distanceMetres:best?bestDistance:0});
+      circle(point,coordinates,radius);
     }
     return placements;
   }
-  function boulderPresentationFeatures(features,options){const layout=layoutBoulders(features,options);return(features||[]).map(feature=>{const placement=layout.get(feature);return placement?.displaced?{...feature,geometry:{...feature.geometry,coordinates:placement.coordinates}}:feature;});}
+  const layoutBoulders=layoutPointSymbols;
+  function pointPresentationFeatures(features,options){const layout=layoutPointSymbols(features,options);return(features||[]).map(feature=>{const placement=layout.get(feature);return placement?.displaced?{...feature,geometry:{...feature.geometry,coordinates:placement.coordinates}}:feature;});}
+  const boulderPresentationFeatures=pointPresentationFeatures;
   function featureLabel(feature,index){const p=feature.properties||{};return p.name||p.omapType||p.objectType||`Objekt ${index+1}`}
   function preflight(features,options){
     const scale=number(options.scale)||15000,context={...options,scale},issues=[];let tested=0;
-    const placements=layoutBoulders(features,options);
-    for(const [feature,placement] of placements)if(placement.unresolved)issues.push({severity:'warning',code:'boulder-spacing-unresolved',symbol:symbolForFeature(feature),featureId:feature.id||null,message:'Sten: symbolavståndet behöver kartkontrolleras; ingen säker liten förskjutning hittades.'});
+    const placements=layoutPointSymbols(features,options);
+    for(const [feature,placement] of placements)if(placement.unresolved)issues.push({severity:'warning',code:'point-spacing-unresolved',symbol:symbolForFeature(feature),featureId:feature.id||null,message:`${featureLabel(feature,0)}: symbolavståndet behöver kartkontrolleras; ingen säker liten förskjutning hittades.`});
     features=(features||[]).map(feature=>{const placement=placements.get(feature);return placement?.displaced?{...feature,geometry:{...feature.geometry,coordinates:placement.coordinates}}:feature;});
     if(options.declination===null||options.declination===''||!Number.isFinite(Number(options.declination)))issues.push({severity:'error',code:'declination-missing',message:'Magnetisk deklination saknas; kartrotation och 601-linjer kan inte verifieras.'});
     const checked=[];
@@ -310,10 +331,10 @@
     const context={...options,scale:number(options.scale)||15000,declination:number(options.declination),center:{lat:number(options.center.lat),lng:number(options.center.lng)},widthMm:number(options.widthMm),heightMm:number(options.heightMm)},groups=registry.colourOrder.map(()=>[]),north=registry.technical['601'],spacing=north.spacingGroundMetres*1000/context.scale,northWidth=paperMm(north.preferredColour==='blue'?north.lineWidthBlueMm:north.lineWidthBlackMm,context.scale),northColour=colour(north.preferredColour);
     for(let x=context.widthMm/2%spacing;x<context.widthMm;x+=spacing)groups[registry.colourOrder.indexOf(north.preferredColour)].push(`<path d="M${x},0V${context.heightMm}" stroke="${northColour}" stroke-width="${northWidth}"/>`);
     for(let x=context.widthMm/2%spacing-spacing;x>=0;x-=spacing)groups[registry.colourOrder.indexOf(north.preferredColour)].push(`<path d="M${x},0V${context.heightMm}" stroke="${northColour}" stroke-width="${northWidth}"/>`);
-    const orderedFeatures=boulderPresentationFeatures(features,options).sort((a,b)=>(symbolForFeature(a)==='519'?1:0)-(symbolForFeature(b)==='519'?1:0));
+    const orderedFeatures=pointPresentationFeatures(features,options).sort((a,b)=>(symbolForFeature(a)==='519'?1:0)-(symbolForFeature(b)==='519'?1:0));
     for(const feature of orderedFeatures){const bounds=paperBounds(feature.geometry,context);if(bounds&&(bounds.right<0||bounds.bottom<0||bounds.left>context.widthMm||bounds.top>context.heightMm))continue;for(const item of vectorElements(feature,context))groups[Math.max(0,item.layer)].push(item.markup);const label=feature.properties?.mapText,labelCoordinate=feature.properties?.labelCoordinate;if(label&&Array.isArray(labelCoordinate)){const p=paperProject(labelCoordinate,context),height=paperMm(feature.properties?.textHeightMm||registry.textRules.minimumSansHeightMm,context.scale),anchor=['start','middle','end'].includes(feature.properties?.textAnchor)?feature.properties.textAnchor:'middle',rotation=number(feature.properties?.rotationDegrees),transform=rotation?` transform="rotate(${rotation} ${p.x} ${p.y})"`:'';groups[registry.colourOrder.indexOf(feature.properties?.textColour||'black')].push(`<text x="${p.x}" y="${p.y}" font-family="${svgEscape(registry.textRules.fontFamily)}" font-size="${height}" text-anchor="${anchor}" dominant-baseline="middle"${transform} data-orientation="map">${svgEscape(label)}</text>`)}}
     const content=groups.map((items,index)=>items.length?`<g data-colour="${registry.colourOrder[index]}" style="mix-blend-mode:${registry.overprint.previewBlendMode}">${items.join('')}</g>`:'').join('');
     return`<svg xmlns="${NS}" viewBox="0 0 ${context.widthMm} ${context.heightMm}" width="${context.widthMm}mm" height="${context.heightMm}mm" role="img" aria-label="Normstyrd orienteringskarta"><metadata>${svgEscape(JSON.stringify({standard:registry.standard,symbolRegistryVersion:registry.registryVersion,scale:context.scale,declination:context.declination,colourSpace:'IOF CMYK definitions with RGB screen preview'}))}</metadata><defs><clipPath id="map-clip"><rect width="${context.widthMm}" height="${context.heightMm}"/></clipPath>${patternDefs(context.scale)}</defs><rect width="100%" height="100%" fill="white"/><g clip-path="url(#map-clip)">${content}</g></svg>`;
   }
-  root.OMAPMAKER_ISOM_RENDERER={definition,factor,paperMm,pixelsPerPaperMm,lineStyles,areaStyle,pointMarkup,preflight,buildVectorSvg,paperProject,geometryPath,colour,layoutBoulders,boulderPresentationFeatures};
+  root.OMAPMAKER_ISOM_RENDERER={definition,factor,paperMm,pixelsPerPaperMm,lineStyles,areaStyle,pointMarkup,preflight,buildVectorSvg,paperProject,geometryPath,colour,layoutPointSymbols,pointPresentationFeatures,layoutBoulders,boulderPresentationFeatures};
 })(window);

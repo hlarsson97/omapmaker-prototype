@@ -3,8 +3,8 @@ const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),assets=path.resolve(process.argv[2]||'../performance-work');
 const mx=111320*Math.cos(59*Math.PI/180),coordinate=(x,y)=>[18+x/mx,59+y/111320];
-const original=coordinate(0,1),globalCoordinate=coordinate(20,-1);
-const state={observations:[{id:'11111111-1111-4111-8111-111111111111',observationId:'11111111-1111-4111-8111-111111111111',symbol:'204',objectType:'boulder',source:'gps',accuracy:2,coordinates:original,createdAt:'2026-09-18T12:00:00Z'}],tracks:[{id:'22222222-2222-4222-8222-222222222222',symbol:'506',objectType:'path',source:'manual',coordinates:[coordinate(-200,0),coordinate(200,0)]}],areas:[]};
+const original=coordinate(0,1),pitOriginal=coordinate(50,1),globalCoordinate=coordinate(20,-1),supportOriginal=coordinate(0,-40),supportId='44444444-4444-4444-8444-444444444444';
+const state={observations:[{id:'11111111-1111-4111-8111-111111111111',observationId:'11111111-1111-4111-8111-111111111111',symbol:'204',objectType:'boulder',source:'gps',accuracy:2,coordinates:original,createdAt:'2026-09-18T12:00:00Z'},{id:'55555555-5555-4555-8555-555555555555',observationId:'55555555-5555-4555-8555-555555555555',symbol:'112',objectType:'pit',source:'gps',accuracy:2,coordinates:pitOriginal,createdAt:'2026-09-18T12:00:00Z'}],tracks:[{id:'22222222-2222-4222-8222-222222222222',symbol:'506',objectType:'path',source:'manual',coordinates:[coordinate(-200,0),coordinate(200,0)]},{id:'33333333-3333-4333-8333-333333333333',observationId:'33333333-3333-4333-8333-333333333333',symbol:'510',objectType:'power_line',source:'gps',coordinates:[coordinate(-100,-40),coordinate(100,-40)],supports:[{id:supportId,coordinates:supportOriginal,angleDegrees:90,supportType:'pole',largeMast:false}],createdAt:'2026-09-18T12:00:00Z'}],areas:[]};
 const globalFeature={type:'Feature',id:'global-stone',properties:{symbol:'204',isomSymbol:'204',objectType:'boulder',qualityScore:80},geometry:{type:'Point',coordinates:globalCoordinate}};
 (async()=>{
   const browser=await chromium.launch({channel:'msedge',headless:true});
@@ -38,9 +38,13 @@ const globalFeature={type:'Feature',id:'global-stone',properties:{symbol:'204',i
       await page.waitForFunction(()=>Object.values(testMap._layers).some(l=>l._omapObjectId==='11111111-1111-4111-8111-111111111111'));
       await page.evaluate(()=>testMap.setView([59,18],19,{animate:false}));
       await page.waitForFunction(()=>{const m=Object.values(testMap._layers).find(l=>l._omapObjectId==='11111111-1111-4111-8111-111111111111');return m?.getLatLng().lat>59+6/111320;});
+      await page.waitForFunction(()=>{const m=Object.values(testMap._layers).find(l=>l._omapObjectId==='55555555-5555-4555-8555-555555555555');return m?.getLatLng().lat>59+8/111320;});
+      assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('omapmaker.global')).observations.find(o=>o.id==='55555555-5555-4555-8555-555555555555').coordinates),pitOriginal,'Ordinary point symbols keep raw survey coordinates while their display is spaced');
       await page.waitForFunction(()=>Object.values(testMap._layers).some(l=>l.feature?.id==='global-stone'&&l.getLatLng?.().lat<59-6/111320));
       const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('omapmaker.global')).observations.find(o=>o.id==='11111111-1111-4111-8111-111111111111'));
+      const storedSupport=()=>page.evaluate(supportId=>JSON.parse(localStorage.getItem('omapmaker.global')).tracks.find(o=>o.id==='33333333-3333-4333-8333-333333333333').supports.find(s=>s.id===supportId),supportId);
       const markerInfo=()=>page.evaluate(()=>{const m=Object.values(testMap._layers).find(l=>l._omapObjectId==='11111111-1111-4111-8111-111111111111'),ll=m.getLatLng(),p=testMap.latLngToContainerPoint(ll);return{lat:ll.lat,lng:ll.lng,x:p.x,y:p.y,draggable:m.dragging?.enabled()||false};});
+      const supportInfo=()=>page.evaluate(supportId=>{const m=Object.values(testMap._layers).find(l=>l._omapSupportId===supportId),ll=m.getLatLng(),p=testMap.latLngToContainerPoint(ll);return{lat:ll.lat,lng:ll.lng,x:p.x,y:p.y,draggable:m.dragging?.enabled()||false};},supportId);
       const before=await markerInfo();assert(!before.draggable);assert.deepEqual((await stored()).coordinates,original);
       async function dragAt(p,dx,dy){await page.mouse.move(p.x,p.y);await page.mouse.down();await page.mouse.move(p.x+dx,p.y+dy,{steps:10});await page.mouse.up();}
       await dragAt(before,45,30);
@@ -54,6 +58,16 @@ const globalFeature={type:'Feature',id:'global-stone',properties:{symbol:'204',i
         await touch.detach();assert.deepEqual((await stored()).coordinates,original,'Touch panning must not move the stone');
       }
       await page.locator('#gpsMode').click();await page.locator('#manualMode').click();assert(!(await markerInfo()).draggable,'Switching modes must never unlock a point');
+      await page.evaluate(()=>testMap.setView([59-40/111320,18],19,{animate:false}));
+      await page.waitForFunction(supportId=>Object.values(testMap._layers).some(l=>l._omapSupportId===supportId),supportId);
+      const supportBefore=await supportInfo();assert(!supportBefore.draggable,'Power supports stay locked during ordinary map use');
+      await dragAt(supportBefore,35,20);assert.deepEqual((await storedSupport()).coordinates,supportOriginal,'Panning from a support must not move it');
+      async function openSupportEdit(){await page.evaluate(supportId=>{testMap.closePopup();Object.values(testMap._layers).find(l=>l._omapSupportId===supportId).openPopup()},supportId);await page.locator(`[data-symbol-object-action="edit-support"][data-support-id="${supportId}"]`).click();await page.locator('.geometry-handle').waitFor();}
+      async function moveSupportHandle(){const b=await page.locator('.geometry-handle').boundingBox();await dragAt({x:b.x+b.width/2,y:b.y+b.height/2},45,0);}
+      await openSupportEdit();await moveSupportHandle();assert.deepEqual((await storedSupport()).coordinates,supportOriginal,'Support preview must not save implicitly');
+      await page.locator('#cancelEdit').click();assert.deepEqual((await storedSupport()).coordinates,supportOriginal);
+      await openSupportEdit();await moveSupportHandle();await page.locator('#finishEdit').click();
+      const supportEdited=await storedSupport();assert.notDeepEqual(supportEdited.coordinates,supportOriginal);assert(Math.abs(supportEdited.coordinates[1]-supportOriginal[1])<1e-10,'Edited support remains snapped to its line');assert(!(await supportInfo()).draggable);
       async function openEdit(){
         await page.evaluate(()=>{testMap.closePopup();testMap.setView([59,18],19,{animate:false});});
         await page.waitForFunction(()=>Object.values(testMap._layers).find(l=>l._omapObjectId==='11111111-1111-4111-8111-111111111111')?.getLatLng().lat>59+6/111320);
@@ -90,7 +104,7 @@ const globalFeature={type:'Feature',id:'global-stone',properties:{symbol:'204',i
       fs.mkdirSync(path.join(root,'.test-artifacts'),{recursive:true});
       await page.screenshot({path:path.join(root,`.test-artifacts/boulder-spacing-${mobile?'mobile':'desktop'}.png`)});
       assert.deepEqual(errors,[]);
-      console.log(`Point editing ${mobile?'mobile':'desktop'}: locked pan/mode switch, explicit edit/save/cancel, reload, restore, display spacing, global marker, zoom/rotation and raw export passed.`);
+      console.log(`Point editing ${mobile?'mobile':'desktop'}: locked points/supports, explicit edit/save/cancel, support snapping, ordinary point spacing, reload, restore, global marker, zoom/rotation and raw export passed.`);
       await context.close();
     }
   }finally{await browser.close();}
