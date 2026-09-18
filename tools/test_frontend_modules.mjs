@@ -21,7 +21,7 @@ import {changeLocalObjectType, localObjectPopup, localObjectSourceLabel} from '.
 import {MAP_OBJECT_CAPABILITIES, ensureLocalOriginal, generatedMapObject, localMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mapObjectSource, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from '../js/map_objects.mjs';
 import {popupLayersFromElements, popupStackContent} from '../js/popup_stack.mjs';
 import {applyDefaultSymbolSettings, bridgeTunnelCurveSegments, cliffTagSegments, closeLineCoordinates, courseCrossSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isCliffSymbol, isClosedLineCoordinates, isDecoratedBarrierSymbol, isDecoratedLineSymbol, isImpassableBarrierSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, symbolObjectControlsHtml, wallDotCoordinates} from '../js/symbol_object_settings.mjs';
-import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyFix, formatFieldSurveyDuration, headingUpBearing, movementHeading, usableSurveyFix} from '../js/field_survey.mjs';
+import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyFix, formatFieldSurveyDuration, headingUpBearing, movementHeading, smoothSurveyLine, usableSurveyFix} from '../js/field_survey.mjs';
 import {AccountApiError, createAccountApi, userMapCacheKey, workspaceCacheKey} from '../js/account_api.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -120,6 +120,12 @@ assert.equal(appendSurveyCoordinate(surveyCoordinates,surveyFix),true);
 assert.equal(appendSurveyCoordinate(surveyCoordinates,{...surveyFix,timestamp:1300}),false);
 assert.equal(appendSurveyCoordinate(surveyCoordinates,{...surveyFix,longitude:18.1001,timestamp:2300}),true);
 assert(distanceMetres(surveyCoordinates[0],surveyCoordinates[1])>5);
+const gpsOrigin=[18,59],metreCoordinate=(x,y,index)=>[gpsOrigin[0]+x/(111320*Math.cos(59*Math.PI/180)),gpsOrigin[1]+y/111320,5,1000+index*1000,null,null];
+const zigzag=[0,4,-4,4,-4,4,-4,4,0].map((y,index)=>metreCoordinate(index*3,y,index)),zigzagBefore=structuredClone(zigzag),smoothed=smoothSurveyLine(zigzag);
+assert.deepEqual(zigzag,zigzagBefore,'GPS smoothing must not mutate raw survey coordinates');
+assert.deepEqual(smoothed[0],zigzag[0]);assert.deepEqual(smoothed.at(-1),zigzag.at(-1));
+assert(smoothed.length<zigzag.length,'Smoothed map geometry should discard redundant GPS vertices');
+assert(Math.max(...smoothed.slice(1,-1).map(coordinate=>Math.abs((coordinate[1]-59)*111320)))<4,'Smoothing should reduce side-to-side GPS noise');
 assert.equal(headingUpBearing(82),-82);
 assert.equal(headingUpBearing(370),-10);
 assert(Math.abs(movementHeading({longitude:18,latitude:59},{longitude:18.001,latitude:59})-90)<0.1);
@@ -736,11 +742,11 @@ assert.equal(paneParents.get('fieldMarkerPane'),rotatingPane);
 assert.equal(paneParents.get('editMarkerPane'),nonRotatingPane);
 
 const fieldHtml = fs.readFileSync(path.join(root, 'field.html'), 'utf8');
-assert(fieldHtml.includes('styles.css?v=21'));
+assert(fieldHtml.includes('styles.css?v=22'));
 assert(fieldHtml.includes('isom_symbols.js?v=17'));
 assert(fieldHtml.includes('isom_renderer.js?v=25'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=93"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=94"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet','maxSmallHousePropertyArea']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);

@@ -600,3 +600,4 @@ body.field-survey-active #toast{bottom:calc(var(--field-panel-offset,90px) + 44p
  body.field-survey-active #gpsQuality{max-width:calc(100vw - 330px)}
  #fieldSurveyPanel{max-height:calc(100dvh - var(--field-nav-top,130px) - 102px - env(safe-area-inset-bottom))}
 }
+.temp-shape{fill:none}.temp-line-shape{stroke-width:6px}.gps-recording-line{fill:none}.temp-area-shape{stroke-width:4px;fill:#286fc022}

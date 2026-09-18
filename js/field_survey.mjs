@@ -46,6 +46,66 @@ export function appendSurveyCoordinate(coordinates, fix, {maximumAccuracy = 50, 
   return true;
 }
 
+function median(values) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return 5;
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function pointSegmentDistance(point, start, end) {
+  const dx = end.x - start.x, dy = end.y - start.y;
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(point.x - start.x - t * dx, point.y - start.y - t * dy);
+}
+
+function simplifyIndices(points, tolerance) {
+  const keep = new Set([0, points.length - 1]), stack = [[0, points.length - 1]];
+  while (stack.length) {
+    const [first, last] = stack.pop(); let furthest = -1, distance = tolerance;
+    for (let index = first + 1; index < last; index++) {
+      const candidate = pointSegmentDistance(points[index], points[first], points[last]);
+      if (candidate > distance) { distance = candidate; furthest = index; }
+    }
+    if (furthest >= 0) { keep.add(furthest); stack.push([first, furthest], [furthest, last]); }
+  }
+  return keep;
+}
+
+// Reduces ordinary GPS side-to-side noise while keeping endpoints, metadata and sharp turns.
+// The maximum movement is accuracy-bound, and the caller can retain the untouched coordinates.
+export function smoothSurveyLine(coordinates, {minimumDistance = 1.5, passes = 2, simplifyTolerance} = {}) {
+  const source = (coordinates || []).filter(coordinate => Number.isFinite(Number(coordinate?.[0])) && Number.isFinite(Number(coordinate?.[1]))).map(coordinate => [...coordinate]);
+  if (source.length < 3) return source;
+  const filtered = [source[0]];
+  for (let index = 1; index < source.length - 1; index++) if (distanceMetres(filtered.at(-1), source[index]) >= minimumDistance) filtered.push(source[index]);
+  if (distanceMetres(filtered.at(-1), source.at(-1)) < minimumDistance && filtered.length > 1) filtered[filtered.length - 1] = source.at(-1); else filtered.push(source.at(-1));
+  if (filtered.length < 5) return filtered.map(coordinate => [...coordinate]);
+  const latitude = filtered.reduce((sum, coordinate) => sum + Number(coordinate[1]), 0) / filtered.length;
+  const mx = 111320 * Math.cos(radians(latitude)), origin = filtered[0];
+  const original = filtered.map(coordinate => ({x: (Number(coordinate[0]) - origin[0]) * mx, y: (Number(coordinate[1]) - origin[1]) * 111320}));
+  const accuracy = median(filtered.map(coordinate => Number(coordinate[2]))), maximumAdjustment = Math.max(1.5, Math.min(3.5, accuracy * .5));
+  let points = original.map(point => ({...point}));
+  for (let pass = 0; pass < passes; pass++) points = points.map((point, index) => {
+    if (index === 0 || index === points.length - 1) return {...point};
+    let x = 0, y = 0, total = 0;
+    for (let neighbour = Math.max(0, index - 2); neighbour <= Math.min(points.length - 1, index + 2); neighbour++) {
+      const proximity = 3 - Math.abs(neighbour - index), neighbourAccuracy = Math.max(1, Number(filtered[neighbour][2]) || accuracy), weight = proximity / neighbourAccuracy;
+      x += points[neighbour].x * weight; y += points[neighbour].y * weight; total += weight;
+    }
+    x /= total; y /= total;
+    const dx = x - original[index].x, dy = y - original[index].y, movement = Math.hypot(dx, dy), scale = movement > maximumAdjustment ? maximumAdjustment / movement : 1;
+    return {x: original[index].x + dx * scale, y: original[index].y + dy * scale};
+  });
+  const tolerance = Number.isFinite(Number(simplifyTolerance)) ? Math.max(0, Number(simplifyTolerance)) : Math.max(1, Math.min(2, maximumAdjustment * .7));
+  const keep = simplifyIndices(points, tolerance);
+  return points.map((point, index) => {
+    const coordinate = [...filtered[index]];
+    coordinate[0] = origin[0] + point.x / mx; coordinate[1] = origin[1] + point.y / 111320;
+    return coordinate;
+  }).filter((_, index) => keep.has(index));
+}
+
 export function headingUpBearing(heading) {
   const numeric = Number(heading);
   if (!Number.isFinite(numeric)) return 0;
