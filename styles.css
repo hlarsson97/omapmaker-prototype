@@ -304,11 +304,6 @@ body.field-survey-active header #fieldSurveyToggle{background:#075b3a;color:#fff
 .field-actions small,.field-actions b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.field-actions small{font-size:7px;font-weight:900;letter-spacing:.06em}.field-actions b{margin-top:3px;font-size:11px}
 .field-survey-footer{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.field-survey-footer button{min-height:31px;border:0;border-radius:8px;padding:5px 8px;background:#edf1ed;color:#405047;font-size:9px;font-weight:800}.field-survey-footer button.active{background:#075b3a;color:#fff}
 #fieldSurveyNotice{margin:6px 2px 0;color:#67746c;font-size:8px;line-height:1.35}
-body.field-survey-active #toolbar{display:none}
-body.field-survey-active.field-survey-tools-open #toolbar{display:flex;bottom:calc(min(56dvh,470px) + 18px + env(safe-area-inset-bottom))!important}
-body.field-survey-active #mapNavControls{bottom:calc(min(56dvh,470px) + 18px + env(safe-area-inset-bottom))}
-body.field-survey-active #editBar{bottom:calc(min(56dvh,470px) + 18px + env(safe-area-inset-bottom))!important}
-body.field-survey-active #toast{bottom:calc(min(56dvh,470px) + 26px + env(safe-area-inset-bottom))}
 .field-survey-track{stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 2px #fff)}
 #fieldSurveyLogSheet form{max-height:88dvh;overflow:auto}.field-log-list{display:grid;gap:7px}.field-log-list article{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:11px;border:1px solid #dce3dc;border-radius:11px;background:#fafbf7}.field-log-list b,.field-log-list small{display:block}.field-log-list small{margin-top:3px;color:#69766e;font-size:9px}.field-log-list button{grid-row:1/3;grid-column:2;align-self:center;min-height:34px;border:0;border-radius:8px;padding:0 9px;background:#e5eee8;color:#075b3a;font-size:9px;font-weight:850}
 #fieldSurveyStartSheet>form>p,#fieldSurveyLogSheet>form>p{color:#56645c;font-size:11px;line-height:1.45}
@@ -318,9 +313,6 @@ body.field-survey-active #toast{bottom:calc(min(56dvh,470px) + 26px + env(safe-a
   #fieldSurveyPanel{left:6px;bottom:calc(6px + env(safe-area-inset-bottom));width:calc(100vw - 12px);max-height:min(51dvh,430px);padding:8px;border-radius:15px}
   .field-segments{grid-template-columns:repeat(5,minmax(55px,1fr));overflow-x:auto;padding-bottom:2px}.field-segments button{min-width:62px}
   .field-actions{grid-template-columns:1fr 1fr}.field-actions button:nth-child(3){grid-column:1/3}
-  body.field-survey-active #mapNavControls{bottom:calc(min(51dvh,430px) + 14px + env(safe-area-inset-bottom))}
-  body.field-survey-active #editBar{bottom:calc(min(51dvh,430px) + 14px + env(safe-area-inset-bottom))!important}
-  body.field-survey-active.field-survey-tools-open #toolbar{bottom:calc(min(51dvh,430px) + 14px + env(safe-area-inset-bottom))!important}
 }
 
 /* ===== v13.css ===== */
@@ -581,3 +573,30 @@ header #homeButton{flex-shrink:0}
  .settings-grid{grid-template-columns:minmax(0,1fr)}
 }
 @media(max-height:550px){#mapNavControls{grid-template-columns:repeat(2,42px)}#mapNavControls .leaflet-control-zoom{grid-column:2;grid-row:1/3}}
+
+/* One folding field panel; navigation stays below the upper map controls. */
+#fieldSurveyPanel{display:flex;flex-direction:column;overflow:hidden;max-height:min(51dvh,430px,calc(100dvh - var(--field-nav-top,182px) - 102px - env(safe-area-inset-bottom)))}
+.field-survey-head{flex-shrink:0;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin:0}
+#fieldSurveyHandle{position:relative;display:flex;align-items:center;gap:10px;min-width:0;min-height:52px;padding:12px 6px 5px;background:transparent;color:var(--ink);text-align:left;touch-action:none;cursor:ns-resize}
+.field-drag-grip{position:absolute;top:2px;left:50%;width:36px;height:4px;border-radius:4px;background:#9caea1;transform:translateX(-50%)}
+#fieldSurveyHandle .field-live-dot{flex:0 0 9px;width:9px;height:9px}
+.field-survey-status{flex:1;min-width:0}.field-survey-status b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fieldSurveyChevron{font-size:22px;color:var(--green)}
+#fieldSurveyContent{overflow:auto;overscroll-behavior:contain;min-height:0;padding-top:6px}
+#fieldSurveyContent[hidden],#fieldSurveyPrimary[hidden],#fieldSurveyExtra[hidden]{display:none}
+#fieldSurveyPanel.is-collapsed{padding-top:3px;padding-bottom:3px}
+#fieldSurveyPanel #stopFieldSurvey{min-height:44px}
+#fieldToolsBack{min-height:44px;margin-bottom:5px;padding:5px 10px;border:0;border-radius:9px;background:#e5eee8;color:var(--green);font-weight:800}
+body.field-survey-active>#toolbar{display:none!important}
+body.field-survey-active #fieldSurveyExtra #toolbar{position:static;display:grid!important;width:100%!important;margin:0;padding:0!important;background:transparent;box-shadow:none;backdrop-filter:none}
+body.field-survey-active #mapNavControls{top:var(--field-nav-top,182px);bottom:auto;display:flex;gap:6px}
+body.field-survey-active #mapNavControls .leaflet-control-zoom{display:flex}
+body.field-survey-active #mapNavControls .leaflet-control-zoom a+a{border-top:0;border-left:1px solid var(--line)}
+body.field-survey-active #editBar{bottom:var(--field-panel-offset,90px)!important}
+body.field-survey-active #toast{bottom:calc(var(--field-panel-offset,90px) + 44px);max-width:calc(100vw - 24px);white-space:normal;text-align:center;transition:opacity .2s}
+#fieldSurveyHandle:focus-visible,#fieldToolsBack:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+@media(max-height:550px) and (orientation:landscape){
+ body.field-survey-active #layersButton{top:calc(72px + env(safe-area-inset-top))!important;right:calc(var(--field-mode-width,180px) + 18px)!important}
+ body.field-survey-active #gpsQuality{max-width:calc(100vw - 330px)}
+ #fieldSurveyPanel{max-height:calc(100dvh - var(--field-nav-top,130px) - 102px - env(safe-area-inset-bottom))}
+}

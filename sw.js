@@ -1,7 +1,7 @@
 // Bump for every release that changes app-shell resources.
-const CACHE = 'omapmaker-shell-bridge-4';
+const CACHE = 'omapmaker-shell-field-panel-1';
 const SHELL = ['index.html', 'field.html', 'home.js', 'home.css', 'app.mjs', 'styles.css', 'team.css', 'isom_symbols.js', 'isom_renderer.js'];
-const MODULES = ['team_sync','team_home','team_panel','offline','viewport_layers','layer_presentation','contour_presentation','utils','generation_settings','indexeddb_store','map_setup','map_layer_api','generated_buildings','generated_paved_areas','generated_roads','generated_infrastructure','bridge_tunnel','generated_land_cover','magnetic_north','map_orientation','smooth_rotation','local_map_objects','map_objects','popup_stack','symbol_object_settings','field_survey','account_api'];
+const MODULES = ['team_sync','team_home','team_panel','offline','viewport_layers','layer_presentation','contour_presentation','utils','generation_settings','indexeddb_store','map_setup','map_layer_api','generated_buildings','generated_paved_areas','generated_roads','generated_infrastructure','bridge_tunnel','generated_land_cover','magnetic_north','map_orientation','smooth_rotation','local_map_objects','map_objects','popup_stack','symbol_object_settings','field_survey','field_survey_panel','account_api'];
 const EXTERNAL = ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/@tomickigrzegorz/leaflet-rotate@0.2.4/dist/leaflet-rotate.umd.min.js'];
 self.addEventListener('install', event => event.waitUntil((async () => {
   const cache = await caches.open(CACHE);
