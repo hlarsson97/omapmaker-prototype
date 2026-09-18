@@ -1,6 +1,6 @@
 import {createTeamApi,createTeamSync} from './js/team_sync.mjs?v=1';
 import './js/offline.mjs?v=1';
-import {mountTeamPanel} from './js/team_panel.mjs?v=1';
+import {mountTeamPanel} from './js/team_panel.mjs?v=2';
 import {createViewportLayers} from './js/viewport_layers.mjs?v=1';
 import {refreshGeoJsonPresentation} from './js/layer_presentation.mjs?v=1';
 import {contourDisplayData} from './js/contour_presentation.mjs?v=2';

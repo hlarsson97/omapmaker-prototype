@@ -1,15 +1,17 @@
-.team-sheet{width:min(960px,94vw);max-width:960px;max-height:90dvh;overflow:auto;padding:22px;border:1px solid #b9c9bd;border-radius:18px;color:#163424;background:#f9fcf8}
-.team-sheet .team-actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
-.team-sheet button{padding:10px 14px;min-height:42px;border:1px solid #aabdb0;border-radius:9px;background:#edf5ed;color:#163424;cursor:pointer}
-.team-sheet button:disabled{opacity:.5;cursor:default}
-.team-sheet pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font-size:12px}
-.team-conflict,.team-sheet [data-team-history-list]>article{border-top:1px solid #c7d4ca;padding:16px 0}
-.team-conflict>button{margin:6px 8px 0 0}
-.team-versions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.team-versions h4{margin:8px 0}.team-versions p{font-size:12px}
-.team-geometry{height:210px;background:#edf0e9;border:1px solid #c7d4ca;border-radius:8px}
-#teamSyncButton{font-size:12px;padding:8px;max-width:160px}
+.team-sheet{box-sizing:border-box;width:min(620px,calc(100vw - 32px));max-width:960px;max-height:calc(100dvh - 48px);margin:auto;overflow:auto;overscroll-behavior:contain;padding:24px;border:0;border-radius:20px;color:var(--ink,#17241c);background:var(--paper,#fffdf3);box-shadow:0 16px 60px #17241c35}
+.team-sheet.has-conflicts{width:min(960px,calc(100vw - 32px))}
+.team-sheet .sheet-head{display:flex;align-items:flex-start;gap:16px;justify-content:space-between}.team-sheet .sheet-head>div{min-width:0}
+.team-sheet h2{margin:5px 0 0;font:28px/1.15 Georgia,serif;overflow-wrap:anywhere}.team-sheet p{font-size:14px;line-height:1.5;color:#536158}.team-sheet .team-intro{margin:12px 0 20px}
+.team-sheet button{font:700 13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:11px 15px;min-height:44px;border:1px solid #d5ddd6;border-radius:11px;background:#fff;color:#075b3a;cursor:pointer;touch-action:manipulation}
+.team-sheet button:hover{background:#edf3e8}.team-sheet button:focus-visible,.team-sheet summary:focus-visible,#teamSyncButton:focus-visible{outline:3px solid #ddef68;outline-offset:3px}.team-sheet button:disabled{opacity:.5;cursor:default}
+.team-sheet .sheet-head>button{flex:0 0 40px;width:40px;min-height:40px;padding:0;border:0;border-radius:50%;font-size:24px;background:#edf0eb;color:#17241c}
+.team-status-card{padding:15px 16px;background:#edf3e8;border:1px solid #d7e2d3;border-radius:13px}.team-status-heading{display:block;font-size:15px;font-weight:800}.team-status-card p{margin:5px 0 0;font-size:13px}.has-conflicts .team-status-card{background:#fff4df;border-color:#e6cc98}
+.team-actions{display:flex;gap:9px;margin:16px 0 22px}.team-sheet .team-primary{flex:1;border-color:#075b3a;background:#075b3a;color:#fff}.team-sheet .team-primary:hover{background:#064a30}
+.team-utilities{margin-top:18px;border-top:1px solid #d5ddd6;padding-top:15px}.team-utilities>summary{cursor:pointer;color:#536158;font-size:13px;font-weight:700;padding:5px 0}.team-utilities>p{font-size:13px}.team-utility-actions{display:grid;gap:8px}.team-utility-actions button{text-align:left}
+.team-sheet pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font-size:12px}.team-conflict,.team-sheet [data-team-history-list]>article{border-top:1px solid #d5ddd6;padding:18px 0}.team-conflict h3{margin:0 0 12px;font-size:17px}.team-conflict>button{margin:6px 8px 0 0}
+.team-versions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.team-versions h4{margin:8px 0;font-size:13px}.team-versions p,.team-versions summary{font-size:12px}.team-geometry{height:200px;background:#edf0e9;border:1px solid #c7d4ca;border-radius:10px}
+#teamSyncButton{white-space:nowrap}#teamSyncButton[data-attention="true"]{background:#fff0ce;color:#724708}
 #teamStorageError{position:fixed;top:80px;left:10px;right:10px;z-index:10000;padding:16px;background:#fff2ce;color:#722b10;border:2px solid #a94824;border-radius:10px}
-.team-readonly #toolbar,.team-readonly #modeSwitch,.team-readonly #fieldSurveyToggle,.team-readonly .generated-actions,.team-readonly .local-type-control,.team-readonly #workspaceSettingsButton{display:none!important}
-.team-workspace #draftHint{color:#18492c}
-@media(max-width:650px){.team-versions{grid-template-columns:1fr}.team-geometry{height:160px}.team-sheet{padding:14px}.team-workspace header h1{max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#teamSyncButton{max-width:100px;font-size:11px}}
+.team-readonly #toolbar,.team-readonly #modeSwitch,.team-readonly #fieldSurveyToggle,.team-readonly .generated-actions,.team-readonly .local-type-control,.team-readonly #workspaceSettingsButton{display:none!important}.team-workspace #draftHint{color:#18492c}
+@media(max-width:650px){.team-sheet,.team-sheet.has-conflicts{width:100%;max-height:calc(100dvh - 28px - env(safe-area-inset-top));margin:auto auto 0;padding:20px 17px calc(22px + env(safe-area-inset-bottom));border-radius:20px 20px 0 0}.team-sheet h2{font-size:25px}.team-versions{grid-template-columns:1fr}.team-geometry{height:170px}.team-actions{flex-wrap:wrap}.team-actions .team-primary{flex:1 1 100%}.team-actions>button{flex:1}.team-workspace header>div:not(.header-actions){min-width:0}.team-workspace header .header-actions{gap:3px}.team-workspace header .header-actions button{padding:0 7px}}
+@media print{#teamSyncButton{display:none!important}}

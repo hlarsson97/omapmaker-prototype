@@ -14,12 +14,12 @@ const describe = value => !value ? 'Ingen tidigare version' : `${title(value)} �
 export function mountTeamPanel({sync, request, workspace, canEdit, beforeSync, apply, onAccessDenied, exportPrivate}) {
   const open = document.createElement('button'); open.type = 'button'; open.id = 'teamSyncButton';
   document.querySelector('.header-actions').prepend(open);
-  const dialog = document.createElement('dialog'); dialog.className = 'team-sheet';
-  dialog.innerHTML = `<div class="sheet-head"><div><small>ARBETSLAG</small><h2></h2></div><button type="button" data-team-close aria-label="Stäng">×</button></div><p>Ändringar sparas på enheten. Tryck Synka för att dela dem med arbetslaget och hämta andras ändringar. Råa GPS-loggar delas inte.</p><p data-team-status role="status"></p><div class="team-actions"><button type="button" data-team-sync>Synka med arbetslaget</button><button type="button" data-team-history>Visa historik</button><button type="button" data-team-rescue>Kopiera kartobjekt till personligt konto</button><button type="button" data-team-backup>Spara lokal säkerhetskopia</button></div><div data-team-conflicts></div><div data-team-history-list></div>`;
+  const dialog = document.createElement('dialog'); dialog.className = 'team-sheet'; dialog.setAttribute('aria-labelledby','teamPanelTitle');
+  dialog.innerHTML = `<div class="sheet-head"><div><small>ARBETSLAG</small><h2 id="teamPanelTitle"></h2></div><button type="button" data-team-close aria-label="Stäng">×</button></div><p class="team-intro">Dina ändringar delas med arbetslaget när du synkar.</p><div class="team-status-card"><span class="team-status-heading"></span><p data-team-status role="status"></p></div><div class="team-actions"><button type="button" class="team-primary" data-team-sync>Synka med arbetslaget</button><button type="button" data-team-history>Visa historik</button></div><div data-team-conflicts></div><div data-team-history-list></div><details class="team-utilities"><summary>Offline och säkerhetskopiering</summary><p>Råa GPS-loggar delas inte med arbetslaget. Här kan du förbereda enheten eller rädda en lokal kopia av ditt arbete.</p><div class="team-utility-actions"><button type="button" data-team-backup>Spara lokal säkerhetskopia</button><button type="button" data-team-rescue>Kopiera kartobjekt till personligt konto</button></div></details>`;
   dialog.querySelector('h2').textContent = workspace.teamName || workspace.name;
   document.body.append(dialog);
   const offline = document.createElement('button'); offline.type = 'button'; offline.textContent = 'Förbered offline';
-  dialog.querySelector('.team-actions').append(offline);
+  dialog.querySelector('.team-utility-actions').prepend(offline);
   offline.onclick = async () => {offline.disabled=true;try {await prepareOffline();message='Appen är förberedd för offlineöppning. Kartobjekt och redan hämtade underlag finns lokalt. Bakgrundskartans bildrutor laddas inte ned för offlinebruk.';}catch(error){message=error.message;}finally{offline.disabled=false;refresh();}};
   const status = dialog.querySelector('[data-team-status]'), conflicts = dialog.querySelector('[data-team-conflicts]'), historyList = dialog.querySelector('[data-team-history-list]');
   let message = '', maps = [], busy = false;
@@ -72,8 +72,13 @@ export function mountTeamPanel({sync, request, workspace, canEdit, beforeSync, a
   }
   function refresh() {
     const count = sync.pendingCount(), conflictCount = sync.conflicts().length;
-    open.textContent = conflictCount ? `Arbetslag · ${conflictCount} konflikter` : count ? `Synka · ${count}` : 'Arbetslag ✓';
-    status.textContent = message || `${canEdit() ? '' : 'Läsbehörighet · '}${count ? `${count} lokala ändringar` : 'Inga lokala ändringar'}${conflictCount ? ` · ${conflictCount} konflikter` : ''}. Senast hämtade uppgifter visas.`;
+    open.textContent = `Arbetslag${count ? ` · ${count}` : ''}`;
+    open.dataset.attention = String(conflictCount > 0);
+    open.title = conflictCount ? `${conflictCount} konflikter behöver granskas` : count ? `${count} ändringar att synka` : 'Öppna arbetslagets synkning och historik';
+    open.setAttribute('aria-label',open.title);
+    dialog.classList.toggle('has-conflicts',conflictCount > 0);
+    dialog.querySelector('.team-status-heading').textContent = conflictCount ? `${conflictCount} ${conflictCount === 1 ? 'konflikt behöver' : 'konflikter behöver'} granskas` : count ? `${count} ${count === 1 ? 'ändring att synka' : 'ändringar att synka'}` : canEdit() ? 'Allt sparat på enheten' : 'Du har läsbehörighet';
+    status.textContent = message || (count ? 'Synka för att dela ditt arbete och hämta andras ändringar.' : 'Synka för att hämta arbetslagets senaste ändringar.');
     dialog.querySelector('[data-team-sync]').disabled = busy;
     if (dialog.open) renderConflicts();
   }

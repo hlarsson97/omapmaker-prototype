@@ -2,7 +2,7 @@ import {createAccountApi, readJsonStorage} from './js/account_api.mjs?v=5';
 import './js/offline.mjs?v=1';
 import {createIndexedDbStore} from './js/indexeddb_store.mjs';
 
-import {mountTeamHome} from './js/team_home.mjs?v=1';
+import {mountTeamHome} from './js/team_home.mjs?v=2';
 const L = globalThis.L;
 const accountApi = createAccountApi();
 const mapDataStore = createIndexedDbStore({databaseName: 'omapmaker-mapdata', version: 1, storeName: 'contours'});
