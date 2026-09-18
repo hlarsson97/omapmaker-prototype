@@ -17,12 +17,14 @@ export function localObjectSourceLabel(source) {
   return mapObjectSource(source).label;
 }
 
-export function localObjectPopup(cat, object, {name, isomClaim, escapeHtml, typeOptions = []}) {
+export function localObjectPopup(cat, object, {name, isomClaim, escapeHtml, typeOptions = [], placement}) {
   const mapObject = localMapObject(cat, object, object.symbol);
   const category = {point: 'Punkt', line: 'Linje', area: 'Yta'}[cat] || cat;
   const details = [category];
   details.push(mapObject.sync.label);
   if (cat === 'point' && Number(object.accuracy) > 0) details.push(`Noggrannhet ±${Math.round(Number(object.accuracy))} m`);
+  if (placement?.displaced) details.push(`Symbolen är förskjuten ${placement.distanceMetres.toFixed(1)} m för läsbarhet. Objektets koordinater är oförändrade.`);
+  if (placement?.unresolved) details.push('Symbolavståndet behöver kartkontrolleras. Ingen säker liten förskjutning hittades.');
   const actionsHtml = mapObjectActionHtml(mapObject, {kind: 'local', escapeHtml});
   const options = typeOptions.map(option => `<option value="${escapeHtml(option.id)}" ${String(option.id) === String(object.objectType) ? 'selected' : ''}>${escapeHtml(option.symbol)} ${escapeHtml(option.name)}</option>`).join('');
   const typeControls = options ? `<div class="object-type-control"><label for="local-object-type-${escapeHtml(object.id)}">Objekttyp</label><select id="local-object-type-${escapeHtml(object.id)}" data-local-object-type="${escapeHtml(object.id)}">${options}</select><button type="button" data-local-object-change-type="${escapeHtml(object.id)}">Ändra typ</button></div>` : '';

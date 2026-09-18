@@ -117,9 +117,89 @@
     for(const polygon of polygons)for(let ringIndex=0;ringIndex<polygon.length;ringIndex++){const points=polygon[ringIndex].map(point=>paperProject(point,context));let area=0;for(let i=0,j=points.length-1;i<points.length;j=i++)area+=points[j].x*points[i].y-points[i].x*points[j].y;total+=(ringIndex?-1:1)*Math.abs(area/2)}return Math.max(0,total);
   }
   function symbolForFeature(feature){return String(feature?.properties?.isomSymbol||feature?.properties?.symbol||'')}
+  // ISOM 2017-2 §2.6: gaps are measured between symbol edges, at base scale.
+  // Work on presentation copies only. Survey geometry is never overwritten.
+  function layoutBoulders(features, options={}) {
+    const active=(features||[]).filter(f=>!['excluded','deleted','locally-excluded','locally-rejected','locally-deleted'].includes(f.properties?.mapStatus||f.properties?.status));
+    const stones=active.filter(f=>f.geometry?.type==='Point'&&['204','205'].includes(symbolForFeature(f)));
+    const placements=new Map();
+    if(!stones.length)return placements;
+    const unit=registry.measurementBasis.baseScale/1000, gap=registry.preflight.generalGapMm*unit;
+    const maxShift=unit; // Do not invent a distant location in crowded terrain.
+    const ordered=[...stones].sort((a,b)=>String(a.id??JSON.stringify(a.geometry.coordinates)).localeCompare(String(b.id??JSON.stringify(b.geometry.coordinates))));
+    const latitude=ordered[0].geometry.coordinates[1], mx=111320*Math.cos(latitude*Math.PI/180);
+    const project=c=>({x:c[0]*mx,y:c[1]*111320});
+    const unproject=(p,original)=>[p.x/mx,p.y/111320,...original.slice(2)];
+    const cellSize=32, cells=new Map(), broad=[], solids=[];
+    function inRing(point,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a.y>point.y)!==(b.y>point.y)&&point.x<(b.x-a.x)*(point.y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
+    function insert(obstacle) {
+      const {left,right,bottom,top}=obstacle;
+      const x0=Math.floor(left/cellSize),x1=Math.floor(right/cellSize),y0=Math.floor(bottom/cellSize),y1=Math.floor(top/cellSize);
+      if((x1-x0+1)*(y1-y0+1)>256){broad.push(obstacle);return;}
+      for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const key=`${x}:${y}`;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(obstacle);}
+    }
+    function circle(feature,coordinate,radius){const p=project(coordinate);insert({feature,p,radius,left:p.x-radius,right:p.x+radius,bottom:p.y-radius,top:p.y+radius});}
+    function segment(feature,a,b,radius){insert({feature,a,b,radius,left:Math.min(a.x,b.x)-radius,right:Math.max(a.x,b.x)+radius,bottom:Math.min(a.y,b.y)-radius,top:Math.max(a.y,b.y)+radius});}
+    function nearest(p,o){if(o.p)return o.p;const dx=o.b.x-o.a.x,dy=o.b.y-o.a.y,t=Math.max(0,Math.min(1,((p.x-o.a.x)*dx+(p.y-o.a.y)*dy)/(dx*dx+dy*dy||1)));return{x:o.a.x+t*dx,y:o.a.y+t*dy};}
+    const stoneSet=new Set(stones);
+    for(const feature of active){
+      if(stoneSet.has(feature))continue;
+      const symbol=symbolForFeature(feature),d=definition(symbol),geometry=feature.geometry;
+      if(!d||!geometry||['101','102','103','601'].includes(symbol))continue; // Contour/black point exception; north lines are not terrain.
+      if(geometry.type==='Point'){
+        const w=d.widthMm||d.diameterMm||d.supportWidthMm,h=d.heightMm||d.diameterMm||w;
+        if(w&&h)circle(feature,geometry.coordinates,(d.diameterMm?d.diameterMm:Math.hypot(w,h)+number(d.strokeWidthMm))*unit/2);
+        continue;
+      }
+      const polygon=geometry.type.includes('Polygon'),outlined=d.outline&&(!d.outlineConditional||feature.properties?.boundary===d.outlineConditional);
+      if(polygon&&!outlined&&!['206','521'].includes(symbol))continue;
+      if(polygon&&['206','521'].includes(symbol))for(const polygonCoordinates of geometry.type==='Polygon'?[geometry.coordinates]:geometry.coordinates){const rings=polygonCoordinates.map(ring=>ring.map(project)),bounds={rings,left:Infinity,right:-Infinity,bottom:Infinity,top:-Infinity};for(const ring of rings)for(const p of ring){bounds.left=Math.min(bounds.left,p.x);bounds.right=Math.max(bounds.right,p.x);bounds.bottom=Math.min(bounds.bottom,p.y);bounds.top=Math.max(bounds.top,p.y);}solids.push(bounds);}
+      let width;
+      if(polygon)width=outlined?number(d.outlineWidthMm)*unit:0;
+      else if(options.map&&options.mode&&options.mode!=='print'){const context={map:options.map,scale:options.scale||15000,mode:options.mode};width=lineStyles(symbol,feature.properties,context).outer.weight*metresPerPixel(options.map);}
+      else if(d.kind==='cased-line')width=Math.max(number(d.minimumInnerWidthMm)*unit,number(feature.properties?.widthMetres||feature.properties?.renderWidthMetres||feature.properties?.estimatedWidthMetres))+2*number(d.outlineWidthMm)*unit;
+      else width=number(d.widthMm||d.lineWidthMm||d.dotDiameterMm||.14)*unit;
+      // Conservative envelope for decorations, avoiding a move onto fence tags etc.
+      width=Math.max(width,number(d.lineCentreGapMm)*unit+number(d.lineWidthMm)*unit,number(d.tagLengthMm)*unit*2,number(d.dotDiameterMm)*unit);
+      for(const line of coordinatesForGeometry(geometry)){for(let i=1;i<line.length;i++)segment(feature,project(line[i-1]),project(line[i]),width/2);}
+    }
+    for(const stone of ordered){
+      const original=stone.geometry.coordinates,p=project(original),radius=definition(symbolForFeature(stone)).diameterMm*unit/2,reach=maxShift+radius+gap;
+      const nearSolids=solids.filter(o=>o.left<=p.x+reach&&o.right>=p.x-reach&&o.bottom<=p.y+reach&&o.top>=p.y-reach);
+      const nearby=new Set(broad.filter(o=>o.left<=p.x+reach&&o.right>=p.x-reach&&o.bottom<=p.y+reach&&o.top>=p.y-reach));
+      for(let x=Math.floor((p.x-reach)/cellSize);x<=Math.floor((p.x+reach)/cellSize);x++)for(let y=Math.floor((p.y-reach)/cellSize);y<=Math.floor((p.y+reach)/cellSize);y++)for(const o of cells.get(`${x}:${y}`)||[])nearby.add(o);
+      const obstacles=[...nearby].filter(o=>{const n=nearest(p,o);return Math.hypot(p.x-n.x,p.y-n.y)<=reach+o.radius;});
+      // Keep the measured side of the nearest segment of each neighbouring line/boundary.
+      const sides=new Map();
+      for(const o of obstacles){if(o.p)continue;const n=nearest(p,o),distance=Math.hypot(p.x-n.x,p.y-n.y);if(!sides.has(o.feature)||distance<sides.get(o.feature).distance)sides.set(o.feature,{o,distance,sign:(o.b.x-o.a.x)*(p.y-o.a.y)-(o.b.y-o.a.y)*(p.x-o.a.x)});}
+      function valid(candidate){
+        if(nearSolids.some(({rings})=>inRing(candidate,rings[0])&&!rings.slice(1).some(ring=>inRing(candidate,ring))))return false;
+        for(const {o,sign} of sides.values()){const cross=(o.b.x-o.a.x)*(candidate.y-o.a.y)-(o.b.y-o.a.y)*(candidate.x-o.a.x);if(Math.abs(sign)>1e-5&&sign*cross<0)return false;}
+        return obstacles.every(o=>{const n=nearest(candidate,o);return Math.hypot(candidate.x-n.x,candidate.y-n.y)+1e-7>=radius+gap+o.radius;});
+      }
+      let best=valid(p)?p:null,bestDistance=best?0:Infinity;
+      function consider(candidate){const distance=Math.hypot(candidate.x-p.x,candidate.y-p.y);if(distance<=maxShift&&distance<bestDistance&&valid(candidate)){best=candidate;bestDistance=distance;}}
+      if(!best){
+        for(const o of obstacles){const n=nearest(p,o),dx=p.x-n.x,dy=p.y-n.y,length=Math.hypot(dx,dy),required=radius+gap+o.radius+1e-5;
+          if(length>1e-7)consider({x:n.x+dx/length*required,y:n.y+dy/length*required});
+          else if(o.a){const vx=o.b.x-o.a.x,vy=o.b.y-o.a.y,len=Math.hypot(vx,vy)||1;for(const side of [1,-1])consider({x:n.x-vy/len*required*side,y:n.y+vx/len*required*side});}
+        }
+        // Intersections and clusters: deterministic bounded search, starting nearest.
+        for(let distance=unit/100;distance<=Math.min(maxShift,bestDistance);distance+=unit/100){for(let angle=0;angle<64;angle++){const a=angle*Math.PI/32;consider({x:p.x+Math.cos(a)*distance,y:p.y+Math.sin(a)*distance});}if(best&&bestDistance<=distance)break;}
+      }
+      const position=best||p,coordinates=bestDistance===0||!best?original.slice():unproject(position,original);
+      placements.set(stone,{coordinates,displaced:Boolean(best&&bestDistance>0),unresolved:!best,distanceMetres:best?bestDistance:0});
+      circle(stone,coordinates,radius);
+    }
+    return placements;
+  }
+  function boulderPresentationFeatures(features,options){const layout=layoutBoulders(features,options);return(features||[]).map(feature=>{const placement=layout.get(feature);return placement?.displaced?{...feature,geometry:{...feature.geometry,coordinates:placement.coordinates}}:feature;});}
   function featureLabel(feature,index){const p=feature.properties||{};return p.name||p.omapType||p.objectType||`Objekt ${index+1}`}
   function preflight(features,options){
     const scale=number(options.scale)||15000,context={...options,scale},issues=[];let tested=0;
+    const placements=layoutBoulders(features,options);
+    for(const [feature,placement] of placements)if(placement.unresolved)issues.push({severity:'warning',code:'boulder-spacing-unresolved',symbol:symbolForFeature(feature),featureId:feature.id||null,message:'Sten: symbolavståndet behöver kartkontrolleras; ingen säker liten förskjutning hittades.'});
+    features=(features||[]).map(feature=>{const placement=placements.get(feature);return placement?.displaced?{...feature,geometry:{...feature.geometry,coordinates:placement.coordinates}}:feature;});
     if(options.declination===null||options.declination===''||!Number.isFinite(Number(options.declination)))issues.push({severity:'error',code:'declination-missing',message:'Magnetisk deklination saknas; kartrotation och 601-linjer kan inte verifieras.'});
     const checked=[];
     (features||[]).forEach((feature,index)=>{
@@ -230,10 +310,10 @@
     const context={...options,scale:number(options.scale)||15000,declination:number(options.declination),center:{lat:number(options.center.lat),lng:number(options.center.lng)},widthMm:number(options.widthMm),heightMm:number(options.heightMm)},groups=registry.colourOrder.map(()=>[]),north=registry.technical['601'],spacing=north.spacingGroundMetres*1000/context.scale,northWidth=paperMm(north.preferredColour==='blue'?north.lineWidthBlueMm:north.lineWidthBlackMm,context.scale),northColour=colour(north.preferredColour);
     for(let x=context.widthMm/2%spacing;x<context.widthMm;x+=spacing)groups[registry.colourOrder.indexOf(north.preferredColour)].push(`<path d="M${x},0V${context.heightMm}" stroke="${northColour}" stroke-width="${northWidth}"/>`);
     for(let x=context.widthMm/2%spacing-spacing;x>=0;x-=spacing)groups[registry.colourOrder.indexOf(north.preferredColour)].push(`<path d="M${x},0V${context.heightMm}" stroke="${northColour}" stroke-width="${northWidth}"/>`);
-    const orderedFeatures=[...(features||[])].sort((a,b)=>(symbolForFeature(a)==='519'?1:0)-(symbolForFeature(b)==='519'?1:0));
+    const orderedFeatures=boulderPresentationFeatures(features,options).sort((a,b)=>(symbolForFeature(a)==='519'?1:0)-(symbolForFeature(b)==='519'?1:0));
     for(const feature of orderedFeatures){const bounds=paperBounds(feature.geometry,context);if(bounds&&(bounds.right<0||bounds.bottom<0||bounds.left>context.widthMm||bounds.top>context.heightMm))continue;for(const item of vectorElements(feature,context))groups[Math.max(0,item.layer)].push(item.markup);const label=feature.properties?.mapText,labelCoordinate=feature.properties?.labelCoordinate;if(label&&Array.isArray(labelCoordinate)){const p=paperProject(labelCoordinate,context),height=paperMm(feature.properties?.textHeightMm||registry.textRules.minimumSansHeightMm,context.scale),anchor=['start','middle','end'].includes(feature.properties?.textAnchor)?feature.properties.textAnchor:'middle',rotation=number(feature.properties?.rotationDegrees),transform=rotation?` transform="rotate(${rotation} ${p.x} ${p.y})"`:'';groups[registry.colourOrder.indexOf(feature.properties?.textColour||'black')].push(`<text x="${p.x}" y="${p.y}" font-family="${svgEscape(registry.textRules.fontFamily)}" font-size="${height}" text-anchor="${anchor}" dominant-baseline="middle"${transform} data-orientation="map">${svgEscape(label)}</text>`)}}
     const content=groups.map((items,index)=>items.length?`<g data-colour="${registry.colourOrder[index]}" style="mix-blend-mode:${registry.overprint.previewBlendMode}">${items.join('')}</g>`:'').join('');
     return`<svg xmlns="${NS}" viewBox="0 0 ${context.widthMm} ${context.heightMm}" width="${context.widthMm}mm" height="${context.heightMm}mm" role="img" aria-label="Normstyrd orienteringskarta"><metadata>${svgEscape(JSON.stringify({standard:registry.standard,symbolRegistryVersion:registry.registryVersion,scale:context.scale,declination:context.declination,colourSpace:'IOF CMYK definitions with RGB screen preview'}))}</metadata><defs><clipPath id="map-clip"><rect width="${context.widthMm}" height="${context.heightMm}"/></clipPath>${patternDefs(context.scale)}</defs><rect width="100%" height="100%" fill="white"/><g clip-path="url(#map-clip)">${content}</g></svg>`;
   }
-  root.OMAPMAKER_ISOM_RENDERER={definition,factor,paperMm,pixelsPerPaperMm,lineStyles,areaStyle,pointMarkup,preflight,buildVectorSvg,paperProject,geometryPath,colour};
+  root.OMAPMAKER_ISOM_RENDERER={definition,factor,paperMm,pixelsPerPaperMm,lineStyles,areaStyle,pointMarkup,preflight,buildVectorSvg,paperProject,geometryPath,colour,layoutBoulders,boulderPresentationFeatures};
 })(window);
