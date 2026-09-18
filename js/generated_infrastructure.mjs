@@ -1,6 +1,6 @@
 import {refreshGeoJsonPresentation} from './layer_presentation.mjs?v=1';
 import {generatedMapObject, mapObjectPopup} from './map_objects.mjs?v=5';
-import {bridgeTunnelCurveSegments, parallelLineCoordinates} from './symbol_object_settings.mjs?v=9';
+import {bridgeTunnelCurveSegments, parallelLineCoordinates} from './symbol_object_settings.mjs?v=10';
 
 export const INFRASTRUCTURE_TYPES = Object.freeze({
   '509': ['railway', 'Järnväg'],

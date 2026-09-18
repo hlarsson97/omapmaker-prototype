@@ -352,7 +352,7 @@ export function bridgeTunnelCurveSegments(coordinates, definition, baseScale = 1
   if (!Array.isArray(coordinates) || coordinates.length < 2) return [];
   const latitude = coordinates.reduce((sum, coordinate) => sum + Number(coordinate[1]), 0) / coordinates.length;
   const project = projection(latitude), points = coordinates.map(project.toMetres), scale = Number(baseScale) / 1000;
-  const tagLength = Number(definition?.tagLengthMm || .5) * scale;
+  const tagLength = Number(definition?.tagLengthMm || .4) * scale;
   const angle = Number(definition?.tagAngleDeg || 60) * Math.PI / 180;
   const along = Math.cos(angle) * tagLength, across = Math.sin(angle) * tagLength;
   const outerPoint = (end, inside, isStart) => {
