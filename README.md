@@ -30,6 +30,23 @@ Frontendens rena modultester körs med:
 GitHub Actions kör automatiskt modulernas syntaxkontroller, frontendmodultesterna
 och ISOM-renderertestet vid varje push och pull request.
 
+## Kartans riktning
+
+Kartans kompassknapp växlar mellan kartnorr, magnetiskt norr, telefonens kompass,
+färdriktning och fri rotation (fri rotation är avstängd på iPhone/iPad).
+Kompassläget kan användas utan GPS. Tillåt rörelse och orientering när telefonen
+frågar; efter omladdning kan ett nytt tryck behövas.
+
+Fältläge startar med färdriktningen uppåt, om kompassläget inte redan är valt.
+Knapparna **Färdriktning** och **Kompass** väljer mellan rörelseriktningen och
+telefonens riktning. Om GPS saknar kurs behöver du gå några meter innan riktningen
+kan bestämmas. Vid stillastående eller osäker position behålls senaste riktningen.
+
+Riktnings- och renderingstester körs med `node tools/test_heading_tracking.mjs`
+och `node tools/test_rotation_rendering.mjs`. Browserregressionerna finns i
+`tools/test_map_orientation.cjs` och `tools/test_rotation_rendering.cjs` och kräver
+Playwright samt lokala Leaflet-filer, enligt anvisningen i respektive testfil.
+
 ## Normativa källor
 
 Kartans symboler, mått och generalisering ska följa **ISOM 2017-2, Revision 6

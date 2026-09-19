@@ -17,13 +17,15 @@ import {INFRASTRUCTURE_TYPES, createGeneratedInfrastructureLayer} from './js/gen
 import {bridgeTunnelGeometryFromRoads, ensureBridgeTunnelMinimum, generateBridgeTunnelFeatures, isRoadLikeFeature} from './js/bridge_tunnel.mjs?v=2';
 import {WATER_SYMBOL_CLASSES, createGeneratedLandCoverLayer, isCurrentLandCoverData, isWaterFeature} from './js/generated_land_cover.mjs?v=15';
 import {magneticNorthRequestUrl, magneticNorthSummary} from './js/magnetic_north.mjs';
-import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextSupportedMapOrientation} from './js/map_orientation.mjs?v=3';
+import {isAppleTouchDevice, mapOrientationBearing, mapOrientationLabel, nextSupportedMapOrientation} from './js/map_orientation.mjs?v=4';
+import {createMapHeadingControl} from './js/map_heading_control.mjs?v=1';
+import {installRotationRendering} from './js/rotation_rendering.mjs?v=1';
 import {createSmoothMapMarkerFactory, installMiddleButtonRotation} from './js/smooth_rotation.mjs?v=1';
 import {changeLocalObjectType, localObjectPopup} from './js/local_map_objects.mjs?v=5';
 import {ensureLocalOriginal, generatedMapObject, localObjectLifecycle, mapObjectActionHtml, mapObjectPopup, mergeGeneratedFeatureOverrides, restoreLocalFromTrash, restoreLocalOriginal} from './js/map_objects.mjs?v=5';
 import {popupLayersFromElements, popupStackContent} from './js/popup_stack.mjs?v=1';
 import {applyDefaultSymbolSettings, bridgeTunnelCurveSegments, cliffTagSegments, closeLineCoordinates, courseCrossSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isCliffSymbol, isClosedLineCoordinates, isDecoratedLineSymbol, isPowerLineSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, wallDotCoordinates} from './js/symbol_object_settings.mjs?v=10';
-import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyDuration, fieldSurveyFix, fixCoordinate, formatFieldSurveyDuration, headingUpBearing, movementHeading, smoothSurveyLine} from './js/field_survey.mjs?v=2';
+import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyDuration, fieldSurveyFix, fixCoordinate, formatFieldSurveyDuration, smoothSurveyLine} from './js/field_survey.mjs?v=2';
 import {createAccountApi, userMapCacheKey} from './js/account_api.mjs?v=5';
 
 const accountApi=createAccountApi();
@@ -105,6 +107,7 @@ if(workspace&&workspace.showNorthLines===undefined)workspace.showNorthLines=true
 const queryCenter=urlParams.has('lat')&&urlParams.has('lng')?{lat:Number(urlParams.get('lat')),lng:Number(urlParams.get('lng'))}:null;
 const lastCenterKey=workspace?`omapmaker.lastCenter.workspace.${workspace.id}`:'omapmaker.lastCenter.global';
 const initialCenter=workspace?.center||queryCenter||JSON.parse(localStorage.getItem(lastCenterKey)||localStorage.getItem('omapmaker.lastCenter')||'{"lat":59.3293,"lng":18.0686}');
+installRotationRendering(L);
 const {map,baseMaps,contourReference}=createFieldMap({Leaflet:L,initialCenter,hasWorkspace:Boolean(workspace),navigationContainer:$('#mapNavControls')});
 const viewportLayers=createViewportLayers(L,map),viewportLeaflet={...L,geoJSON:viewportLayers.geoJSON};
 let popupHitLayers=[],popupStack=null,popupStackSwitching=false;
@@ -116,15 +119,38 @@ document.addEventListener('click',event=>{const summary=event.target.closest?.('
 const mapMarker=createSmoothMapMarkerFactory(L),middleButtonRotation=installMiddleButtonRotation({Leaflet:L,map});
 const mapOrientationKey=`omapmaker.orientation.${workspace?.id||'global'}`;
 const freeRotationSupported=!isAppleTouchDevice(navigator);
-let mapOrientation=localStorage.getItem(mapOrientationKey)||'map-north',freeMapBearing=Number(localStorage.getItem(`${mapOrientationKey}.bearing`))||0,mapDeclination=Number(workspace?.magneticDeclination)||null;if(!freeRotationSupported&&mapOrientation==='free')mapOrientation='map-north';
-function nextOrientation(){return nextSupportedMapOrientation(mapOrientation,freeRotationSupported)}
+let mapOrientation=localStorage.getItem(mapOrientationKey)||'map-north',freeMapBearing=Number(localStorage.getItem(`${mapOrientationKey}.bearing`))||0,mapDeclination=workspace?.magneticDeclination==null?null:Number(workspace.magneticDeclination);if(!freeRotationSupported&&mapOrientation==='free')mapOrientation='map-north';
+const initialMapOrientation=mapOrientation;mapOrientation='map-north';
+let orientationStatus='',orientationRequest=0,nextOrientationOverride=null;
+const mapHeadingControl=createMapHeadingControl({map,getDeclination:()=>mapDeclination,onStatus:(message,announce)=>{orientationStatus=message;updateOrientationButton();if(announce)toast(message)},onError:()=>{applyMapOrientation('map-north');toast('Riktningsföljningen pausades. Kartan kan användas med norr upp.')}});
+function nextOrientation(){return nextOrientationOverride||nextSupportedMapOrientation(mapOrientation,freeRotationSupported)}
 function setFreeRotation(enabled){const active=Boolean(enabled&&freeRotationSupported);map.touchGestures?.[active?'enable':'disable']?.();map.touchZoom?.[active?'disable':'enable']?.();map.shiftKeyRotate?.[active?'enable':'disable']?.();middleButtonRotation.setEnabled(active)}
-function updateOrientationButton(){const button=$('#mapOrientationButton'),label=mapOrientationLabel(mapOrientation),next=mapOrientationLabel(nextOrientation()),bearing=Number(map.getBearing?.()||0);button.classList.toggle('free',mapOrientation==='free');button.classList.toggle('heading-up',mapOrientation==='heading-up');button.querySelector('small').textContent=mapOrientation==='map-north'?'N':mapOrientation==='magnetic-north'?'MAG':mapOrientation==='heading-up'?'FÄRD':'FRI';button.style.setProperty('--compass-bearing',`${bearing}deg`);button.title=mapOrientation==='free'?`${label} · två fingrar eller mushjulets knapp`:label;button.setAttribute('aria-label',`${label}. Tryck för ${next.toLocaleLowerCase('sv-SE')}`)}
+function updateOrientationButton(){const button=$('#mapOrientationButton'),label=mapOrientationLabel(mapOrientation),next=mapOrientationLabel(nextOrientation()),bearing=Number(map.getBearing?.()||0);button.classList.toggle('free',mapOrientation==='free');button.classList.toggle('heading-up',['heading-up','compass'].includes(mapOrientation));button.querySelector('small').textContent=mapOrientation==='map-north'?'N':mapOrientation==='magnetic-north'?'MAG':mapOrientation==='heading-up'?'FÄRD':mapOrientation==='compass'?'KOMP':'FRI';button.style.setProperty('--compass-bearing',`${bearing}deg`);button.title=mapOrientation==='free'?`${label} · två fingrar eller mushjulets knapp`:orientationStatus||label;button.setAttribute('aria-label',`${label}. Tryck för ${next.toLocaleLowerCase('sv-SE')}`);for(const [id,mode] of [['fieldHeading','heading-up'],['fieldCompass','compass']]){const control=$(`#${id}`);control.classList.toggle('active',mapOrientation===mode);control.setAttribute('aria-pressed',String(mapOrientation===mode));control.title=mapOrientation===mode?orientationStatus:mapOrientationLabel(mode)}}
 async function ensureMapDeclination(){if(Number.isFinite(mapDeclination))return mapDeclination;const center=workspace?.center||map.getCenter(),result=await jsonResponse(await accountApi.authenticatedFetch(magneticNorthRequestUrl(center)));mapDeclination=Number(result.declinationDegrees.toFixed(1));if(workspace){const changes={magneticNorthCalculation:result,magneticDeclination:mapDeclination};Object.assign(workspace,changes);try{await persistWorkspace(changes)}catch{cacheWorkspaces()}}return mapDeclination}
-async function applyMapOrientation(mode,{announce=false}={}){if(typeof map.setBearing!=='function'){mapOrientation='map-north';$('#mapOrientationButton').disabled=true;$('#mapOrientationButton').title='Kartrotation kunde inte laddas';return}try{if(mode==='magnetic-north')await ensureMapDeclination();mapOrientation=mode;setFreeRotation(mode==='free');map.setBearing(mapOrientationBearing(mode,mapDeclination,freeMapBearing));localStorage.setItem(mapOrientationKey,mode);updateOrientationButton();if(announce)toast(mapOrientationLabel(mode))}catch(error){mapOrientation='map-north';setFreeRotation(false);map.setBearing(0);localStorage.setItem(mapOrientationKey,mapOrientation);updateOrientationButton();toast(error.message)}}
+async function applyMapOrientation(mode,{announce=false,userGesture=false}={}){
+  const request=++orientationRequest;
+  if(typeof map.setBearing!=='function'){mapOrientation='map-north';$('#mapOrientationButton').disabled=true;$('#mapOrientationButton').title='Kartrotation kunde inte laddas';return}
+  try{
+    if(mode==='compass')await mapHeadingControl.requestCompassPermission({userGesture});
+    if(mode==='magnetic-north')await ensureMapDeclination();
+    if(request!==orientationRequest)return;
+    mapOrientation=mode;orientationStatus='';nextOrientationOverride=null;setFreeRotation(mode==='free');
+    mapHeadingControl.setMode(mode);
+    if(!['compass','heading-up'].includes(mode)){map.stop();map.setBearing(mapOrientationBearing(mode,mapDeclination,freeMapBearing))}
+    if(mode==='heading-up'&&watchId===null)startGps();
+    // Magnetic correction is useful offline too when stored in the workspace.
+    if(mode==='compass'&&!Number.isFinite(mapDeclination))ensureMapDeclination().catch(()=>{});
+    localStorage.setItem(mapOrientationKey,mode);updateOrientationButton();
+    if(announce)toast(orientationStatus||mapOrientationLabel(mode));
+  }catch(error){
+    if(request!==orientationRequest)return;
+    // Permission failures keep the working orientation and leave GPS logging alone.
+    nextOrientationOverride=!userGesture&&mode==='compass'?'compass':nextSupportedMapOrientation(mode,freeRotationSupported);
+    orientationStatus=error.message;localStorage.setItem(mapOrientationKey,mapOrientation);updateOrientationButton();toast(error.message);
+  }
+}
 map.on('rotate',()=>{if(mapOrientation==='free'){freeMapBearing=Number(map.getBearing?.()||0);localStorage.setItem(`${mapOrientationKey}.bearing`,String(freeMapBearing))}updateOrientationButton()});
-$('#mapOrientationButton').onclick=()=>applyMapOrientation(nextOrientation(),{announce:true});
-applyMapOrientation(mapOrientation);
+$('#mapOrientationButton').onclick=()=>applyMapOrientation(nextOrientation(),{announce:true,userGesture:true});
 let activeBase=null;
 const layerPrefs={basemap:'osm',objects:true,globalObjects:true,evidence:false,contours:false,propertyBoundaries:false,facilityReferences:false,mapLabels:false,natureReferences:false,militaryReferences:false,projectContours:true,generatedSurfaces:true,generatedLines:true,landCover:true,buildings:true,pavedAreas:true,roads:true,infrastructure:true,opacity:100,...JSON.parse(localStorage.getItem('omapmaker.layers')||'{}')};if(layerPrefs.basemap==='none')layerPrefs.basemap='orientation';for(const category of ['point','line','area']){const key=`${category}Opacity`;if(!Number.isFinite(Number(layerPrefs[key])))layerPrefs[key]=Number(layerPrefs.opacity)||100}
 function saveLayerPrefs(){schedulePointLayout();localStorage.setItem('omapmaker.layers',JSON.stringify(layerPrefs))}
@@ -644,7 +670,7 @@ function showFieldSurveyRaw(session){if(fieldSurveyRawLayer)map.removeLayer(fiel
 function downloadFieldSurvey(session){const blob=new Blob([JSON.stringify({type:'FeatureCollection',properties:{app:'OMapMaker',kind:'raw-field-survey',id:session.id,startedAt:session.startedAt,endedAt:session.endedAt},features:[{type:'Feature',properties:{accuracy:session.raw.map(f=>f.accuracy),timestamps:session.raw.map(f=>f.timestamp)},geometry:{type:'LineString',coordinates:session.raw.map(f=>[f.longitude,f.latitude,f.altitude]).filter(c=>Number.isFinite(c[0])&&Number.isFinite(c[1]))}}]},null,2)],{type:'application/geo+json'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=`omapmaker-faltlogg-${session.startedAt.slice(0,10)}.geojson`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 const fieldSurveyPanel=createFieldSurveyPanel(document);
 function renderFieldSurveyLogs(){const list=$('#fieldSurveyLogList');list.replaceChildren();const sessions=[...fieldSurveySessions].reverse();if(!sessions.length){const empty=document.createElement('p');empty.textContent='Inga fältloggar har sparats ännu.';list.append(empty);return}sessions.forEach(session=>{const article=document.createElement('article'),text=document.createElement('div'),title=document.createElement('b'),meta=document.createElement('small'),controls=document.createElement('div'),show=document.createElement('button'),download=document.createElement('button');title.textContent=new Date(session.startedAt).toLocaleString('sv-SE',{dateStyle:'medium',timeStyle:'short'});meta.textContent=`${formatFieldSurveyDuration(fieldSurveyDuration(session))} · ${session.raw.length} GPS-punkter · ${session.segments.length} kartstråk`;show.type='button';show.textContent='Visa';show.onclick=()=>showFieldSurveyRaw(session);download.type='button';download.textContent='Exportera';download.onclick=()=>downloadFieldSurvey(session);controls.className='field-log-actions';controls.append(show,download);text.append(title,meta);article.append(text,controls);list.append(article)})}
-async function startFieldSurvey(){if(fieldSurvey)return;const now=new Date().toISOString();fieldSurvey={id:crypto.randomUUID(),workspaceId:workspace?.id||null,startedAt:now,endedAt:null,status:'active',raw:[],segments:[],transitions:[{type:'terrain',at:now,rawIndex:0}],activeSegmentStartedAt:now,previousOrientation:mapOrientation};fieldSurveySessions.push(fieldSurvey);fieldSurveySegment='terrain';fieldSurveySegmentCoords=[];fieldSurveyFollow=true;document.body.classList.add('field-survey-active');$('#fieldSurveyPanel').hidden=false;fieldSurveyPanel.reset();$('#fieldSurveyStartSheet').close();if(watchId===null)startGps();fieldSurveyElapsedTimer=setInterval(updateFieldSurveyStatus,15000);updateFieldSurveyStatus();requestFieldWakeLock();await saveFieldSurveysNow();toast('Fältinmätning startad · rå GPS-logg sparas')}
+async function startFieldSurvey(){if(fieldSurvey)return;const now=new Date().toISOString();fieldSurvey={id:crypto.randomUUID(),workspaceId:workspace?.id||null,startedAt:now,endedAt:null,status:'active',raw:[],segments:[],transitions:[{type:'terrain',at:now,rawIndex:0}],activeSegmentStartedAt:now,previousOrientation:mapOrientation};fieldSurveySessions.push(fieldSurvey);fieldSurveySegment='terrain';fieldSurveySegmentCoords=[];fieldSurveyFollow=true;document.body.classList.add('field-survey-active');$('#fieldSurveyPanel').hidden=false;fieldSurveyPanel.reset();$('#fieldSurveyStartSheet').close();if(watchId===null)startGps();if(mapOrientation!=='compass')await applyMapOrientation('heading-up');fieldSurveyElapsedTimer=setInterval(updateFieldSurveyStatus,15000);updateFieldSurveyStatus();requestFieldWakeLock();await saveFieldSurveysNow();toast('Fältinmätning startad · rå GPS-logg sparas')}
 async function stopFieldSurvey(){if(!fieldSurvey)return;finalizeFieldSurveySegment();fieldSurvey.endedAt=new Date().toISOString();fieldSurvey.status='completed';delete fieldSurvey.activeSegmentStartedAt;await saveFieldSurveysNow();if(fieldSurveyElapsedTimer)clearInterval(fieldSurveyElapsedTimer);fieldSurveyElapsedTimer=null;if(wakeLock)await wakeLock.release().catch(()=>{});wakeLock=null;if(mapOrientation==='heading-up')await applyMapOrientation(fieldSurvey.previousOrientation==='heading-up'?'map-north':fieldSurvey.previousOrientation);fieldSurvey=null;fieldSurveySegment='terrain';fieldSurveySegmentCoords=[];renderFieldSurveyTemp();if(fieldSurveyRawLayer)map.removeLayer(fieldSurveyRawLayer);fieldSurveyRawLayer=null;$('#fieldSurveyLogs').textContent='Råloggar';fieldSurveyPanel.reset();$('#fieldSurveyPanel').hidden=true;document.body.classList.remove('field-survey-active','field-survey-tools-open');toast('Fältinmätningen sparades')}
 async function loadFieldSurveySessions(){
   fieldSurveySessions=await mapDataStore.get(fieldSurveyStorageKey)||[];
@@ -656,6 +682,7 @@ function openFieldSurveyLogs(){renderFieldSurveyLogs();$('#fieldSurveyStartSheet
 $('#fieldSurveyToggle').onclick=()=>fieldSurvey?fieldSurveyPanel.toggle():$('#fieldSurveyStartSheet').showModal();$('#startFieldSurvey').onclick=startFieldSurvey;$('#stopFieldSurvey').onclick=stopFieldSurvey;$('#browseFieldSurveyLogs').onclick=openFieldSurveyLogs;
 $('#fieldFollow').onclick=()=>setFieldSurveyFollow(!fieldSurveyFollow);map.on('dragstart',()=>{if(fieldSurvey)setFieldSurveyFollow(false)});
 $('#fieldHeading').onclick=async()=>{if(mapOrientation==='heading-up')await applyMapOrientation('map-north',{announce:true});else await applyMapOrientation('heading-up',{announce:true});updateFieldSurveyStatus()};
+$('#fieldCompass').onclick=()=>applyMapOrientation(mapOrientation==='compass'?'map-north':'compass',{announce:true,userGesture:true});
 $('#fieldPointHere').onclick=()=>lastPosition?addPoint(lastPosition.latlng,lastPosition.accuracy,'gps',prefs.point):toast('GPS söker position · försök igen strax');
 $('#fieldPointManual').onclick=()=>{if(recording)return toast('Slutför eller avbryt pågående objekt först');setFieldSurveyFollow(false);recording={mode:'manual',cat:'point',type:prefs.point};labels();toast(`${name('point',prefs.point)} · tryck på kartan, GPS-loggen fortsätter`)};
 $('#fieldAreaManual').onclick=()=>{if(recording)return toast('Slutför eller avbryt pågående objekt först');setFieldSurveyFollow(false);recording={mode:'manual',cat:'area',type:prefs.area};currentCoords=[];showDrawingBar();labels();toast('Tryck ut områdets hörn · GPS-loggen fortsätter')};
@@ -673,17 +700,18 @@ function startGps(){
   if(!navigator.geolocation){toast('GPS stöds inte av webbläsaren');return}
   localStorage.setItem('omapmaker.gpsEnabled','true');$('#gpsQuality').className='';$('#gpsQuality span').textContent='GPS söker position…';
   watchId=navigator.geolocation.watchPosition(position=>{
-    const previousFix=lastPosition?.fix,fix=fieldSurveyFix(position),ll=L.latLng(fix.latitude,fix.longitude);
+    const fix=fieldSurveyFix(position);
+    if(!Number.isFinite(fix.latitude)||Math.abs(fix.latitude)>90||!Number.isFinite(fix.longitude)||Math.abs(fix.longitude)>180||!Number.isFinite(fix.accuracy)||fix.accuracy<0||!Number.isFinite(fix.timestamp)||fix.timestamp<0||fix.timestamp<=(lastPosition?.fix?.timestamp??-Infinity))return;
+    const ll=L.latLng(fix.latitude,fix.longitude);
     lastPosition={latlng:ll,accuracy:fix.accuracy,fix};
     if(!gpsMarker){gpsCircle=L.circle(ll,{pane:'gpsPane',interactive:false,radius:fix.accuracy,className:'accuracy'}).addTo(map);gpsMarker=L.circleMarker(ll,{pane:'gpsPane',interactive:false,radius:7,color:'#fff',weight:3,fillColor:'#2677c7',fillOpacity:1,className:'gps-position-marker'}).addTo(map);gpsMarker.bringToFront()}
     else{gpsMarker.setLatLng(ll);gpsCircle.setLatLng(ll).setRadius(fix.accuracy);gpsMarker.bringToFront()}
     const [cls,label]=quality(fix.accuracy);$('#gpsQuality').className=cls;$('#gpsQuality span').textContent=label;
-    const movement=previousFix&&fix.accuracy<=50&&previousFix.accuracy<=50&&distanceMetres([previousFix.longitude,previousFix.latitude],[fix.longitude,fix.latitude])>=3?movementHeading(previousFix,fix):null,heading=fix.heading??movement;
-    if(mapOrientation==='heading-up'&&heading!==null){freeMapBearing=headingUpBearing(heading);map.setBearing(freeMapBearing)}
+    mapHeadingControl.updateMovement(fix);
     if(fieldSurvey){
       fieldSurvey.raw.push(fix);
       if(FIELD_SURVEY_SEGMENTS[fieldSurveySegment]?.objectType&&appendSurveyCoordinate(fieldSurveySegmentCoords,fix))renderFieldSurveyTemp();
-      if(fieldSurveyFollow)map.panTo(ll,{animate:true,duration:.35,noMoveStart:true});
+      if(fieldSurveyFollow&&fix.accuracy<=50&&!map._animatingZoom&&!map.dragging?._draggable?._moving){map.stop();map.panTo(ll,{animate:false,noMoveStart:true})}
       updateFieldSurveyStatus();queueFieldSurveySave();
     }
     if(recording?.mode==='gps'&&fix.accuracy<=50){currentCoords.push(fixCoordinate(fix));updateTemp()}
@@ -693,9 +721,10 @@ function startGps(){
   },{enableHighAccuracy:true,maximumAge:0,timeout:15000});
   refreshGpsButton();
 }
-function stopGps(){if(fieldSurvey)return toast('Avsluta fältinmätningen innan GPS stängs av');if(recording?.mode==='gps')return toast('Avsluta eller avbryt GPS-inspelningen först');if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;lastPosition=null;if(gpsMarker)map.removeLayer(gpsMarker);if(gpsCircle)map.removeLayer(gpsCircle);gpsMarker=null;gpsCircle=null;localStorage.setItem('omapmaker.gpsEnabled','false');$('#gpsQuality').className='';refreshGpsButton()}
+function stopGps(){if(fieldSurvey)return toast('Avsluta fältinmätningen innan GPS stängs av');if(recording?.mode==='gps')return toast('Avsluta eller avbryt GPS-inspelningen först');if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;lastPosition=null;mapHeadingControl.resetMovement();if(gpsMarker)map.removeLayer(gpsMarker);if(gpsCircle)map.removeLayer(gpsCircle);gpsMarker=null;gpsCircle=null;localStorage.setItem('omapmaker.gpsEnabled','false');$('#gpsQuality').className='';refreshGpsButton()}
 $('#gpsQuality').onclick=()=>watchId===null?startGps():stopGps();
 if(localStorage.getItem('omapmaker.gpsEnabled')!=='false')startGps();else refreshGpsButton();
+applyMapOrientation(initialMapOrientation);
 $('#centerLocationButton').onclick=centerOnCurrentPosition;
 if(workspace){$('#centerWorkspaceButton').onclick=fitWorkspace}else $('#centerWorkspaceButton').hidden=true;
 function refreshFieldPresentation(){layers.forEach(applyFieldPresentation)}

@@ -32,6 +32,11 @@ jobs:
       - name: Test frontend modules
         run: node tools/test_frontend_modules.mjs
 
+      - name: Test compass, travel direction and rotation bounds
+        run: |
+          node tools/test_heading_tracking.mjs
+          node tools/test_rotation_rendering.mjs
+
       - name: Test ISOM renderer
         run: node tools/test_isom_renderer.js
 
