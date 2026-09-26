@@ -1,3 +1,4 @@
+import {createFieldJournal,createJournalWriter,surveyPieceId} from './js/field_journal.mjs?v=1';
 import {createFieldSurveyPanel} from './js/field_survey_panel.mjs?v=1';
 import {createTeamApi,createTeamSync} from './js/team_sync.mjs?v=1';
 import './js/offline.mjs?v=1';
@@ -26,7 +27,7 @@ import {ensureLocalOriginal, generatedMapObject, localObjectLifecycle, mapObject
 import {popupLayersFromElements, popupStackContent} from './js/popup_stack.mjs?v=1';
 import {applyDefaultSymbolSettings, bridgeTunnelCurveSegments, cliffTagSegments, closeLineCoordinates, courseCrossSegments, fenceTagSegments, groupedFenceTagSegments, groupedProminentLineChevronSegments, groupedWallDotCoordinates, isBarrierLineSymbol, isCliffSymbol, isClosedLineCoordinates, isDecoratedLineSymbol, isPowerLineSymbol, lineCoordinatesWithoutGaps, nearestBarrierAttachment, nearestPointOnLine, parallelLineCoordinates, powerSupportFeatures, prominentLineChevronSegments, retainingWallHalfDotPolygons, snapPowerSupports, stairwayStepSegments, wallDotCoordinates} from './js/symbol_object_settings.mjs?v=10';
 import {FIELD_SURVEY_SEGMENTS, appendSurveyCoordinate, distanceMetres, fieldSurveyDuration, fieldSurveyFix, fixCoordinate, formatFieldSurveyDuration, smoothSurveyLine} from './js/field_survey.mjs?v=2';
-import {createAccountApi, userMapCacheKey} from './js/account_api.mjs?v=5';
+import {createAccountApi, userMapCacheKey} from './js/account_api.mjs?v=6';
 
 const accountApi=createAccountApi();
 let accountUser=accountApi.cachedUser(),accountOnline=false;
@@ -53,7 +54,7 @@ if(workspace?.teamId){
 }
 
 let initialUserData=null,userDataCursor=0;
-if(accountUser&&accountOnline){try{initialUserData=await accountApi.userData(0);userDataCursor=initialUserData.cursor}catch{accountOnline=false}}
+if(accountUser&&accountOnline){try{initialUserData=await accountApi.userData(0,true);userDataCursor=initialUserData.cursor}catch{accountOnline=false}}
 
 const symbolRegistry=window.OMAPMAKER_ISOM_REGISTRY;
 if(!symbolRegistry?.registryVersion)throw new Error('OMapMakers symbolregister kunde inte läsas');
@@ -91,7 +92,7 @@ if(!teamSync&&accountUser)localStorage.setItem(userMapStorageKey,JSON.stringify(
 let mode = localStorage.getItem('omapmaker.mode') === 'manual' ? 'manual' : 'gps';
 let recording = null, currentCoords = [], tempLayer = null, selected = null, handles = [], supportPlacement = null, supportEdit = null, bridgePlacement = null, bridgeGuideLayer = null;
 let lastPosition = null, watchId = null, gpsMarker = null, gpsCircle = null;
-let fieldSurvey=null,fieldSurveySegment='terrain',fieldSurveySegmentCoords=[],fieldSurveyTempLayer=null,fieldSurveyRawLayer=null,fieldSurveyFollow=true,fieldSurveySaveTimer=null,wakeLock=null,fieldSurveyElapsedTimer=null;
+let fieldSurvey=null,fieldSurveySegment='terrain',fieldSurveySegmentCoords=[],fieldSurveyTempLayer=null,fieldSurveyRawLayer=null,fieldSurveyFollow=true,wakeLock=null;
 const layers = new Map();
 const storedDeviceId=localStorage.getItem('omapmaker.deviceId');const deviceId=uuidPattern.test(storedDeviceId||'')?storedDeviceId:crypto.randomUUID();localStorage.setItem('omapmaker.deviceId',deviceId);
 function cacheWorkspaces(){if(accountUser)accountApi.cacheWorkspaces(accountUser.id,workspaces);else localStorage.setItem('omapmaker.workspaces',JSON.stringify(workspaces))}
@@ -643,40 +644,178 @@ $('#bridgeSelectRoads').onclick=startBridgeRoadSelection;$('#bridgeDrawFree').on
 function openSheet(cat){if(recording||supportEdit)return toast('Slutför eller avbryt pågående objekt först');$('#sheetCategory').textContent=cat==='point'?'PLACERA':cat==='line'?'LINJE':'OMRÅDE';$('#sheetTitle').textContent=`Välj ${cat==='point'?'punktobjekt':cat==='line'?'linjeobjekt':'områdestyp'}`;$('#sheetOptions').innerHTML='';catalog[cat].forEach(d=>{const b=document.createElement('button');b.type='button';b.className=`symbol-choice${d[0]===prefs[cat]?' selected':''}`;b.innerHTML=`<span class="symbol-preview">${symbolPreview(cat,d[0])}</span><span class="symbol-name">${escapeHtml(d[2])}</span><small>${escapeHtml(isomClaim(d[1],manualTypes[d[0]].geometry))}</small>`;b.onclick=()=>{prefs[cat]=d[0];save();labels();$('#objectSheet').close();toast(`${d[2]} vald`)};$('#sheetOptions').append(b)});$('#objectSheet').showModal()}
 document.querySelectorAll('.tool-menu').forEach(b=>b.onclick=()=>openSheet(b.dataset.category));
 
-function updateFieldSurveyStatus(){if(!fieldSurvey)return;$('#fieldSurveyElapsed').textContent=`${formatFieldSurveyDuration(fieldSurveyDuration(fieldSurvey))} · ${fieldSurvey.raw.length} GPS-punkter`;document.querySelectorAll('[data-field-segment]').forEach(button=>button.classList.toggle('active',button.dataset.fieldSegment===fieldSurveySegment));$('#fieldFollow').classList.toggle('active',fieldSurveyFollow);$('#fieldFollow').setAttribute('aria-pressed',String(fieldSurveyFollow));const heading=mapOrientation==='heading-up';$('#fieldHeading').classList.toggle('active',heading);$('#fieldHeading').setAttribute('aria-pressed',String(heading))}
-const lastFieldSurveySyncHashes=new Map();let fieldSurveyServerTimer=null,fieldSurveyServerRunning=false;
-function surveySyncPayload(session){const value=cloneJson(session);delete value._syncRevision;delete value._syncDirty;delete value._syncConflict;return value}
-function surveySyncHash(session){return JSON.stringify(surveySyncPayload(session))}
-function queueFieldSurveyServerSync(){if(!accountUser||!accountOnline)return;if(fieldSurveyServerTimer)clearTimeout(fieldSurveyServerTimer);fieldSurveyServerTimer=setTimeout(()=>{fieldSurveyServerTimer=null;flushFieldSurveyServerSync().catch(()=>{})},1000)}
+function updateFieldSurveyStatus(){if(!fieldSurvey)return;$('#fieldSurveyElapsed').textContent=`${formatFieldSurveyDuration(fieldSurveyDuration(fieldSurvey))} · ${fieldSurvey.pointCount||0} GPS-punkter`;document.querySelectorAll('[data-field-segment]').forEach(button=>button.classList.toggle('active',button.dataset.fieldSegment===fieldSurveySegment));$('#fieldFollow').classList.toggle('active',fieldSurveyFollow);$('#fieldFollow').setAttribute('aria-pressed',String(fieldSurveyFollow));const heading=mapOrientation==='heading-up';$('#fieldHeading').classList.toggle('active',heading);$('#fieldHeading').setAttribute('aria-pressed',String(heading))}
+const fieldJournal=createFieldJournal(fieldSurveyStorageKey);
+let fieldWriter=null,fieldSavingError='',fieldUploadError='',fieldUploadRunning=false,fieldBusy=false,fieldReady=false,fieldLocked=false,fieldPreviewTimer=null;
+let fieldLatestFix=null,fieldStorageInfo='',fieldNeedsGap=false,fieldPreviewHistory=[];
+function fieldError(error){fieldSavingError=error.message||'Kunde inte spara fältpasset';updateFieldStorageStatus();toast(fieldSavingError)}
+function updateFieldStorageStatus(){
+  const node=$('#fieldSurveyStorageStatus');if(!node)return;
+  node.setAttribute('role',fieldSavingError?'alert':'status');
+  node.textContent=fieldSavingError||[fieldSurvey?.savedAt?`Sparat på telefonen ${new Date(fieldSurvey.savedAt).toLocaleTimeString('sv-SE')}`:'Sparas automatiskt var 5:e sekund',fieldUploadError||(!accountUser?'Endast på telefonen':navigator.onLine?'Uppladdning sker automatiskt':'Offline · väntar på uppladdning'),fieldStorageInfo].filter(Boolean).join(' · ');
+}
+async function checkFieldStorage(request=false){
+  try{if(request)await navigator.storage?.persist?.();const estimate=await navigator.storage?.estimate?.();const persistent=await navigator.storage?.persisted?.();fieldStorageInfo=estimate?.quota?`${formatBytes(Math.max(0,estimate.quota-estimate.usage))} tillgängligt${persistent?' · beständig lagring':''}`:'';if(estimate?.quota-estimate?.usage<20*1024*1024)fieldStorageInfo='Lite lagringsutrymme kvar · exportera en säkerhetskopia';updateFieldStorageStatus()}catch{}
+}
+function attachFieldWriter(){fieldSurvey.persistedCount=fieldSurvey.pointCount||0;fieldWriter=createJournalWriter(fieldJournal,fieldSurvey,{onSaved:()=>{fieldSavingError='';updateFieldStorageStatus()},onError:fieldError})}
+async function saveFieldSurveysNow(){if(!fieldWriter)return;await fieldWriter.flush();updateFieldStorageStatus();void flushFieldSurveyServerSync()}
+async function journalRequest(path,body){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+  try{const response=await accountApi.authenticatedFetch(path,{signal:controller.signal,...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});const result=await response.json();if(!response.ok)throw new Error(result.error||'Uppladdningen misslyckades');return result}finally{clearTimeout(timer)}
+}
 async function flushFieldSurveyServerSync(){
-  if(!accountUser||!accountOnline||fieldSurveyServerRunning)return;const dirty=fieldSurveySessions.filter(session=>session.status!=='active'&&session._syncDirty);if(!dirty.length)return;fieldSurveyServerRunning=true;const sent=new Map(dirty.map(session=>[session.id,surveySyncHash(session)]));
-  try{const result=await accountApi.syncUserData([],dirty.map(session=>({id:session.id,payload:surveySyncPayload(session),expectedRevision:Number(session._syncRevision)||0})));userDataCursor=Math.max(userDataCursor,result.cursor||0);for(const receipt of result.fieldSurveys){const session=fieldSurveySessions.find(item=>item.id===receipt.id);if(!session)continue;session._syncRevision=receipt.revision;lastFieldSurveySyncHashes.set(session.id,sent.get(session.id));if(surveySyncHash(session)===sent.get(session.id)){session._syncDirty=false;delete session._syncConflict}}await mapDataStore.put(fieldSurveyStorageKey,fieldSurveySessions)}
-  catch(error){if(error.code==='sync_conflict'){for(const current of error.current||[]){const session=fieldSurveySessions.find(item=>item.id===current.id);if(session)session._syncConflict=true}}else accountOnline=false;await mapDataStore.put(fieldSurveyStorageKey,fieldSurveySessions)}
-  finally{fieldSurveyServerRunning=false}
+  if(!accountUser||!navigator.onLine||fieldUploadRunning||!fieldReady||!fieldLocked)return;fieldUploadRunning=true;
+  try{
+    for(const session of await fieldJournal.list()){
+      for(let sequence=(await fieldJournal.ack(session.id))+1;sequence<=session.sequence;sequence++){
+        const block=await fieldJournal.block(session.id,sequence);if(!block)throw new Error('Ett GPS-block saknas lokalt');
+        const receipt=await journalRequest('/api/field-journal',block);
+        if(receipt.sequence!==sequence||receipt.id!==session.id)throw new Error('Servern bekräftade inte GPS-blocket');
+        await fieldJournal.acknowledge(session.id,sequence);
+      }
+    }
+    fieldUploadError='Sparade block uppladdade';
+  }catch(error){fieldUploadError=`Väntar på uppladdning · ${error.message}`}
+  finally{fieldUploadRunning=false;updateFieldStorageStatus()}
 }
-async function saveFieldSurveysNow(){if(fieldSurveySaveTimer){clearTimeout(fieldSurveySaveTimer);fieldSurveySaveTimer=null}if(accountUser)for(const session of fieldSurveySessions){if(session.status==='active')continue;const previous=lastFieldSurveySyncHashes.get(session.id),current=surveySyncHash(session);if(previous===undefined||previous!==current)session._syncDirty=true}await mapDataStore.put(fieldSurveyStorageKey,fieldSurveySessions);queueFieldSurveyServerSync()}
-function queueFieldSurveySave(){if(fieldSurveySaveTimer)return;fieldSurveySaveTimer=setTimeout(()=>saveFieldSurveysNow().catch(()=>{}),1800)}
-function renderFieldSurveyTemp(){if(fieldSurveyTempLayer)map.removeLayer(fieldSurveyTempLayer);fieldSurveyTempLayer=null;const definition=FIELD_SURVEY_SEGMENTS[fieldSurveySegment];if(!definition?.objectType||fieldSurveySegmentCoords.length<2)return;const symbol=item('line',definition.objectType)?.[1],coordinates=gpsLineCoordinates(fieldSurveySegmentCoords,symbol),style=recordingLineStyle(definition.objectType);fieldSurveyTempLayer=L.polyline(latlngs(coordinates),{...style,pane:'fieldPane',interactive:false,className:'field-survey-track gps-recording-line'}).addTo(map);applyRecordingLinePresentation(fieldSurveyTempLayer,style)}
-function finalizeFieldSurveySegment(){
-  const definition=FIELD_SURVEY_SEGMENTS[fieldSurveySegment];if(!fieldSurvey||!definition?.objectType||fieldSurveySegmentCoords.length<2){fieldSurveySegmentCoords=[];renderFieldSurveyTemp();return}
-  const objectType=definition.objectType,symbol=item('line',objectType)[1],rawCoordinates=fieldSurveySegmentCoords.map(coordinate=>[...coordinate]),coordinates=gpsLineCoordinates(rawCoordinates,symbol),obj={...identity(),objectType,symbol,coordinates,rawCoordinates,source:'gps',quality:'unverified',gpsSmoothing:'accuracy-aware-v1',createdAt:new Date().toISOString(),fieldSurveyId:fieldSurvey.id};
-  applyDefaultSymbolSettings(obj,obj.symbol);ensureLocalOriginal(obj);state.tracks.push(obj);renderLine(obj);fieldSurvey.segments.push({objectId:obj.id,objectType,startedAt:fieldSurvey.activeSegmentStartedAt,endedAt:new Date().toISOString(),pointCount:rawCoordinates.length,renderedPointCount:coordinates.length});fieldSurveySegmentCoords=[];renderFieldSurveyTemp();save()
+function renderFieldSurveyTemp(){
+  const definition=FIELD_SURVEY_SEGMENTS[fieldSurveySegment];
+  if(!definition?.objectType||fieldSurveySegmentCoords.length<2){if(fieldSurveyTempLayer)map.removeLayer(fieldSurveyTempLayer);fieldSurveyTempLayer=null;return}
+  const style=recordingLineStyle(definition.objectType),coordinates=gpsLineCoordinates([...fieldPreviewHistory,...fieldSurveySegmentCoords],item('line',definition.objectType)?.[1]);
+  if(fieldSurveyTempLayer){fieldSurveyTempLayer.setLatLngs(latlngs(coordinates));fieldSurveyTempLayer.setStyle(style)}
+  else fieldSurveyTempLayer=L.polyline(latlngs(coordinates),{...style,pane:'fieldPane',interactive:false,className:'field-survey-track gps-recording-line'}).addTo(map);
+  applyRecordingLinePresentation(fieldSurveyTempLayer,style);
 }
-function latestUsableFieldFix(){return fieldSurvey?.raw?.findLast?.(fix=>Number(fix.accuracy)<=50)||[...(fieldSurvey?.raw||[])].reverse().find(fix=>Number(fix.accuracy)<=50)||null}
-function selectFieldSurveySegment(next){if(!fieldSurvey||!FIELD_SURVEY_SEGMENTS[next]||next===fieldSurveySegment)return;finalizeFieldSurveySegment();fieldSurveySegment=next;fieldSurvey.activeSegmentStartedAt=new Date().toISOString();fieldSurvey.transitions.push({type:next,at:fieldSurvey.activeSegmentStartedAt,rawIndex:fieldSurvey.raw.length});const latest=latestUsableFieldFix();if(latest&&FIELD_SURVEY_SEGMENTS[next].objectType)appendSurveyCoordinate(fieldSurveySegmentCoords,latest,{minimumDistance:0});updateFieldSurveyStatus();renderFieldSurveyTemp();queueFieldSurveySave();toast(next==='terrain'?'Terräng · endast råloggen sparas':`${FIELD_SURVEY_SEGMENTS[next].label} mäts nu`)}
+function scheduleFieldPreview(){if(fieldPreviewTimer)return;fieldPreviewTimer=setTimeout(()=>{fieldPreviewTimer=null;renderFieldSurveyTemp()},1000)}
+function recordFieldFix(fix){
+  if(fieldBusy||!fieldWriter)return;
+  if(fieldSurvey.segments.at(-1)?.endedAt){fieldSavingError='Inspelningen är pausad. Försök avsluta fältpasset igen för att slutföra sparningen.';updateFieldStorageStatus();return}
+  try{
+    if(fieldNeedsGap&&fieldWriter.buffered<2048){const previous=fieldSurvey.segments.at(-1);if(previous)previous.endedAt=new Date(fieldLatestFix?.timestamp||Date.now()).toISOString();newFieldSegment(fieldSurveySegment);fieldNeedsGap=false}
+    fieldWriter.append({fix,segmentId:fieldSurvey.activeSegmentId,type:fieldSurveySegment});fieldSurvey.pointCount++;fieldLatestFix=fix;
+    if(FIELD_SURVEY_SEGMENTS[fieldSurveySegment]?.objectType&&appendSurveyCoordinate(fieldSurveySegmentCoords,fix)){
+      // Preview is deliberately bounded; untouched measurements are in the journal.
+      if(fieldSurveySegmentCoords.length>512){fieldPreviewHistory.push(...gpsLineCoordinates(fieldSurveySegmentCoords.splice(0,256),item('line',FIELD_SURVEY_SEGMENTS[fieldSurveySegment].objectType)?.[1]));if(fieldPreviewHistory.length>512)fieldPreviewHistory=fieldPreviewHistory.filter((_,index,all)=>index%2===0||index===all.length-1)}
+      scheduleFieldPreview();
+    }
+  }catch(error){fieldNeedsGap=true;fieldError(error)}
+}
+async function materializeFieldSegments(){
+  // Process bounded pieces and use stable IDs, so interruption during map saving is safe to retry.
+  for(const segment of fieldSurvey.segments.filter(segment=>segment.endedAt)){
+    if(segment.materialized&&Number.isInteger(segment.pieceCount)&&Array.from({length:segment.pieceCount},(_,index)=>surveyPieceId(segment.id,index)).every(id=>state.tracks.some(track=>track.id===id)))continue;
+    const definition=FIELD_SURVEY_SEGMENTS[segment.type];if(!definition?.objectType){segment.materialized=true;continue}
+    let coordinates=segment.startFix?[fixCoordinate(segment.startFix)]:[],piece=0;
+    const savePiece=()=>{
+      if(coordinates.length<2)return;
+      const id=surveyPieceId(segment.id,piece++),symbol=item('line',definition.objectType)[1];
+      if(!state.tracks.some(track=>track.id===id)){
+        const obj={...identity(),id,observationId:id,objectType:definition.objectType,symbol,coordinates:gpsLineCoordinates(coordinates,symbol),rawJournal:{sessionId:fieldSurvey.id,segmentId:segment.id,piece:piece-1},source:'gps',quality:'unverified',gpsSmoothing:'accuracy-aware-v1',createdAt:segment.startedAt,fieldSurveyId:fieldSurvey.id,fieldSegmentId:segment.id};
+        applyDefaultSymbolSettings(obj,obj.symbol);ensureLocalOriginal(obj);state.tracks.push(obj);renderLine(obj);
+      }
+    };
+    for await(const block of fieldJournal.blocks(fieldSurvey,{from:segment.startSequence||1,to:segment.endSequence||fieldSurvey.sequence}))for(const point of block.points){
+      if(point.segmentId!==segment.id)continue;
+      if(appendSurveyCoordinate(coordinates,point.fix)&&coordinates.length>=512){savePiece();coordinates=[coordinates.at(-1)]}
+    }
+    savePiece();save();segment.materialized=true;segment.pieceCount=piece;await saveFieldSurveysNow();
+  }
+}
+async function finalizeFieldSurveySegment(){
+  const segment=fieldSurvey.segments.find(segment=>segment.id===fieldSurvey.activeSegmentId);if(segment&&!segment.endedAt)segment.endedAt=new Date().toISOString();
+  await saveFieldSurveysNow();if(segment)segment.endSequence=fieldSurvey.sequence;await materializeFieldSegments();fieldSurveySegmentCoords=[];renderFieldSurveyTemp();
+}
+function newFieldSegment(type){fieldPreviewHistory=[];fieldNeedsGap=false;const now=new Date().toISOString();fieldSurveySegment=type;fieldSurvey.activeSegmentId=crypto.randomUUID();fieldSurvey.activeSegmentStartedAt=now;fieldSurvey.segments.push({id:fieldSurvey.activeSegmentId,type,startedAt:now,endedAt:null,startSequence:(fieldSurvey.sequence||0)+1});fieldSurveySegmentCoords=[]}
+async function selectFieldSurveySegment(next){
+  if(!fieldSurvey||fieldBusy||!FIELD_SURVEY_SEGMENTS[next]||next===fieldSurveySegment)return;fieldBusy=true;
+  try{await finalizeFieldSurveySegment();newFieldSegment(next);if(fieldLatestFix?.accuracy<=50){fieldSurvey.segments.at(-1).startFix=fieldLatestFix;appendSurveyCoordinate(fieldSurveySegmentCoords,fieldLatestFix,{minimumDistance:0})}await saveFieldSurveysNow();updateFieldSurveyStatus();renderFieldSurveyTemp();toast(`${FIELD_SURVEY_SEGMENTS[next].label} mäts nu`)}catch(error){fieldError(error)}finally{fieldBusy=false}
+}
 async function requestFieldWakeLock(){if(!fieldSurvey||wakeLock||!navigator.wakeLock?.request)return;try{wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener?.('release',()=>{wakeLock=null},{once:true});$('#fieldSurveyNotice').textContent='Skärmen hålls vaken. Lås inte telefonen – webbläsaren kan då pausa GPS.'}catch{$('#fieldSurveyNotice').textContent='Skärmen kunde inte hållas vaken. Lås inte telefonen – webbläsaren kan då pausa GPS.'}}
 function setFieldSurveyFollow(value){fieldSurveyFollow=Boolean(value);updateFieldSurveyStatus();if(fieldSurveyFollow&&lastPosition)map.panTo(lastPosition.latlng,{animate:true,duration:.35})}
-function showFieldSurveyRaw(session){if(fieldSurveyRawLayer)map.removeLayer(fieldSurveyRawLayer);fieldSurveyRawLayer=null;const coordinates=(session?.raw||[]).filter(fix=>Number.isFinite(fix.latitude)&&Number.isFinite(fix.longitude)).map(fix=>[fix.latitude,fix.longitude]);if(coordinates.length<2)return toast('Loggen innehåller ännu inte tillräckligt många punkter');fieldSurveyRawLayer=L.polyline(coordinates,{pane:'gpsPane',color:'#d14b42',weight:3,opacity:.8,dashArray:'6 5',className:'raw-field-survey'}).addTo(map);$('#fieldSurveyLogs').textContent='Dölj rålogg';map.fitBounds(fieldSurveyRawLayer.getBounds(),{padding:[35,35]});$('#fieldSurveyLogSheet').close();toast('Råloggen visas tillfälligt')}
-function downloadFieldSurvey(session){const blob=new Blob([JSON.stringify({type:'FeatureCollection',properties:{app:'OMapMaker',kind:'raw-field-survey',id:session.id,startedAt:session.startedAt,endedAt:session.endedAt},features:[{type:'Feature',properties:{accuracy:session.raw.map(f=>f.accuracy),timestamps:session.raw.map(f=>f.timestamp)},geometry:{type:'LineString',coordinates:session.raw.map(f=>[f.longitude,f.latitude,f.altitude]).filter(c=>Number.isFinite(c[0])&&Number.isFinite(c[1]))}}]},null,2)],{type:'application/geo+json'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=`omapmaker-faltlogg-${session.startedAt.slice(0,10)}.geojson`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-const fieldSurveyPanel=createFieldSurveyPanel(document);
-function renderFieldSurveyLogs(){const list=$('#fieldSurveyLogList');list.replaceChildren();const sessions=[...fieldSurveySessions].reverse();if(!sessions.length){const empty=document.createElement('p');empty.textContent='Inga fältloggar har sparats ännu.';list.append(empty);return}sessions.forEach(session=>{const article=document.createElement('article'),text=document.createElement('div'),title=document.createElement('b'),meta=document.createElement('small'),controls=document.createElement('div'),show=document.createElement('button'),download=document.createElement('button');title.textContent=new Date(session.startedAt).toLocaleString('sv-SE',{dateStyle:'medium',timeStyle:'short'});meta.textContent=`${formatFieldSurveyDuration(fieldSurveyDuration(session))} · ${session.raw.length} GPS-punkter · ${session.segments.length} kartstråk`;show.type='button';show.textContent='Visa';show.onclick=()=>showFieldSurveyRaw(session);download.type='button';download.textContent='Exportera';download.onclick=()=>downloadFieldSurvey(session);controls.className='field-log-actions';controls.append(show,download);text.append(title,meta);article.append(text,controls);list.append(article)})}
-async function startFieldSurvey(){if(fieldSurvey)return;const now=new Date().toISOString();fieldSurvey={id:crypto.randomUUID(),workspaceId:workspace?.id||null,startedAt:now,endedAt:null,status:'active',raw:[],segments:[],transitions:[{type:'terrain',at:now,rawIndex:0}],activeSegmentStartedAt:now,previousOrientation:mapOrientation};fieldSurveySessions.push(fieldSurvey);fieldSurveySegment='terrain';fieldSurveySegmentCoords=[];fieldSurveyFollow=true;document.body.classList.add('field-survey-active');$('#fieldSurveyPanel').hidden=false;fieldSurveyPanel.reset();$('#fieldSurveyStartSheet').close();if(watchId===null)startGps();if(mapOrientation!=='compass')await applyMapOrientation('heading-up');fieldSurveyElapsedTimer=setInterval(updateFieldSurveyStatus,15000);updateFieldSurveyStatus();requestFieldWakeLock();await saveFieldSurveysNow();toast('Fältinmätning startad · rå GPS-logg sparas')}
-async function stopFieldSurvey(){if(!fieldSurvey)return;finalizeFieldSurveySegment();fieldSurvey.endedAt=new Date().toISOString();fieldSurvey.status='completed';delete fieldSurvey.activeSegmentStartedAt;await saveFieldSurveysNow();if(fieldSurveyElapsedTimer)clearInterval(fieldSurveyElapsedTimer);fieldSurveyElapsedTimer=null;if(wakeLock)await wakeLock.release().catch(()=>{});wakeLock=null;if(mapOrientation==='heading-up')await applyMapOrientation(fieldSurvey.previousOrientation==='heading-up'?'map-north':fieldSurvey.previousOrientation);fieldSurvey=null;fieldSurveySegment='terrain';fieldSurveySegmentCoords=[];renderFieldSurveyTemp();if(fieldSurveyRawLayer)map.removeLayer(fieldSurveyRawLayer);fieldSurveyRawLayer=null;$('#fieldSurveyLogs').textContent='Råloggar';fieldSurveyPanel.reset();$('#fieldSurveyPanel').hidden=true;document.body.classList.remove('field-survey-active','field-survey-tools-open');toast('Fältinmätningen sparades')}
-async function loadFieldSurveySessions(){
-  fieldSurveySessions=await mapDataStore.get(fieldSurveyStorageKey)||[];
-  if(accountUser&&initialUserData){const desiredWorkspace=workspace?.id||null;for(const item of initialUserData.fieldSurveys||[]){if((item.payload?.workspaceId||null)!==desiredWorkspace)continue;const index=fieldSurveySessions.findIndex(session=>session.id===item.id),local=index>=0?fieldSurveySessions[index]:null;if(local?._syncDirty)continue;if(item.deleted){if(index>=0)fieldSurveySessions.splice(index,1);continue}const session={...item.payload,_syncRevision:item.revision,_syncDirty:false};if(index>=0)fieldSurveySessions[index]=session;else fieldSurveySessions.push(session)}}
-  let changed=false;fieldSurveySessions.forEach(session=>{lastFieldSurveySyncHashes.set(session.id,surveySyncHash(session));if(session.status==='active'){session.status='interrupted';session.endedAt=session.endedAt||new Date().toISOString();changed=true}});if(changed)await saveFieldSurveysNow();else await mapDataStore.put(fieldSurveyStorageKey,fieldSurveySessions);if(fieldSurveySessions.some(session=>session._syncDirty))queueFieldSurveyServerSync()
+async function showFieldSurveyRaw(session){
+  if(fieldSurveyRawLayer)map.removeLayer(fieldSurveyRawLayer);fieldSurveyRawLayer=null;
+  const lines=[];let current=[],segmentId=null,total=0,stride=Math.max(1,Math.ceil(session.pointCount/5000));
+  for await(const block of fieldJournal.blocks(session))for(const point of block.points){
+    if(point.segmentId!==segmentId){if(current.length>1)lines.push(current);current=[];segmentId=point.segmentId}
+    if(total++%stride===0)current.push([point.fix.latitude,point.fix.longitude]);
+  }
+  if(current.length>1)lines.push(current);if(!lines.length)return toast('Loggen innehåller ännu inte tillräckligt många punkter');
+  fieldSurveyRawLayer=L.polyline(lines,{pane:'gpsPane',color:'#d14b42',weight:3,opacity:.8,dashArray:'6 5',className:'raw-field-survey'}).addTo(map);$('#fieldSurveyLogs').textContent='Dölj rålogg';map.fitBounds(fieldSurveyRawLayer.getBounds(),{padding:[35,35]});$('#fieldSurveyLogSheet').close();toast('Råloggen visas förenklat. Exporten innehåller alla punkter.')
 }
+async function downloadFieldSurvey(session){
+  if(fieldSurvey?.id===session.id)await saveFieldSurveysNow();
+  const parts=['{"type":"FeatureCollection","properties":'+JSON.stringify({app:'OMapMaker',kind:'raw-field-survey',...session})+',"features":['];let first=true;
+  for await(const block of fieldJournal.blocks(session)){
+    const text=block.points.map(point=>{const value=(first?'':',')+JSON.stringify({type:'Feature',properties:{...point.fix,segmentId:point.segmentId,segmentType:point.type},geometry:{type:'Point',coordinates:[point.fix.longitude,point.fix.latitude,...(point.fix.altitude==null?[]:[point.fix.altitude])]}});first=false;return value}).join('');
+    if(text)parts.push(new Blob([text]));
+  }
+  parts.push(']}');const blob=new Blob(parts,{type:'application/geo+json'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=`omapmaker-faltlogg-${session.startedAt.slice(0,10)}.geojson`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),10000)
+}
+const fieldSurveyPanel=createFieldSurveyPanel(document);
+function renderFieldSurveyLogs(){
+  const list=$('#fieldSurveyLogList');list.replaceChildren();
+  if(!fieldSurveySessions.length){list.textContent='Inga fältloggar har sparats ännu.';return}
+  for(const session of [...fieldSurveySessions].reverse()){
+    const article=document.createElement('article'),text=document.createElement('div'),title=document.createElement('b'),meta=document.createElement('small'),controls=document.createElement('div');
+    title.textContent=new Date(session.startedAt).toLocaleString('sv-SE',{dateStyle:'medium',timeStyle:'short'});meta.textContent=`${session.pointCount||0} GPS-punkter · ${session.status==='completed'?'Avslutat':'Avbrutet eller pågående'} · ${session.savedAt?'sparat '+new Date(session.savedAt).toLocaleTimeString('sv-SE'):''}`;
+    const action=(label,fn)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=async()=>{button.disabled=true;try{await fn()}catch(error){fieldError(error)}finally{button.disabled=false}};controls.append(button)};
+    action('Visa',()=>showFieldSurveyRaw(session));action('Exportera',()=>downloadFieldSurvey(session));
+    if(session.status!=='completed'&&!fieldSurvey){action('Fortsätt spela in',()=>recoverFieldSurvey(session,true));action('Avsluta och behåll',()=>recoverFieldSurvey(session,false))}
+    else if(!fieldSurvey&&session.segments.length)action('Återskapa stigar',()=>recoverFieldSurvey(session,false));
+    controls.className='field-log-actions';text.append(title,meta);article.append(text,controls);list.append(article);
+  }
+}
+function showActiveFieldSurvey(){document.body.classList.add('field-survey-active');$('#fieldSurveyPanel').hidden=false;fieldSurveyPanel.reset();$('#fieldSurveyStartSheet').close();$('#fieldSurveyLogSheet').close();$('#fieldSurveyRecoverySheet').close();fieldSurveyFollow=true;if(watchId===null)startGps();updateFieldSurveyStatus();requestFieldWakeLock()}
+async function startFieldSurvey(){
+  if(fieldSurvey||fieldBusy||!fieldReady||!fieldLocked)return toast('Fältloggen är inte redo eller är öppen i en annan flik');fieldBusy=true;
+  try{await checkFieldStorage(true);const now=new Date().toISOString();fieldSurvey={id:crypto.randomUUID(),workspaceId:workspace?.id||null,startedAt:now,endedAt:null,status:'active',pointCount:0,sequence:0,segments:[],previousOrientation:mapOrientation};fieldSurveySessions.push(fieldSurvey);fieldLatestFix=null;newFieldSegment('terrain');attachFieldWriter();await saveFieldSurveysNow();showActiveFieldSurvey();if(mapOrientation!=='compass')await applyMapOrientation('heading-up');toast('Fältpasset sparas automatiskt på telefonen')}catch(error){fieldError(error);if(fieldSurvey)showActiveFieldSurvey()}finally{fieldBusy=false}
+}
+async function stopFieldSurvey(){
+  if(!fieldSurvey||fieldBusy)return;fieldBusy=true;
+  try{await finalizeFieldSurveySegment();fieldSurvey.endedAt=new Date().toISOString();fieldSurvey.status='completed';await saveFieldSurveysNow();if(wakeLock)await wakeLock.release().catch(()=>{});wakeLock=null;if(mapOrientation==='heading-up')await applyMapOrientation(fieldSurvey.previousOrientation==='heading-up'?'map-north':fieldSurvey.previousOrientation||'map-north');fieldSurvey=null;fieldWriter=null;fieldSurveySegment='terrain';fieldSurveySegmentCoords=[];renderFieldSurveyTemp();if(fieldSurveyRawLayer)map.removeLayer(fieldSurveyRawLayer);fieldSurveyRawLayer=null;fieldSurveyPanel.reset();$('#fieldSurveyPanel').hidden=true;document.body.classList.remove('field-survey-active','field-survey-tools-open');toast('Fältpass och stigsegment sparade')}catch(error){fieldError(error)}finally{fieldBusy=false}
+}
+async function recoverFieldSurvey(session,resume){
+  if(fieldSurvey||fieldBusy||!fieldLocked)return;fieldBusy=true;
+  try{
+    // Fork recovered recording to a new session before accepting new fixes. The old journal remains immutable on other devices.
+    fieldSurvey=session;attachFieldWriter();const last=session.segments.at(-1),type=last?.type||'terrain';
+    if(last&&!last.endedAt)last.endedAt=session.savedAt||new Date().toISOString();
+    await materializeFieldSegments();session.status='completed';session.endedAt=session.savedAt;await saveFieldSurveysNow();
+    fieldSurvey=null;fieldWriter=null;$('#fieldSurveyRecoverySheet').close();$('#fieldSurveyLogSheet').close();
+    if(resume){fieldBusy=false;await startFieldSurvey();if(type!=='terrain')await selectFieldSurveySegment(type);toast('Inspelningen fortsätter efter en markerad lucka')}else toast('Det sparade fältpasset har återställts på kartan');
+  }catch(error){fieldError(error);if(fieldSurvey)showActiveFieldSurvey()}finally{fieldBusy=false}
+}
+async function loadFieldSurveySessions(){
+  if(!navigator.locks)throw new Error('Webbläsaren saknar stöd för säker fältinspelning. Uppdatera webbläsaren.');
+  fieldLocked=await new Promise(resolve=>navigator.locks.request(`field-journal:${fieldSurveyStorageKey}`,{ifAvailable:true},lock=>{resolve(Boolean(lock));return lock?new Promise(()=>{}):undefined}));
+  if(!fieldLocked)throw new Error('Fältloggen är öppen i en annan flik. Fortsätt där.');
+  // Migrate old local and server logs once, then retain only metadata in memory.
+  const legacy=await mapDataStore.get(fieldSurveyStorageKey)||[];
+  for(const item of initialUserData?.fieldSurveys||[])if((item.payload?.workspaceId||null)===(workspace?.id||null)&&!legacy.some(s=>s.id===item.id)&&!item.deleted)legacy.push(item.payload);
+  for(const session of legacy){
+    const existing=await fieldJournal.get(session.id);if(existing?.legacyImported)continue;
+    const {raw=[],...old}=session;
+    const transition=session.transitions?.at(-1),recoverable=session.status!=='completed'&&FIELD_SURVEY_SEGMENTS[transition?.type]?.objectType;
+    const meta=existing||{...old,segments:recoverable?[{id:crypto.randomUUID(),type:transition.type,startedAt:transition.at,endedAt:null}]:[],sequence:0,pointCount:0,status:session.status==='active'?'interrupted':session.status};
+    meta.persistedCount=meta.pointCount||0;
+    const writer=createJournalWriter(fieldJournal,meta);
+    for(let index=meta.pointCount||0;index<raw.length;index++){const segment=recoverable&&index>=transition.rawIndex?meta.segments[0]:null;writer.append({fix:raw[index],type:segment?.type||'terrain',segmentId:segment?.id||null});meta.pointCount++;if(writer.buffered>=128)await writer.flush()}
+    meta.legacyImported=true;await writer.flush();
+  }
+  await mapDataStore.delete(fieldSurveyStorageKey);if(initialUserData)initialUserData.fieldSurveys=[];
+  if(accountUser&&navigator.onLine){try{
+    const remote=await journalRequest('/api/field-journal');
+    for(const meta of remote.sessions||[]){if((meta.workspaceId||null)!==(workspace?.id||null))continue;const local=await fieldJournal.get(meta.id);for(let sequence=(local?.sequence||0)+1;sequence<=meta.sequence;sequence++)await fieldJournal.importBlock(await journalRequest(`/api/field-journal?id=${encodeURIComponent(meta.id)}&sequence=${sequence}`))}
+  }catch(error){fieldUploadError=`Återhämtning från servern väntar · ${error.message}`}}
+  fieldSurveySessions=await fieldJournal.list();fieldReady=true;await checkFieldStorage();void flushFieldSurveyServerSync();
+  const interrupted=fieldSurveySessions.find(session=>session.status!=='completed');
+  if(interrupted){$('#fieldRecoveryText').textContent=`Ett fältpass avbröts. ${interrupted.pointCount||0} GPS-punkter sparade${interrupted.savedAt?' till '+new Date(interrupted.savedAt).toLocaleString('sv-SE'):''}.`;$('#fieldRecoverContinue').onclick=()=>recoverFieldSurvey(interrupted,true);$('#fieldRecoverFinish').onclick=()=>recoverFieldSurvey(interrupted,false);$('#fieldSurveyRecoverySheet').showModal()}
+}
+setInterval(()=>{if(fieldSurvey)updateFieldSurveyStatus();if(fieldWriter&&!fieldBusy)saveFieldSurveysNow().catch(fieldError)},5000);
+setInterval(()=>{void checkFieldStorage();void flushFieldSurveyServerSync()},30000);
+addEventListener('online',()=>void flushFieldSurveyServerSync());
+$('#fieldRetrySave').onclick=()=>saveFieldSurveysNow().catch(fieldError);
+
 document.querySelectorAll('[data-field-segment]').forEach(button=>button.onclick=()=>selectFieldSurveySegment(button.dataset.fieldSegment));
 function openFieldSurveyLogs(){renderFieldSurveyLogs();$('#fieldSurveyStartSheet').close();$('#fieldSurveyLogSheet').showModal()}
 $('#fieldSurveyToggle').onclick=()=>fieldSurvey?fieldSurveyPanel.toggle():$('#fieldSurveyStartSheet').showModal();$('#startFieldSurvey').onclick=startFieldSurvey;$('#stopFieldSurvey').onclick=stopFieldSurvey;$('#browseFieldSurveyLogs').onclick=openFieldSurveyLogs;
@@ -689,7 +828,7 @@ $('#fieldAreaManual').onclick=()=>{if(recording)return toast('Slutför eller avb
 $('#fieldPointMenu').onclick=()=>openSheet('point');$('#fieldAreaMenu').onclick=()=>openSheet('area');$('#fieldMoreTools').onclick=()=>{setToolbarCollapsed(false,false);fieldSurveyPanel.showTools(true)};
 $('#fieldPowerSupport').onclick=()=>{if(recording||supportEdit)return toast('Slutför eller avbryt pågående objekt först');const lines=state.tracks.filter(item=>isPowerLineSymbol(manualObjectSymbol('line',item))&&!localObjectIsInactive(item));if(!lines.length){prefs.line='power_line';save();labels();setToolbarCollapsed(false,false);fieldSurveyPanel.showTools(true);return toast('Rita kraftledningen först, placera sedan stolpar på den')}setFieldSurveyFollow(false);supportPlacement={objectId:null,largeMast:null,chooseNearest:true};toast('Tryck nära kraftledningen där masten står · GPS-loggen fortsätter')};
 $('#fieldSurveyLogs').onclick=()=>{if(fieldSurveyRawLayer){map.removeLayer(fieldSurveyRawLayer);fieldSurveyRawLayer=null;$('#fieldSurveyLogs').textContent='Råloggar';return toast('Råloggen dold')}openFieldSurveyLogs()};
-document.addEventListener('visibilitychange',()=>{if(!fieldSurvey)return;if(document.visibilityState==='visible')requestFieldWakeLock();else saveFieldSurveysNow().catch(()=>{})});
+document.addEventListener('visibilitychange',()=>{if(!fieldSurvey)return;if(document.visibilityState==='visible')requestFieldWakeLock();else saveFieldSurveysNow().catch(fieldError)});
 
 function quality(a){return a<=3?['excellent',`★ GPS ± ${Math.round(a)} m · Utmärkt`]:a<=10?['good',`GPS ± ${Math.round(a)} m · Bra`]:a<=50?['warn',`GPS ± ${Math.round(a)} m · Osäkert`]:['bad',`GPS ± ${Math.round(a)} m · Otillräckligt`]}
 function refreshGpsButton(){const running=watchId!==null,button=$('#gpsQuality');button.setAttribute('aria-pressed',String(running));button.title=running?'Stäng av GPS':'Starta GPS';if(!running)button.querySelector('span').textContent='GPS av · Starta'}
@@ -709,10 +848,9 @@ function startGps(){
     const [cls,label]=quality(fix.accuracy);$('#gpsQuality').className=cls;$('#gpsQuality span').textContent=label;
     mapHeadingControl.updateMovement(fix);
     if(fieldSurvey){
-      fieldSurvey.raw.push(fix);
-      if(FIELD_SURVEY_SEGMENTS[fieldSurveySegment]?.objectType&&appendSurveyCoordinate(fieldSurveySegmentCoords,fix))renderFieldSurveyTemp();
+      recordFieldFix(fix);
       if(fieldSurveyFollow&&fix.accuracy<=50&&!map._animatingZoom&&!map.dragging?._draggable?._moving){map.stop();map.panTo(ll,{animate:false,noMoveStart:true})}
-      updateFieldSurveyStatus();queueFieldSurveySave();
+      updateFieldSurveyStatus();
     }
     if(recording?.mode==='gps'&&fix.accuracy<=50){currentCoords.push(fixCoordinate(fix));updateTemp()}
   },error=>{
@@ -904,7 +1042,7 @@ $('#runContourGeneration').onclick=async()=>{
   }catch(error){status.textContent=location.hostname.includes('github.io')?'Höjdtjänsten är ännu inte driftsatt. Starta den lokala prototypen för att generera kurvor.':error.message;if(error.cancelled)toast('Genereringen avbröts')}
   finally{activeContourJobId=null;setContourControlsRunning(false);refreshContourCacheInfo()}
 };
-setMode(mode);labels();try{save()}catch(error){if(!teamSync)throw error;toast(error.message)}loadFieldSurveySessions().catch(()=>{});
+setMode(mode);labels();try{save()}catch(error){if(!teamSync)throw error;toast(error.message)}loadFieldSurveySessions().catch(fieldError);
 
 if(teamSync){
   $('#draftHint').textContent='ARBETSLAG · Ändringar delas när du synkar';

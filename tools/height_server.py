@@ -1734,12 +1734,19 @@ class Handler(SimpleHTTPRequestHandler):
             session=self.require_session()
             if not session:return
             return self.send_json(200,{'workspaces':USER_STORE.list_workspaces(session['user']['id'])})
+        if path=='/api/field-journal':
+            session=self.require_session()
+            if not session:return
+            try:
+                query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                return self.send_json(200,USER_STORE.field_journal(session['user']['id'],(query.get('id') or [None])[0],(query.get('sequence') or [None])[0]))
+            except ValueError as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/user-data':
             session=self.require_session()
             if not session:return
             try:
                 query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query);since=(query.get('since') or [0])[0]
-                return self.send_json(200,USER_STORE.user_data(session['user']['id'],since))
+                return self.send_json(200,USER_STORE.user_data(session['user']['id'],since,(query.get('journal') or [''])[0]=='1'))
             except ValueError as exc:return self.send_json(400,{'error':str(exc)})
         if path.startswith('/api/workspaces/'):
             session=self.require_session()
@@ -1855,6 +1862,12 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 request=self.read_json(25_000_000)
                 return self.send_json(200,USER_STORE.import_user_data(session['user']['id'],request.get('migrationId'),request.get('objects'),request.get('fieldSurveys'),request.get('layerOverrides')))
+            except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
+        if path=='/api/field-journal':
+            session=self.require_session(csrf=True)
+            if not session:return
+            try:
+                return self.send_json(200,USER_STORE.append_field_journal(session['user']['id'],self.read_json(500_000)))
             except (ValueError,json.JSONDecodeError) as exc:return self.send_json(400,{'error':str(exc)})
         if path=='/api/user-data/sync':
             session=self.require_session(csrf=True)

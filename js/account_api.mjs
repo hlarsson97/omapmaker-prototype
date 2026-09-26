@@ -116,8 +116,8 @@ export function createAccountApi({fetchImpl = globalThis.fetch, storage = global
     return value;
   }
 
-  async function userData(since = 0) {
-    return request(`/api/user-data?since=${encodeURIComponent(since)}`);
+  async function userData(since = 0, journal = false) {
+    return request(`/api/user-data?since=${encodeURIComponent(since)}${journal ? "&journal=1" : ""}`);
   }
 
   async function syncUserData(objects, fieldSurveys = [], layerOverrides = [], mutationId = crypto.randomUUID()) {

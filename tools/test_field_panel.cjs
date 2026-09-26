@@ -106,7 +106,7 @@ const assets = path.resolve(process.argv[2] || '../performance-work');
       await page.locator('#stopFieldSurvey').click();
       await page.waitForFunction(() => document.querySelector('#fieldSurveyPanel').hidden);
       assert.equal(await page.locator('body > #toolbar').isVisible(),true);
-      await page.locator('#fieldSurveyToggle').click();await page.locator('#startFieldSurvey').click();
+      await page.locator('#fieldSurveyToggle').click();await page.locator('#startFieldSurvey').click();await page.locator('#fieldSurveyPanel').waitFor({state:'visible'});
       assert.equal(await page.locator('#fieldSurveyHandle').getAttribute('aria-expanded'),'true');
       assert.equal(await page.locator('#fieldSurveyPrimary').isVisible(),true);
       assert.deepEqual(errors,[]);

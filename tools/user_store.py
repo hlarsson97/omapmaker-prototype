@@ -261,6 +261,20 @@ class UserStore:
                     deleted_at TEXT,
                     PRIMARY KEY(user_id, id)
                 );
+                CREATE TABLE IF NOT EXISTS user_field_journal (
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    session_id TEXT NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    payload_zlib BLOB NOT NULL,
+                    PRIMARY KEY(user_id, session_id, sequence)
+                );
+                CREATE TABLE IF NOT EXISTS user_field_journal_heads (
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    session_id TEXT NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    PRIMARY KEY(user_id, session_id)
+                );
                 CREATE TABLE IF NOT EXISTS user_layer_overrides (
                     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     scope_id TEXT NOT NULL,
@@ -513,6 +527,50 @@ class UserStore:
             raise ValueError('Kartobjektet är för stort')
         return identifier, category, encoded
 
+    def append_field_journal(self, user_id, block):
+        if not isinstance(block, dict) or not isinstance(block.get('meta'), dict):
+            raise ValueError('GPS-blocket saknar metadata')
+        meta = block['meta']; identifier = _uuid(meta.get('id'), 'Fältloggen')
+        sequence = block.get('sequence'); points = block.get('points')
+        if type(sequence) is not int or not 1 <= sequence <= 10_000_000 or meta.get('sequence') != sequence:
+            raise ValueError('Ogiltigt blocknummer')
+        if not isinstance(points, list) or len(points) > 128:
+            raise ValueError('GPS-blocket är för stort')
+        for point in points:
+            fix = point.get('fix') if isinstance(point, dict) else None
+            if not isinstance(fix, dict): raise ValueError('Ogiltig GPS-punkt')
+            for key, limit in [('latitude', 90), ('longitude', 180)]:
+                value = fix.get(key)
+                if type(value) not in (float, int) or not math.isfinite(value) or abs(value) > limit:
+                    raise ValueError('Ogiltig GPS-position')
+        encoded = json.dumps(block, ensure_ascii=False, separators=(',', ':'), sort_keys=True, allow_nan=False).encode()
+        if len(encoded) > 500_000: raise ValueError('GPS-blocket är för stort')
+        with self.connection() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            existing = connection.execute('SELECT payload_zlib FROM user_field_journal WHERE user_id=? AND session_id=? AND sequence=?', (user_id, identifier, sequence)).fetchone()
+            if existing:
+                if zlib.decompress(existing['payload_zlib']) != encoded:
+                    raise ValueError('GPS-blocket finns redan med annat innehåll. Den lokala kopian behålls.')
+                return {'id': identifier, 'sequence': sequence, 'idempotent': True}
+            head = connection.execute('SELECT sequence FROM user_field_journal_heads WHERE user_id=? AND session_id=?', (user_id, identifier)).fetchone()
+            if sequence != (head['sequence'] if head else 0) + 1:
+                raise ValueError('Ett tidigare GPS-block saknas')
+            connection.execute('INSERT INTO user_field_journal VALUES(?,?,?,?)', (user_id, identifier, sequence, zlib.compress(encoded)))
+            connection.execute('INSERT INTO user_field_journal_heads VALUES(?,?,?,?) ON CONFLICT(user_id,session_id) DO UPDATE SET sequence=excluded.sequence,metadata_json=excluded.metadata_json', (user_id, identifier, sequence, json.dumps(meta, ensure_ascii=False)))
+        return {'id': identifier, 'sequence': sequence, 'idempotent': False}
+
+    def field_journal(self, user_id, identifier=None, sequence=None):
+        with self.connection() as connection:
+            if identifier is None:
+                rows = connection.execute('SELECT metadata_json FROM user_field_journal_heads WHERE user_id=?', (user_id,)).fetchall()
+                return {'sessions': [json.loads(row['metadata_json']) for row in rows]}
+            identifier = _uuid(identifier, 'Fältloggen')
+            try: sequence = int(sequence)
+            except (ValueError, TypeError): raise ValueError('Ogiltigt blocknummer')
+            row = connection.execute('SELECT payload_zlib FROM user_field_journal WHERE user_id=? AND session_id=? AND sequence=?', (user_id, identifier, sequence)).fetchone()
+            if not row: raise ValueError('GPS-blocket hittades inte')
+            return json.loads(zlib.decompress(row['payload_zlib']))
+
     @staticmethod
     def _normalize_field_survey(value):
         if not isinstance(value, dict):
@@ -559,7 +617,7 @@ class UserStore:
     def _layer_override_value(self, row):
         return {'scopeId': row['scope_id'], 'layerType': row['layer_type'], 'featureId': row['feature_id'], 'payload': json.loads(row['payload_json']), 'revision': row['revision'], 'deleted': row['deleted_at'] is not None, 'updatedAt': row['updated_at']}
 
-    def user_data(self, user_id, since=0):
+    def user_data(self, user_id, since=0, journal=False):
         try:
             since = max(0, int(since or 0))
         except (ValueError, TypeError):
@@ -579,6 +637,10 @@ class UserStore:
                 object_rows = connection.execute(f"SELECT * FROM user_map_objects WHERE user_id=? AND id IN ({','.join('?' for _ in object_ids)})", (user_id, *object_ids)).fetchall() if object_ids else []
                 survey_rows = connection.execute(f"SELECT * FROM user_field_surveys WHERE user_id=? AND id IN ({','.join('?' for _ in survey_ids)})", (user_id, *survey_ids)).fetchall() if survey_ids else []
                 override_rows = [row for scope_id, layer_type, feature_id in override_ids if (row := connection.execute('SELECT * FROM user_layer_overrides WHERE user_id=? AND scope_id=? AND layer_type=? AND feature_id=?', (user_id, scope_id, layer_type, feature_id)).fetchone())]
+            if journal:
+                heads = connection.execute('SELECT session_id,metadata_json FROM user_field_journal_heads WHERE user_id=?', (user_id,)).fetchall()
+                migrated = {row['session_id'] for row in heads if json.loads(row['metadata_json']).get('legacyImported')}
+                survey_rows = [row for row in survey_rows if row['id'] not in migrated]
         return {'cursor': cursor, 'objects': [self._object_value(row) for row in object_rows], 'fieldSurveys': [self._survey_value(row) for row in survey_rows], 'layerOverrides': [self._layer_override_value(row) for row in override_rows]}
 
     @staticmethod

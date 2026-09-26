@@ -472,6 +472,29 @@ class UserWorkspaceApiTests(unittest.TestCase):
         status,updated,_=self.request('/api/workspaces/'+workspace['id'],{'changes':{'name':'Sydskogen'},'expectedRevision':1},method='PATCH',headers=headers);self.assertEqual(status,200);self.assertEqual(updated['revision'],2);self.assertEqual(updated['name'],'Sydskogen')
         status,conflict,_=self.request('/api/workspaces/'+workspace['id'],{'changes':{'name':'Gammal ändring'},'expectedRevision':1},method='PATCH',headers=headers);self.assertEqual(status,409);self.assertEqual(conflict['code'],'revision_conflict');self.assertEqual(conflict['current']['name'],'Sydskogen')
 
+    def test_field_journal_is_atomic_idempotent_and_private(self):
+        identifier=str(uuid.uuid4())
+        block={'sequence':1,'meta':{'id':identifier,'sequence':1,'pointCount':1,'workspaceId':None},'points':[{'fix':{'latitude':59.3,'longitude':18.1,'accuracy':4}}]}
+        status,_,_=self.request('/api/field-journal',block);self.assertEqual(status,401)
+        cookie,csrf,_=self.login();headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf}
+        status,_,_=self.request('/api/field-journal',block,headers={'Cookie':cookie});self.assertEqual(status,403)
+        status,result,_=self.request('/api/field-journal',block,headers=headers);self.assertEqual(status,200);self.assertFalse(result['idempotent'])
+        status,result,_=self.request('/api/field-journal',block,headers=headers);self.assertEqual(status,200);self.assertTrue(result['idempotent'])
+        altered=json.loads(json.dumps(block));altered['points'][0]['fix']['latitude']=60
+        status,_,_=self.request('/api/field-journal',altered,headers=headers);self.assertEqual(status,400)
+        gap=json.loads(json.dumps(block));gap['sequence']=gap['meta']['sequence']=3
+        status,_,_=self.request('/api/field-journal',gap,headers=headers);self.assertEqual(status,400)
+        status,saved,_=self.request(f'/api/field-journal?id={identifier}&sequence=1',headers=headers);self.assertEqual(status,200);self.assertEqual(saved,block)
+        _,heads,_=self.request('/api/field-journal',headers=headers);self.assertEqual(heads['sessions'],[block['meta']])
+        berit_cookie,_,_=self.login('berit','annat mycket langt testlosenord')
+        _,private,_=self.request('/api/field-journal',headers={'Cookie':berit_cookie});self.assertEqual(private['sessions'],[])
+        status,_,_=self.request(f'/api/field-journal?id={identifier}&sequence=1',headers={'Cookie':berit_cookie});self.assertEqual(status,400)
+        second={'sequence':2,'meta':{**block['meta'],'sequence':2,'status':'completed'},'points':[]}
+        status,_,_=self.request('/api/field-journal',second,headers=headers);self.assertEqual(status,200)
+        _,heads,_=self.request('/api/field-journal',headers=headers);self.assertEqual(heads['sessions'],[second['meta']])
+        too_large={**second,'sequence':3,'meta':{**second['meta'],'sequence':3},'points':block['points']*129}
+        status,_,_=self.request('/api/field-journal',too_large,headers=headers);self.assertEqual(status,400)
+
     def test_private_map_data_and_field_surveys_sync_with_revisions(self):
         cookie,csrf,_=self.login();headers={'Cookie':cookie,'X-OMapMaker-CSRF':csrf};object_id=str(uuid.uuid4());survey_id=str(uuid.uuid4());migration=str(uuid.uuid4())
         map_object={'id':object_id,'category':'point','payload':{'id':object_id,'observationId':object_id,'objectType':'boulder','coordinates':[18.1,59.3]}}
