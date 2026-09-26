@@ -112,7 +112,10 @@ data/lantmateriet/geotorget-credentials.json
 
 Filen och katalogen sätts till `0600` respektive `0700`, omfattas av Git-ignore
 och är läsbara endast för användaren som kör OMapMaker. Signerade leverans-URL:er
-lagras aldrig. Vid omstart verifieras ordern på nytt och anslutningen återställs.
+lagras aldrig. Vid omstart verifieras ordern på nytt och anslutningen återställs. Om Geotorget
+inte svarar behålls uppgifterna och appen visar att anslutningen är sparad.
+När appen är öppen kontrolleras status varje minut och servern försöker verifiera
+igen, högst en gång per minut. Användaren behöver inte ange uppgifterna på nytt.
 Knappen **Glöm och koppla från** stoppar pågående Topografi 10-hämtning, tömmer
 serverminnet och raderar credential-filen.
 

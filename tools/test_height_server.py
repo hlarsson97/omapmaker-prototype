@@ -236,6 +236,30 @@ class GeotorgetDownloadTests(unittest.TestCase):
         finally:
             with server.LM_SESSION_LOCK:server.LM_SESSION.clear();server.LM_SESSION.update(previous)
 
+    def test_saved_credentials_survive_outage_and_retry_without_reentry(self):
+        manifest={'product':'Topografi 10 Nedladdning, vektor','orderStatus':'AKTIV','deliveryStatus':'LYCKAD','files':[]}
+        previous=dict(server.LM_SESSION)
+        try:
+            with tempfile.TemporaryDirectory() as temporary, patch.object(server,'GEOTORGET_CREDENTIAL_FILE',Path(temporary)/'geotorget.json'), patch.object(server,'GEOTORGET_RETRY_AT',0), patch.object(server.time,'monotonic',return_value=100) as clock, patch.object(server,'geotorget_delivery_manifest',side_effect=[RuntimeError('HTTP 500'),manifest]) as verify:
+                server.clear_geotorget_credentials(forget=True)
+                server.save_geotorget_credentials('user','secret','cc4cbb38-d8c6-4859-b271-592a7477e374')
+                status=server.geotorget_session_status()
+                self.assertFalse(status['connected']);self.assertTrue(status['persistent'])
+                self.assertNotIn('secret',json.dumps(status))
+                self.assertTrue(server.GEOTORGET_CREDENTIAL_FILE.exists())
+                server.geotorget_session_status();self.assertEqual(verify.call_count,1)
+                clock.return_value=161
+                status=server.geotorget_session_status()
+                self.assertTrue(status['connected']);self.assertTrue(status['persistent'])
+                self.assertEqual(verify.call_count,2)
+                server.clear_geotorget_credentials(forget=True)
+                clock.return_value=222
+                status=server.geotorget_session_status()
+                self.assertFalse(status['connected']);self.assertFalse(status['persistent'])
+                self.assertEqual(verify.call_count,2)
+        finally:
+            with server.LM_SESSION_LOCK:server.LM_SESSION.clear();server.LM_SESSION.update(previous)
+
 
 class QuietHandler(server.Handler):
     def log_message(self, *_):pass

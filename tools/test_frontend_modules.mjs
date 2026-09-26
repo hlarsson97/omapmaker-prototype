@@ -748,7 +748,7 @@ assert(fieldHtml.includes('styles.css?v=22'));
 assert(fieldHtml.includes('isom_symbols.js?v=17'));
 assert(fieldHtml.includes('isom_renderer.js?v=25'));
 assert(fieldHtml.includes('@tomickigrzegorz/leaflet-rotate@0.2.4'));
-assert(fieldHtml.includes('type="module" src="app.mjs?v=95"'));
+assert(fieldHtml.includes('type="module" src="app.mjs?v=96"'));
 for (const fieldControl of ['fieldSurveyToggle','fieldSurveyPanel','fieldPointManual','fieldAreaManual','fieldPowerSupport','fieldHeading','fieldSurveyLogs','pointOpacity','lineOpacity','areaOpacity','trashButton','trashSheet','trashList','lineBridges','lineInferredBridges','bridgeTunnelSheet','bridgeSelectRoads','bridgeDrawFree','propertyBoundariesVisible','fetchPropertyBoundariesButton','mapLabelsVisible','fetchMapLabelsButton','natureReferencesVisible','fetchNatureReferencesButton','militaryReferencesVisible','fetchMilitaryReferencesButton','openLantmaterietLogin','lantmaterietLoginSheet','lantmaterietUsername','lantmaterietPassword','lantmaterietOrderId','persistLantmaterietCredentials','disconnectLantmateriet','maxSmallHousePropertyArea']) assert(fieldHtml.includes(`id="${fieldControl}"`));
 for (const oldAsset of ['field.css', 'overlay.css', 'v6.css', 'v14.css', 'v6.js']) {
   assert(!fieldHtml.includes(oldAsset), `${oldAsset} ska inte längre laddas`);
@@ -759,6 +759,26 @@ assert(styles.includes('/* ===== field.css ===== */'));
 assert(styles.includes('/* ===== v14.css ===== */'));
 for (const category of ['point','line','area']) assert(styles.includes(`.map-${category}-object{opacity:var(--${category}-object-opacity,1)!important}`), `${category}-objekt ska styras av sitt globala opacitetsreglage`);
 const appSource = fs.readFileSync(path.join(root, 'app.mjs'), 'utf8');
+// Saved server credentials must not be presented as a request to log in again.
+{
+ const controls=new Map();
+ const $=id=>{if(!controls.has(id)){const label={hidden:false};controls.set(id,{closest:()=>label})}return controls.get(id)};
+ const renderSource=appSource.slice(appSource.indexOf('function renderGeotorgetSession()'),appSource.indexOf('async function refreshGeotorgetSession()'));
+ const render=new Function('$','accountOnline','accountUser','geotorgetSession',renderSource+';renderGeotorgetSession()');
+ const user={capabilities:['server:manage']};
+ render($,true,user,{connected:false,persistent:true});
+ assert($('#submitLantmaterietLogin').hidden);
+ assert($('#lantmaterietPassword').closest('label').hidden);
+ assert(!$('#disconnectLantmateriet').hidden);
+ assert($('#lantmaterietLoginStatus').textContent.includes('sparade på servern'));
+ render($,true,user,{connected:true,persistent:true,manifest:{product:'Topografi 10'}});
+ assert(!$('#lantmaterietDownloadOptions').hidden);
+ render($,true,user,{connected:false,persistent:false});
+ assert(!$('#submitLantmaterietLogin').hidden);
+ assert(!$('#lantmaterietPassword').closest('label').hidden);
+ assert($('#disconnectLantmateriet').hidden);
+}
+
 assert(appSource.includes('map-${geometryCategory(feature)}-object'), 'Genererade objekt ska få opacitetsklass efter geometri');
 assert(appSource.includes("workspace?.symbolDisplayMode||'print'"), 'Globalkartan ska använda skalenliga symboler när inget arbetsområde anger digitalt läge');
 assert(appSource.includes("if(symbolDisplayMode()==='print')refreshSymbolPresentation({zoomOnly:true})"), 'Skalenliga punktsymboler ska renderas om efter zoom');
